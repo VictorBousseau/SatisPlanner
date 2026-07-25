@@ -1,0 +1,24 @@
+# Environnement
+.venv/
+__pycache__/
+*.py[cod]
+
+# Outils
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# Icones : assets proteges, reconstituables par extraction FModel. Jamais versionnees.
+# La base SQLite generee, elle, EST versionnee : c'est un artefact livre, embarque
+# dans l'exe, pour que l'application fonctionne sans installation du jeu.
+satisplanner/resources/icons/
+
+# Sauvegardes utilisateur
+*.sfp

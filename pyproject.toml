@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "satisplanner"
+version = "0.1.0"
+description = "Planificateur d'usines theoriques pour Satisfactory 1.2"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "PySide6>=6.8,<6.10",
+    "pydantic>=2.9,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-qt>=4.4,<5",
+    "pytest-cov>=6.0,<7",
+    "ruff>=0.8,<1.0",
+    "mypy>=1.13,<2",
+    "pyinstaller>=6.11,<7",
+]
+
+[project.scripts]
+satisplanner = "satisplanner.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["satisplanner*"]
+
+[tool.setuptools.package-data]
+satisplanner = ["resources/*.sqlite"]
+
+# ---------------------------------------------------------------- ruff
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RET",  # return
+    "PTH",  # use pathlib
+    "ARG",  # unused arguments
+    "TID",  # tidy imports
+    "RUF",
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ARG001"]  # pytest fixtures are injected, not called
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------- mypy
+
+# Strict everywhere; `core/` is the layer the specification requires it for, and
+# nothing in `ui/` or `data/` currently needs an exemption. Relaxations, if any
+# become necessary, belong in explicit per-module overrides below.
+[tool.mypy]
+python_version = "3.12"
+files = ["satisplanner", "tests"]
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = ["pytestqt.*"]  # pytest-qt ships no type information
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------- pytest
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
