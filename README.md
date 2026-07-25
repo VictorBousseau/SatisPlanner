@@ -56,24 +56,40 @@ des imports et échoue sinon.
 
 ## Données du jeu
 
-Les données de jeu et les icônes appartiennent à Coffee Stain Studios et **ne sont jamais
-versionnées**. Elles sont extraites localement depuis l'installation du joueur.
+**L'application est autonome.** La base SQLite est générée une fois à la conception, versionnée, et
+embarquée dans l'exe : elle fonctionne sur une machine où Satisfactory n'est pas installé, sans
+configuration.
 
-À venir en phase 1 : `python -m satisplanner.data.build --game-dir "<installation>"`, qui génère
-`satisplanner/resources/game_1.2.sqlite` depuis le dossier `CommunityResources/Docs`.
+Régénération (outil de maintenance, à relancer quand le jeu change de version) :
 
-Les icônes vont dans `satisplanner/resources/icons/` (dossier ignoré par git). La procédure
-d'extraction FModel sera documentée en phase 5. L'application reste **100 % fonctionnelle sans
-icônes** : un fallback génératif dessine un carré coloré avec les initiales de l'item.
+```bash
+.venv/Scripts/python.exe -m satisplanner.data.build --game-dir "C:\Program Files (x86)\Steam\steamapps\common\Satisfactory"
+```
+
+Le CLI découvre seul son fichier source dans `CommunityResources/Docs` : `en-US.json` en référence
+de structure, `fr.json` pour les libellés, avec repli sur une autre variante anglaise puis sur
+`Docs.json`. Aucun nom de fichier n'est codé en dur, et le fichier retenu est affiché.
+
+Fixture de test : `tools/extract_fixture.py` extrait des mêmes fichiers une tranche de quelques
+centaines de kilo-octets vers `tests/fixtures/`, en conservant l'encodage UTF-16 LE et le BOM
+d'origine — les tests traversent donc le même chemin de décodage que la production.
+
+Les icônes appartiennent à Coffee Stain Studios : `satisplanner/resources/icons/` est ignoré par git
+et reconstituable par extraction FModel (procédure documentée en phase 5). L'application reste
+**100 % fonctionnelle sans icônes** : un fallback génératif dessine un carré coloré avec les
+initiales de l'item.
 
 ## Décisions de conception
 
 Trois points ont été arbitrés au démarrage et gouvernent le moteur :
 
 1. **Aucun chiffre deviné.** Les débits sont dérivés des données du jeu par des conversions
-   centralisées, testées contre une table de valeurs de référence (convoyeurs 60 → 1200 items/min,
-   tuyauteries 300 / 600 m³/min, foreuses 60 / 120 / 240, etc.). Si une formule dérive, le test
-   échoue immédiatement au lieu de propager l'erreur.
+   centralisées (`satisplanner/data/conversions.py`), chacune documentant son champ source, sa
+   formule et sa valeur de contrôle, et testées contre une table de référence (convoyeurs 60 → 1200
+   items/min, tuyauteries 300 / 600 m³/min, foreuses 60 / 120 / 240, etc.). Si une formule dérive,
+   le test échoue immédiatement au lieu de propager l'erreur. **En cas de désaccord entre une valeur
+   attendue et les fichiers du jeu, les fichiers font foi** — c'est ainsi qu'a été détectée la
+   recette d'Ordinateur, dont les ingrédients ont changé depuis la 1.0.
 2. **Blocage des sous-produits évalué sur la topologie, pas sur le débit.** Une machine est bloquée
    (taux = 0) uniquement s'il n'existe aucune sortie pour l'un de ses produits. Si une sortie existe
    mais n'absorbe qu'une fraction du débit, on applique une contre-pression continue (taux < 1) —

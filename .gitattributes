@@ -1,0 +1,4 @@
+# Les fixtures sont en UTF-16 LE avec BOM et la base SQLite est un binaire :
+# toute conversion de fin de ligne les corromprait silencieusement.
+tests/fixtures/docs_*.json binary
+*.sqlite binary

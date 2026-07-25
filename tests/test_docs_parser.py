@@ -1,0 +1,409 @@
+"""Parser tests, run against a real slice of the game files.
+
+The control table of the specification is asserted end to end here: from the raw
+UTF-16 file down to a per-minute rate.
+"""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from satisplanner.core.models import ItemForm
+from satisplanner.data.docs_parser import (
+    DocsFileError,
+    GameDataset,
+    ParsedRecipe,
+    french_labels,
+    locate_docs_directory,
+    parse_class_list,
+    parse_dataset,
+    parse_icon_filename,
+    parse_item_amounts,
+    read_locale,
+    read_text_file,
+    select_reference_file,
+)
+from tests.conftest import FRENCH_FIXTURE, REFERENCE_FIXTURE, slot_of
+
+# --------------------------------------------------------------------------- #
+# Encoding
+# --------------------------------------------------------------------------- #
+
+
+def test_the_fixture_really_is_utf16_with_a_bom() -> None:
+    assert REFERENCE_FIXTURE.read_bytes()[:2] == b"\xff\xfe"
+
+
+def test_reading_as_utf8_fails_which_is_the_whole_point() -> None:
+    with pytest.raises(UnicodeDecodeError):
+        REFERENCE_FIXTURE.read_text(encoding="utf-8")
+
+
+def test_read_text_file_handles_the_game_encoding() -> None:
+    text = read_text_file(REFERENCE_FIXTURE)
+    assert text.startswith("[")  # no BOM left over
+    assert json.loads(text)
+
+
+def test_read_text_file_also_accepts_utf8(tmp_path: Path) -> None:
+    path = tmp_path / "plain.json"
+    path.write_text('[{"NativeClass": "x", "Classes": []}]', encoding="utf-8")
+    assert json.loads(read_text_file(path))
+
+
+def test_undecodable_file_raises_a_clear_error(tmp_path: Path) -> None:
+    path = tmp_path / "broken.json"
+    path.write_bytes(b"\x81\x82\x83")
+    with pytest.raises(DocsFileError, match="impossible de decoder"):
+        read_text_file(path)
+
+
+# --------------------------------------------------------------------------- #
+# Locating the source file
+# --------------------------------------------------------------------------- #
+
+
+def _docs_dir(tmp_path: Path, *names: str) -> Path:
+    docs = tmp_path / "CommunityResources" / "Docs"
+    docs.mkdir(parents=True)
+    for name in names:
+        (docs / name).write_text("[]", encoding="utf-16")
+    return docs
+
+
+def test_docs_directory_is_found_from_the_game_root(tmp_path: Path) -> None:
+    docs = _docs_dir(tmp_path, "en-US.json")
+    assert locate_docs_directory(tmp_path) == docs
+
+
+def test_docs_directory_can_also_be_passed_directly(tmp_path: Path) -> None:
+    docs = _docs_dir(tmp_path, "en-US.json")
+    assert locate_docs_directory(docs) == docs
+
+
+def test_missing_docs_directory_is_reported(tmp_path: Path) -> None:
+    with pytest.raises(DocsFileError, match="verifiez --game-dir"):
+        locate_docs_directory(tmp_path)
+
+
+def test_en_us_wins_over_the_other_locales(tmp_path: Path) -> None:
+    docs = _docs_dir(tmp_path, "af.json", "de.json", "en-GB.json", "en-US.json", "fr.json")
+    path, preferred = select_reference_file(docs)
+    assert (path.name, preferred) == ("en-US.json", True)
+
+
+def test_another_english_variant_is_used_when_en_us_is_absent(tmp_path: Path) -> None:
+    docs = _docs_dir(tmp_path, "de.json", "en-CA.json", "en-GB.json")
+    path, preferred = select_reference_file(docs)
+    assert (path.name, preferred) == ("en-GB.json", True)
+
+
+def test_the_historical_docs_json_is_still_accepted(tmp_path: Path) -> None:
+    docs = _docs_dir(tmp_path, "Docs.json", "ja.json")
+    path, preferred = select_reference_file(docs)
+    assert (path.name, preferred) == ("Docs.json", True)
+
+
+def test_last_resort_falls_back_and_flags_it(tmp_path: Path) -> None:
+    docs = _docs_dir(tmp_path, "ja.json", "zh-Hans.json")
+    path, preferred = select_reference_file(docs)
+    assert path.name == "ja.json"
+    assert preferred is False, "un choix par defaut doit etre signale a l'utilisateur"
+
+
+# --------------------------------------------------------------------------- #
+# Composite properties
+# --------------------------------------------------------------------------- #
+
+
+def test_ingredient_parsing_keeps_class_names_and_order() -> None:
+    raw = (
+        "((ItemClass=\"/Script/Engine.BlueprintGeneratedClass'/Game/FactoryGame/Resource/Parts/"
+        "IronPlate/Desc_IronPlate.Desc_IronPlate_C'\",Amount=6),"
+        "(ItemClass=\"/Script/Engine.BlueprintGeneratedClass'/Game/FactoryGame/Resource/Parts/"
+        "IronScrew/Desc_IronScrew.Desc_IronScrew_C'\",Amount=12))"
+    )
+    assert parse_item_amounts(raw) == [("Desc_IronPlate_C", 6), ("Desc_IronScrew_C", 12)]
+
+
+def test_empty_composite_properties_are_not_an_error() -> None:
+    assert parse_item_amounts("") == []
+    assert parse_class_list("") == []
+
+
+def test_produced_in_parsing_reduces_paths_to_class_names() -> None:
+    raw = (
+        '("/Game/FactoryGame/Buildable/Factory/SmelterMk1/Build_SmelterMk1.Build_SmelterMk1_C",'
+        '"/Script/FactoryGame.FGBuildableAutomatedWorkBench")'
+    )
+    assert parse_class_list(raw) == ["Build_SmelterMk1_C", "FGBuildableAutomatedWorkBench"]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (
+            "Texture2D /Game/FactoryGame/Resource/Parts/Plastic/UI/IconDesc_Plastic_256"
+            ".IconDesc_Plastic_256",
+            "IconDesc_Plastic_256.png",
+        ),
+        # A 512 asset is rewritten: only the 256 variant is exported.
+        (
+            "Texture2D /Game/FactoryGame/Resource/RawResources/CrudeOil/UI/LiquidOil_Pipe_512"
+            ".LiquidOil_Pipe_512",
+            "LiquidOil_Pipe_256.png",
+        ),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_icon_file_name_extraction(raw: str | None, expected: str | None) -> None:
+    assert parse_icon_filename(raw) == expected
+
+
+# --------------------------------------------------------------------------- #
+# Control table, from the file to the rate
+# --------------------------------------------------------------------------- #
+
+
+def test_smelter_iron_ingot(recipes: dict[str, ParsedRecipe]) -> None:
+    recipe = recipes["Recipe_IngotIron_C"]
+    assert recipe.building_class == "Build_SmelterMk1_C"
+    assert slot_of(recipe.ingredients, "Desc_OreIron_C").rate_per_minute == 30
+    assert slot_of(recipe.products, "Desc_IronIngot_C").rate_per_minute == 30
+    assert recipe.involves_fluid is False
+
+
+def test_foundry_steel_ingot(recipes: dict[str, ParsedRecipe]) -> None:
+    recipe = recipes["Recipe_IngotSteel_C"]
+    assert recipe.building_class == "Build_FoundryMk1_C"
+    assert slot_of(recipe.ingredients, "Desc_OreIron_C").rate_per_minute == 45
+    assert slot_of(recipe.ingredients, "Desc_Coal_C").rate_per_minute == 45
+    assert slot_of(recipe.products, "Desc_SteelIngot_C").rate_per_minute == 45
+
+
+def test_constructor_iron_plate(recipes: dict[str, ParsedRecipe]) -> None:
+    recipe = recipes["Recipe_IronPlate_C"]
+    assert recipe.building_class == "Build_ConstructorMk1_C"
+    assert slot_of(recipe.ingredients, "Desc_IronIngot_C").rate_per_minute == 30
+    assert slot_of(recipe.products, "Desc_IronPlate_C").rate_per_minute == 20
+
+
+def test_assembler_reinforced_iron_plate(recipes: dict[str, ParsedRecipe]) -> None:
+    recipe = recipes["Recipe_IronPlateReinforced_C"]
+    assert recipe.building_class == "Build_AssemblerMk1_C"
+    assert slot_of(recipe.ingredients, "Desc_IronPlate_C").rate_per_minute == 30
+    assert slot_of(recipe.ingredients, "Desc_IronScrew_C").rate_per_minute == 60
+    assert slot_of(recipe.products, "Desc_IronPlateReinforced_C").rate_per_minute == 5
+
+
+def test_refinery_plastic_locks_litres_fluids_and_byproducts(
+    recipes: dict[str, ParsedRecipe],
+) -> None:
+    """The most important row of the control table.
+
+    30 m3 of oil -> 20 plastic + 10 m3 of heavy oil residue. It validates the
+    fluid conversion, the division by 1000 and the byproduct handling at once.
+    """
+    recipe = recipes["Recipe_Plastic_C"]
+    assert recipe.building_class == "Build_OilRefinery_C"
+    assert recipe.involves_fluid is True
+    assert recipe.product_count == 2
+
+    oil = slot_of(recipe.ingredients, "Desc_LiquidOil_C")
+    assert oil.rate_per_minute == 30
+    assert oil.amount_per_cycle == 3, "3000 L par cycle valent 3 m3, pas 3000"
+
+    assert slot_of(recipe.products, "Desc_Plastic_C").rate_per_minute == 20
+    assert slot_of(recipe.products, "Desc_HeavyOilResidue_C").rate_per_minute == 10
+
+
+def test_refinery_rubber_has_a_different_byproduct_ratio(
+    recipes: dict[str, ParsedRecipe],
+) -> None:
+    recipe = recipes["Recipe_Rubber_C"]
+    assert slot_of(recipe.ingredients, "Desc_LiquidOil_C").rate_per_minute == 30
+    assert slot_of(recipe.products, "Desc_Rubber_C").rate_per_minute == 20
+    assert slot_of(recipe.products, "Desc_HeavyOilResidue_C").rate_per_minute == 20
+
+
+def test_manufacturer_computer(recipes: dict[str, ParsedRecipe]) -> None:
+    """Computer: 2.5/min, as expected.
+
+    The ingredients, however, are those of Satisfactory 1.2 as read from the game
+    files -- 4 circuit boards, 8 cables and 16 plastic over 24 s -- and not the
+    10/9/18 of the pre-1.0 recipe. The control table's 25 / 22.5 / 45 belongs to
+    that older recipe; the game data wins.
+    """
+    recipe = recipes["Recipe_Computer_C"]
+    assert recipe.building_class == "Build_ManufacturerMk1_C"
+    assert recipe.cycle_seconds == 24
+    assert slot_of(recipe.products, "Desc_Computer_C").rate_per_minute == 2.5
+    assert slot_of(recipe.ingredients, "Desc_CircuitBoard_C").rate_per_minute == 10
+    assert slot_of(recipe.ingredients, "Desc_Cable_C").rate_per_minute == 20
+    assert slot_of(recipe.ingredients, "Desc_Plastic_C").rate_per_minute == 40
+
+
+def test_packager_moves_a_fluid_into_a_solid(recipes: dict[str, ParsedRecipe]) -> None:
+    recipe = recipes["Recipe_PackagedWater_C"]
+    assert recipe.building_class == "Build_Packager_C"
+    assert slot_of(recipe.ingredients, "Desc_Water_C").rate_per_minute == 60
+    assert slot_of(recipe.ingredients, "Desc_FluidCanister_C").rate_per_minute == 60
+    assert slot_of(recipe.products, "Desc_PackagedWater_C").rate_per_minute == 60
+
+
+def test_recycling_loop_recipes_are_present_and_marked_alternate(
+    recipes: dict[str, ParsedRecipe],
+) -> None:
+    """The phase 2 fixed point needs both halves of the loop."""
+    plastic = recipes["Recipe_Alternate_Plastic_1_C"]
+    rubber = recipes["Recipe_Alternate_RecycledRubber_C"]
+    assert plastic.is_alternate and rubber.is_alternate
+    # Recycled Plastic consumes rubber and fuel, and produces plastic.
+    assert slot_of(plastic.ingredients, "Desc_Rubber_C").rate_per_minute == 30
+    assert slot_of(plastic.ingredients, "Desc_LiquidFuel_C").rate_per_minute == 30
+    assert slot_of(plastic.products, "Desc_Plastic_C").rate_per_minute == 60
+    # ... and the other way round, which is what closes the cycle.
+    assert slot_of(rubber.ingredients, "Desc_Plastic_C").rate_per_minute == 30
+    assert slot_of(rubber.products, "Desc_Rubber_C").rate_per_minute == 60
+
+
+# --------------------------------------------------------------------------- #
+# Scope
+# --------------------------------------------------------------------------- #
+
+
+def test_out_of_scope_recipes_are_dropped(recipes: dict[str, ParsedRecipe]) -> None:
+    # Present in the fixture on purpose: a Blender recipe and a build gun recipe.
+    assert "Recipe_NitricAcid_C" not in recipes, "le Melangeur est hors perimetre V1"
+    assert "Recipe_Wall_8x4_01_C" not in recipes, "le pistolet n'est pas une machine"
+
+
+def test_every_recipe_belongs_to_a_v1_machine(dataset: GameDataset) -> None:
+    machines = {building.class_name for building in dataset.buildings}
+    assert {recipe.building_class for recipe in dataset.recipes} <= machines
+
+
+def test_belts_cover_the_six_tiers(dataset: GameDataset) -> None:
+    assert [
+        (belt.tier, belt.items_per_minute) for belt in sorted(dataset.belts, key=lambda b: b.tier)
+    ] == [(1, 60), (2, 120), (3, 270), (4, 480), (5, 780), (6, 1200)]
+
+
+def test_pipes_expose_two_tiers_without_the_cosmetic_twins(dataset: GameDataset) -> None:
+    assert [
+        (pipe.tier, pipe.cubic_metres_per_minute)
+        for pipe in sorted(dataset.pipes, key=lambda p: p.tier)
+    ] == [(1, 300), (2, 600)]
+    assert all("NoIndicator" not in pipe.class_name for pipe in dataset.pipes)
+
+
+def test_extractors_carry_their_rate_and_purity_flag(dataset: GameDataset) -> None:
+    extractors = {extractor.class_name: extractor for extractor in dataset.extractors}
+    assert extractors["Build_MinerMk1_C"].rate_per_minute == 60
+    assert extractors["Build_MinerMk2_C"].rate_per_minute == 120
+    assert extractors["Build_MinerMk3_C"].rate_per_minute == 240
+    assert extractors["Build_MinerMk1_C"].item_class is None, "une foreuse accepte tout solide"
+    assert extractors["Build_MinerMk1_C"].has_purity is True
+
+    oil = extractors["Build_OilPump_C"]
+    assert (oil.rate_per_minute, oil.item_class, oil.has_purity) == (120, "Desc_LiquidOil_C", True)
+
+    water = extractors["Build_WaterPump_C"]
+    assert water.rate_per_minute == 120
+    assert water.item_class == "Desc_Water_C"
+    assert water.has_purity is False, "l'extracteur d'eau a un debit fixe"
+
+    assert "Build_FrackingExtractor_C" not in extractors, "les puits sont hors perimetre V1"
+
+
+def test_storages_expose_slots_for_solids_and_volume_for_fluids(dataset: GameDataset) -> None:
+    storages = {storage.class_name: storage for storage in dataset.storages}
+    assert storages["Build_StorageContainerMk1_C"].slots == 24
+    assert storages["Build_StorageContainerMk2_C"].slots == 48
+    # mStorageCapacity is already in m3 -- it must not go through the litre division.
+    assert storages["Build_PipeStorageTank_C"].capacity_m3 == 400
+    assert storages["Build_IndustrialTank_C"].capacity_m3 == 2400
+
+
+def test_machine_power_draw(dataset: GameDataset) -> None:
+    power = {building.class_name: building.power_mw for building in dataset.buildings}
+    assert power["Build_SmelterMk1_C"] == 4
+    assert power["Build_FoundryMk1_C"] == 16
+    assert power["Build_OilRefinery_C"] == 30
+    assert power["Build_ManufacturerMk1_C"] == 55
+    assert "Build_Blender_C" not in power, "le Melangeur est hors perimetre V1"
+
+
+# --------------------------------------------------------------------------- #
+# Items and labels
+# --------------------------------------------------------------------------- #
+
+
+def test_item_forms_and_stack_sizes(dataset: GameDataset) -> None:
+    items = {item.class_name: item for item in dataset.items}
+    assert items["Desc_Plastic_C"].form is ItemForm.SOLID
+    assert items["Desc_Plastic_C"].stack_size == 200
+    assert items["Desc_HeavyOilResidue_C"].form is ItemForm.LIQUID
+    assert items["Desc_HeavyOilResidue_C"].stack_size == 50
+    assert items["Desc_OreIron_C"].is_raw_resource is True
+    assert items["Desc_IronPlate_C"].is_raw_resource is False
+
+
+def test_french_labels_are_used(dataset: GameDataset) -> None:
+    items = {item.class_name: item for item in dataset.items}
+    assert items["Desc_OreIron_C"].display_name == "Iron Ore"
+    assert items["Desc_OreIron_C"].display_name_fr == "Minerai de fer"
+    assert items["Desc_HeavyOilResidue_C"].display_name_fr == "Résidus de pétrole lourd"
+    buildings = {b.class_name: b.display_name_fr for b in dataset.buildings}
+    assert buildings["Build_OilRefinery_C"] == "Raffinerie"
+
+
+def test_missing_french_locale_falls_back_to_english_without_failing() -> None:
+    dataset = parse_dataset(
+        read_locale(REFERENCE_FIXTURE), {}, source_file="x.json", french_file=None
+    )
+    items = {item.class_name: item for item in dataset.items}
+    assert items["Desc_OreIron_C"].display_name_fr == "Iron Ore"
+    assert dataset.french_file is None
+
+
+def test_the_alternate_flag_never_depends_on_the_french_label() -> None:
+    """In French the label reads "... (alternative)", so it cannot be the source."""
+    labels = french_labels(read_locale(FRENCH_FIXTURE))
+    assert not labels["Recipe_Alternate_Plastic_1_C"].startswith("Alternate:")
+    dataset = parse_dataset(
+        read_locale(REFERENCE_FIXTURE), labels, source_file="x.json", french_file="fr.json"
+    )
+    alternates = {r.class_name for r in dataset.recipes if r.is_alternate}
+    assert "Recipe_Alternate_Plastic_1_C" in alternates
+    assert "Recipe_Plastic_C" not in alternates
+
+
+def test_alternate_recipes_the_game_encodes_inconsistently(
+    recipes: dict[str, ParsedRecipe],
+) -> None:
+    """Both encodings are authoritative; relying on either one alone mislabels a recipe.
+
+    Turbofuel carries the class-name prefix but its label is plain "Turbofuel";
+    Pure Aluminum Ingot is the mirror case. Both are alternate recipes in game.
+    """
+    turbofuel = recipes["Recipe_Alternate_Turbofuel_C"]
+    assert turbofuel.display_name == "Turbofuel"
+    assert turbofuel.is_alternate is True
+
+    aluminium = recipes["Recipe_PureAluminumIngot_C"]
+    assert not aluminium.class_name.startswith("Recipe_Alternate_")
+    assert aluminium.is_alternate is True
+
+
+def test_the_fixture_parses_without_warnings(dataset: GameDataset) -> None:
+    assert dataset.warnings == ()
+
+
+def test_icons_are_resolved_for_the_items_of_the_control_table(dataset: GameDataset) -> None:
+    icons = {item.class_name: item.icon_file for item in dataset.items}
+    assert icons["Desc_Plastic_C"] == "IconDesc_Plastic_256.png"
+    # A _512 asset must have been rewritten to the exported _256 variant.
+    assert icons["Desc_LiquidOil_C"] == "LiquidOil_Pipe_256.png"
