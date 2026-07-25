@@ -13,22 +13,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Final
 
-from satisplanner.core.models import ItemForm
+from satisplanner.core.models import BuildingKind, Item, ItemForm
 from satisplanner.data import db
-from satisplanner.data.docs_parser import (
-    BuildingKind,
-    DocsFileError,
-    GameDataset,
-    ParsedItem,
-    load_dataset,
-)
+from satisplanner.data.docs_parser import DocsFileError, GameDataset, load_dataset
 from satisplanner.data.icons import EMBEDDED_ICON_DIRECTORY, IconIndex
 
 logger = logging.getLogger("satisplanner.data.build")
 
-DEFAULT_OUTPUT: Final = (
-    Path(__file__).resolve().parent.parent / "resources" / db.DEFAULT_DATABASE_NAME
-)
+DEFAULT_OUTPUT: Final = db.default_database_path()
 
 # Beyond this many missing icons, the list is truncated: it would be noise.
 MAX_LISTED_MISSING: Final = 20
@@ -67,11 +59,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def scoped_items(dataset: GameDataset) -> list[ParsedItem]:
-    """Items the V1 interface will actually display.
+def scoped_items(dataset: GameDataset) -> list[Item]:
+    """Items the V1 palette shows by default.
 
     That is every item involved in a kept recipe, plus every raw resource, since a
-    miner can be placed on any node. Equipment, ammunition and vehicles are out.
+    miner can be placed on any node. Event content is excluded: it is hidden behind
+    a checkbox, so a missing icon there is not a gap worth reporting.
     """
     referenced = {
         slot.item_class
@@ -81,7 +74,11 @@ def scoped_items(dataset: GameDataset) -> list[ParsedItem]:
     referenced.update(
         extractor.item_class for extractor in dataset.extractors if extractor.item_class
     )
-    return [item for item in dataset.items if item.class_name in referenced or item.is_raw_resource]
+    return [
+        item
+        for item in dataset.items
+        if (item.class_name in referenced or item.is_raw_resource) and not item.is_event
+    ]
 
 
 def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
@@ -100,15 +97,21 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
     detail = ", ".join(f"{FORM_LABELS_FR[form]} {forms[form]}" for form in ItemForm)
     log("Items                   : %d  (%s)", len(dataset.items), detail)
 
+    events = sum(1 for item in dataset.items if item.is_event)
+    log("    dont evenement (FICSMAS) : %d, masques par defaut dans la palette", events)
+
     alternates = sum(1 for recipe in dataset.recipes if recipe.is_alternate)
     fluids = sum(1 for recipe in dataset.recipes if recipe.involves_fluid)
     byproducts = sum(1 for recipe in dataset.recipes if recipe.product_count > 1)
+    event_recipes = sum(1 for recipe in dataset.recipes if recipe.is_event)
     log(
-        "Recettes                : %d  (alternatives %d, fluides %d, a sous-produit %d)",
+        "Recettes                : %d  (alternatives %d, fluides %d, a sous-produit %d,"
+        " evenement %d)",
         len(dataset.recipes),
         alternates,
         fluids,
         byproducts,
+        event_recipes,
     )
 
     per_machine = Counter(recipe.building_class for recipe in dataset.recipes)

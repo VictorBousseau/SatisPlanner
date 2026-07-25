@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "external_source",
+      "id": "ingots",
+      "label": "60 lingots pour 90 demandes",
+      "item_class": "Desc_IronIngot_C",
+      "rate_per_minute": 60
+    },
+    {
+      "kind": "machine",
+      "id": "small",
+      "label": "Un constructeur, demande 30",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "machine",
+      "id": "large",
+      "label": "Deux constructeurs, demande 60",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 2
+    },
+    {
+      "kind": "output",
+      "id": "out_small",
+      "item_class": "Desc_IronPlate_C"
+    },
+    {
+      "kind": "output",
+      "id": "out_large",
+      "item_class": "Desc_IronPlate_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "ingots",
+      "target": "small",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e2",
+      "source": "ingots",
+      "target": "large",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e3",
+      "source": "small",
+      "target": "out_small",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e4",
+      "source": "large",
+      "target": "out_large",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    }
+  ]
+}

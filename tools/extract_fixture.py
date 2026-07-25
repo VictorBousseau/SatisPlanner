@@ -79,6 +79,8 @@ KEEP: Final[frozenset[str]] = frozenset(
         "Recipe_Plastic_C",  # fluid in, solid + fluid byproduct out
         "Recipe_Rubber_C",  # idem, different byproduct ratio
         "Recipe_ResidualPlastic_C",
+        # Consumes heavy oil residue: needed to test partial absorption of a byproduct.
+        "Recipe_ResidualFuel_C",
         "Recipe_Computer_C",
         "Recipe_Cable_C",
         "Recipe_Wire_C",
@@ -91,6 +93,12 @@ KEEP: Final[frozenset[str]] = frozenset(
         # -- out of scope on purpose, to prove the filtering works
         "Recipe_NitricAcid_C",  # Blender, excluded machine
         "Recipe_Wall_8x4_01_C",  # build gun only, not a machine
+        # -- event content (FICSMAS) and real ammunition, to test the is_event marker
+        "Desc_Gift_C",
+        "Desc_XmasBall1_C",
+        "Desc_SpikedRebar_C",
+        "Recipe_XmasBall1_C",
+        "Recipe_SpikedRebar_C",
         # -- machines
         "Build_SmelterMk1_C",
         "Build_FoundryMk1_C",

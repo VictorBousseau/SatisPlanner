@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from satisplanner.core.graph import FactoryGraph
+from satisplanner.core.models import GameData, Recipe, RecipeSlot
 from satisplanner.data.docs_parser import (
     GameDataset,
-    ParsedRecipe,
-    RecipeSlot,
     french_labels,
     parse_dataset,
     read_locale,
@@ -21,6 +21,7 @@ from satisplanner.data.docs_parser import (
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 REFERENCE_FIXTURE = FIXTURE_DIR / "docs_en-US.json"
 FRENCH_FIXTURE = FIXTURE_DIR / "docs_fr.json"
+GRAPH_DIR = FIXTURE_DIR / "graphs"
 
 
 @pytest.fixture(scope="session")
@@ -35,8 +36,21 @@ def dataset() -> GameDataset:
 
 
 @pytest.fixture(scope="session")
-def recipes(dataset: GameDataset) -> dict[str, ParsedRecipe]:
+def recipes(dataset: GameDataset) -> dict[str, Recipe]:
     return {recipe.class_name: recipe for recipe in dataset.recipes}
+
+
+@pytest.fixture(scope="session")
+def game_data(dataset: GameDataset) -> GameData:
+    """The catalogue as injected into the engine."""
+    return dataset.to_game_data()
+
+
+def load_graph(name: str) -> FactoryGraph:
+    """Load one of the JSON factory fixtures from ``tests/fixtures/graphs``."""
+    return FactoryGraph.model_validate_json(
+        (GRAPH_DIR / f"{name}.json").read_text(encoding="utf-8")
+    )
 
 
 def slot_of(slots: tuple[RecipeSlot, ...], item_class: str) -> RecipeSlot:

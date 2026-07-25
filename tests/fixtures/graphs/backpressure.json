@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "resource",
+      "id": "oil",
+      "item_class": "Desc_LiquidOil_C",
+      "extractor_class": "Build_OilPump_C",
+      "purity": "normal",
+      "count": 3
+    },
+    {
+      "kind": "machine",
+      "id": "plastic",
+      "label": "Plastique, 12 raffineries",
+      "recipe_class": "Recipe_Plastic_C",
+      "machine_count": 12
+    },
+    {
+      "kind": "machine",
+      "id": "residual_fuel",
+      "label": "Carburant residuel, 1 raffinerie",
+      "recipe_class": "Recipe_ResidualFuel_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "output",
+      "id": "plastic_out",
+      "item_class": "Desc_Plastic_C"
+    },
+    {
+      "kind": "output",
+      "id": "fuel_out",
+      "item_class": "Desc_LiquidFuel_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "oil",
+      "target": "plastic",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e2",
+      "source": "plastic",
+      "target": "plastic_out",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e3",
+      "source": "plastic",
+      "target": "residual_fuel",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e4",
+      "source": "residual_fuel",
+      "target": "fuel_out",
+      "item_class": "Desc_LiquidFuel_C",
+      "transport_class": "Build_Pipeline_C"
+    }
+  ]
+}

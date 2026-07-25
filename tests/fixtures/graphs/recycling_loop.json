@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "external_source",
+      "id": "fuel",
+      "label": "Carburant importe",
+      "item_class": "Desc_LiquidFuel_C",
+      "rate_per_minute": 60
+    },
+    {
+      "kind": "machine",
+      "id": "recycled_plastic",
+      "recipe_class": "Recipe_Alternate_Plastic_1_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "machine",
+      "id": "recycled_rubber",
+      "recipe_class": "Recipe_Alternate_RecycledRubber_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "output",
+      "id": "plastic_out",
+      "item_class": "Desc_Plastic_C"
+    },
+    {
+      "kind": "output",
+      "id": "rubber_out",
+      "item_class": "Desc_Rubber_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "fuel",
+      "target": "recycled_plastic",
+      "item_class": "Desc_LiquidFuel_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e2",
+      "source": "fuel",
+      "target": "recycled_rubber",
+      "item_class": "Desc_LiquidFuel_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e3",
+      "source": "recycled_plastic",
+      "target": "recycled_rubber",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e4",
+      "source": "recycled_rubber",
+      "target": "recycled_plastic",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e5",
+      "source": "recycled_plastic",
+      "target": "plastic_out",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e6",
+      "source": "recycled_rubber",
+      "target": "rubber_out",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    }
+  ]
+}

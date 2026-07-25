@@ -18,14 +18,25 @@ import json
 import logging
 import re
 from collections.abc import Iterable, Iterator, Sequence
-from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
 from satisplanner.core import constants
-from satisplanner.core.models import ItemForm
+from satisplanner.core.models import (
+    Belt,
+    Building,
+    BuildingKind,
+    Extractor,
+    GameData,
+    Item,
+    ItemForm,
+    Pipe,
+    Recipe,
+    RecipeSlot,
+    Storage,
+)
 from satisplanner.data import conversions
 
 logger = logging.getLogger(__name__)
@@ -248,109 +259,40 @@ RECIPE_ALTERNATE_PREFIX: Final = "Recipe_Alternate_"
 RECIPE_ALTERNATE_LABEL: Final = "Alternate:"
 
 
-class BuildingKind(StrEnum):
-    """What a building does, as far as the planner is concerned."""
-
-    MANUFACTURER = "manufacturer"
-    EXTRACTOR = "extractor"
-    BELT = "belt"
-    PIPE = "pipe"
-    STORAGE = "storage"
+# Event content (FICSMAS) lives under its own asset directory. That path is a far
+# more reliable marker than a class-name heuristic: it catches every ornament and
+# firework without catching legitimate items such as ammunition.
+EVENT_ASSET_MARKER: Final = "/Events/"
 
 
-# --------------------------------------------------------------------------- #
-# Parsed rows
-# --------------------------------------------------------------------------- #
-
-
-class _Row(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-
-class ParsedItem(_Row):
-    class_name: str
-    display_name: str
-    display_name_fr: str
-    form: ItemForm
-    stack_size: float
-    icon_file: str | None
-    sink_points: int
-    is_raw_resource: bool
-
-
-class RecipeSlot(_Row):
-    item_class: str
-    amount_per_cycle: float  # already in items or m3
-    rate_per_minute: float
-
-
-class ParsedRecipe(_Row):
-    class_name: str
-    display_name: str
-    display_name_fr: str
-    building_class: str
-    cycle_seconds: float
-    is_alternate: bool
-    involves_fluid: bool
-    ingredients: tuple[RecipeSlot, ...]
-    products: tuple[RecipeSlot, ...]
-
-    @property
-    def product_count(self) -> int:
-        """Number of distinct products; more than one means a byproduct."""
-        return len(self.products)
-
-
-class ParsedBuilding(_Row):
-    class_name: str
-    display_name: str
-    display_name_fr: str
-    kind: BuildingKind
-    power_mw: float
-    icon_file: str | None
-
-
-class ParsedExtractor(_Row):
-    class_name: str
-    item_class: str | None  # None = any node of the allowed form
-    allowed_form: ItemForm
-    rate_per_minute: float
-    has_purity: bool
-
-
-class ParsedBelt(_Row):
-    class_name: str
-    tier: int
-    items_per_minute: float
-
-
-class ParsedPipe(_Row):
-    class_name: str
-    tier: int
-    cubic_metres_per_minute: float
-
-
-class ParsedStorage(_Row):
-    class_name: str
-    form: ItemForm
-    slots: int | None  # solids: capacity depends on the stored item's stack size
-    capacity_m3: float | None  # fluids
-
-
-class GameDataset(_Row):
+class GameDataset(BaseModel):
     """Everything the database needs, already normalised."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     source_file: str
     french_file: str | None
     reference_was_preferred: bool
-    items: tuple[ParsedItem, ...]
-    recipes: tuple[ParsedRecipe, ...]
-    buildings: tuple[ParsedBuilding, ...]
-    extractors: tuple[ParsedExtractor, ...]
-    belts: tuple[ParsedBelt, ...]
-    pipes: tuple[ParsedPipe, ...]
-    storages: tuple[ParsedStorage, ...]
+    items: tuple[Item, ...]
+    recipes: tuple[Recipe, ...]
+    buildings: tuple[Building, ...]
+    extractors: tuple[Extractor, ...]
+    belts: tuple[Belt, ...]
+    pipes: tuple[Pipe, ...]
+    storages: tuple[Storage, ...]
     warnings: tuple[str, ...]
+
+    def to_game_data(self) -> GameData:
+        """The catalogue the engine consumes."""
+        return GameData.from_rows(
+            items=self.items,
+            recipes=self.recipes,
+            buildings=self.buildings,
+            extractors=self.extractors,
+            belts=self.belts,
+            pipes=self.pipes,
+            storages=self.storages,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -368,9 +310,20 @@ def _label(class_name: str, fallback: str, labels: dict[str, str]) -> str:
     return labels.get(class_name) or fallback
 
 
-def parse_items(
-    grouped: dict[str, list[dict[str, str]]], labels: dict[str, str]
-) -> list[ParsedItem]:
+def is_event_class(cls: dict[str, str]) -> bool:
+    """True for seasonal event content (FICSMAS).
+
+    Decided on the asset path rather than the class name: items expose it through
+    their icon, recipes through ``FullName``. Such content is kept in the database
+    but hidden by default in the palette -- it belongs to no production chain.
+    """
+    return any(
+        EVENT_ASSET_MARKER in (cls.get(field) or "")
+        for field in ("FullName", "mSmallIcon", "mPersistentBigIcon")
+    )
+
+
+def parse_items(grouped: dict[str, list[dict[str, str]]], labels: dict[str, str]) -> list[Item]:
     """Every descriptor that has a real resource form is an item.
 
     Buildings are descriptors too, but carry ``RF_INVALID``, which excludes them
@@ -379,7 +332,7 @@ def parse_items(
     raw_resources = {
         cls["ClassName"] for cls in grouped.get("FGResourceDescriptor", []) if "ClassName" in cls
     }
-    items: list[ParsedItem] = []
+    items: list[Item] = []
     seen: set[str] = set()
 
     for cls in _iter_all_classes(grouped):
@@ -390,7 +343,7 @@ def parse_items(
         seen.add(class_name)
         display_name = cls.get("mDisplayName") or class_name
         items.append(
-            ParsedItem(
+            Item(
                 class_name=class_name,
                 display_name=display_name,
                 display_name_fr=_label(class_name, display_name, labels),
@@ -401,6 +354,7 @@ def parse_items(
                 ),
                 sink_points=int(parse_float(cls.get("mResourceSinkPoints"))),
                 is_raw_resource=class_name in raw_resources,
+                is_event=is_event_class(cls),
             )
         )
     return sorted(items, key=lambda item: item.class_name)
@@ -423,9 +377,9 @@ def parse_recipes(
     labels: dict[str, str],
     forms: dict[str, ItemForm],
     warnings: list[str],
-) -> list[ParsedRecipe]:
+) -> list[Recipe]:
     """Recipes of the V1 machines, with every amount normalised to per-minute rates."""
-    recipes: list[ParsedRecipe] = []
+    recipes: list[Recipe] = []
     missing_items: set[str] = set()
 
     for cls in grouped.get("FGRecipe", []):
@@ -473,7 +427,7 @@ def parse_recipes(
         )
         involved = tuple(slots["ingredients"]) + tuple(slots["products"])
         recipes.append(
-            ParsedRecipe(
+            Recipe(
                 class_name=class_name,
                 display_name=display_name,
                 display_name_fr=_label(class_name, display_name, labels),
@@ -483,6 +437,7 @@ def parse_recipes(
                 involves_fluid=any(forms[slot.item_class].is_fluid for slot in involved),
                 ingredients=slots["ingredients"],
                 products=slots["products"],
+                is_event=is_event_class(cls),
             )
         )
 
@@ -507,10 +462,10 @@ def _building(
     kind: BuildingKind,
     labels: dict[str, str],
     descriptors: dict[str, dict[str, str]],
-) -> ParsedBuilding:
+) -> Building:
     class_name = cls["ClassName"]
     display_name = cls.get("mDisplayName") or class_name
-    return ParsedBuilding(
+    return Building(
         class_name=class_name,
         display_name=display_name,
         display_name_fr=_label(class_name, display_name, labels),
@@ -525,11 +480,11 @@ def parse_buildings(
     labels: dict[str, str],
     warnings: list[str],
 ) -> tuple[
-    list[ParsedBuilding],
-    list[ParsedExtractor],
-    list[ParsedBelt],
-    list[ParsedPipe],
-    list[ParsedStorage],
+    list[Building],
+    list[Extractor],
+    list[Belt],
+    list[Pipe],
+    list[Storage],
 ]:
     """Parse every buildable within V1 scope, plus its transport or storage rates."""
     descriptors = {
@@ -537,11 +492,11 @@ def parse_buildings(
         for cls in grouped.get("FGBuildingDescriptor", [])
         if "ClassName" in cls
     }
-    buildings: list[ParsedBuilding] = []
-    extractors: list[ParsedExtractor] = []
-    belts: list[ParsedBelt] = []
-    pipes: list[ParsedPipe] = []
-    storages: list[ParsedStorage] = []
+    buildings: list[Building] = []
+    extractors: list[Extractor] = []
+    belts: list[Belt] = []
+    pipes: list[Pipe] = []
+    storages: list[Storage] = []
 
     # Production machines
     for cls in grouped.get("FGBuildableManufacturer", []):
@@ -569,7 +524,7 @@ def parse_buildings(
         allowed = parse_allowed_resources(cls.get("mAllowedResources", ""))
         buildings.append(_building(cls, BuildingKind.EXTRACTOR, labels, descriptors))
         extractors.append(
-            ParsedExtractor(
+            Extractor(
                 class_name=class_name,
                 item_class=allowed[0] if len(allowed) == 1 else None,
                 allowed_form=forms_declared,
@@ -590,7 +545,7 @@ def parse_buildings(
             continue
         buildings.append(_building(cls, BuildingKind.BELT, labels, descriptors))
         belts.append(
-            ParsedBelt(
+            Belt(
                 class_name=cls["ClassName"],
                 tier=int(match.group(1)),
                 items_per_minute=conversions.belt_items_per_minute(parse_float(cls.get("mSpeed"))),
@@ -607,7 +562,7 @@ def parse_buildings(
             continue
         buildings.append(_building(cls, BuildingKind.PIPE, labels, descriptors))
         pipes.append(
-            ParsedPipe(
+            Pipe(
                 class_name=class_name,
                 tier=int(match.group(1) or 1),
                 cubic_metres_per_minute=conversions.pipe_cubic_metres_per_minute(
@@ -623,7 +578,7 @@ def parse_buildings(
             continue
         buildings.append(_building(cls, BuildingKind.STORAGE, labels, descriptors))
         storages.append(
-            ParsedStorage(
+            Storage(
                 class_name=class_name,
                 form=ItemForm.SOLID,
                 slots=STORAGE_SLOTS[class_name],
@@ -636,7 +591,7 @@ def parse_buildings(
             continue
         buildings.append(_building(cls, BuildingKind.STORAGE, labels, descriptors))
         storages.append(
-            ParsedStorage(
+            Storage(
                 class_name=class_name,
                 form=ItemForm.LIQUID,
                 slots=None,
@@ -713,6 +668,6 @@ def load_dataset(game_dir: Path) -> GameDataset:
     )
 
 
-def item_forms(items: Sequence[ParsedItem]) -> dict[str, ItemForm]:
+def item_forms(items: Sequence[Item]) -> dict[str, ItemForm]:
     """Convenience mapping used by callers that need to know an item's unit."""
     return {item.class_name: item.form for item in items}

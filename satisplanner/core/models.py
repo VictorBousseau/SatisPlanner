@@ -1,10 +1,23 @@
-"""Domain models.
+"""Domain models: the game catalogue, as the engine sees it.
 
-Phase 1 introduces only the vocabulary that the data layer needs to share with
-the domain. The graph, recipe and building models land in phase 2.
+These models are the contract between the data layer and the engine. The data
+layer builds them (from the game files or from the SQLite database) and hands them
+over; the engine only ever receives them by injection and never reads a database.
+
+Every quantity is already normalised: items/min for solids, m3/min for fluids.
 """
 
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
+from typing import Self
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from satisplanner.core import constants
+
+
+class UnknownClassError(LookupError):
+    """A class name is absent from the game catalogue."""
 
 
 class ItemForm(StrEnum):
@@ -22,3 +35,220 @@ class ItemForm(StrEnum):
     def is_fluid(self) -> bool:
         """True for liquids and gases, i.e. everything measured in m3."""
         return self is not ItemForm.SOLID
+
+
+class Purity(StrEnum):
+    """Purity of a resource node, which multiplies the extractor's base rate."""
+
+    IMPURE = "impure"
+    NORMAL = "normal"
+    PURE = "pure"
+
+    @property
+    def multiplier(self) -> float:
+        return _PURITY_MULTIPLIERS[self]
+
+
+_PURITY_MULTIPLIERS: Mapping[Purity, float] = {
+    Purity.IMPURE: constants.IMPURE_MULTIPLIER,
+    Purity.NORMAL: constants.NORMAL_MULTIPLIER,
+    Purity.PURE: constants.PURE_MULTIPLIER,
+}
+
+
+class BuildingKind(StrEnum):
+    """What a building does, as far as the planner is concerned."""
+
+    MANUFACTURER = "manufacturer"
+    EXTRACTOR = "extractor"
+    BELT = "belt"
+    PIPE = "pipe"
+    STORAGE = "storage"
+
+
+class _Row(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class Item(_Row):
+    class_name: str
+    display_name: str
+    display_name_fr: str
+    form: ItemForm
+    stack_size: float
+    icon_file: str | None
+    sink_points: int
+    is_raw_resource: bool
+    is_event: bool = False
+
+
+class RecipeSlot(_Row):
+    """One ingredient or one product of a recipe, for a single machine."""
+
+    item_class: str
+    amount_per_cycle: float  # already in items or m3
+    rate_per_minute: float
+
+
+class Recipe(_Row):
+    class_name: str
+    display_name: str
+    display_name_fr: str
+    building_class: str
+    cycle_seconds: float
+    is_alternate: bool
+    involves_fluid: bool
+    ingredients: tuple[RecipeSlot, ...]
+    products: tuple[RecipeSlot, ...]
+    is_event: bool = False
+
+    @property
+    def product_count(self) -> int:
+        """Number of distinct products; more than one means a byproduct."""
+        return len(self.products)
+
+    def ingredient_rates(self) -> dict[str, float]:
+        """Consumption per machine and per minute, by item."""
+        return {slot.item_class: slot.rate_per_minute for slot in self.ingredients}
+
+    def product_rates(self) -> dict[str, float]:
+        """Production per machine and per minute, by item."""
+        return {slot.item_class: slot.rate_per_minute for slot in self.products}
+
+
+class Building(_Row):
+    class_name: str
+    display_name: str
+    display_name_fr: str
+    kind: BuildingKind
+    power_mw: float
+    icon_file: str | None
+
+
+class Extractor(_Row):
+    class_name: str
+    item_class: str | None  # None = any node of the allowed form
+    allowed_form: ItemForm
+    rate_per_minute: float
+    has_purity: bool
+
+    def rate(self, purity: Purity) -> float:
+        """Base rate at 100 % clock speed, adjusted for node purity if relevant."""
+        if not self.has_purity:
+            return self.rate_per_minute
+        return self.rate_per_minute * purity.multiplier
+
+
+class Belt(_Row):
+    class_name: str
+    tier: int
+    items_per_minute: float
+
+
+class Pipe(_Row):
+    class_name: str
+    tier: int
+    cubic_metres_per_minute: float
+
+
+class Storage(_Row):
+    class_name: str
+    form: ItemForm
+    slots: int | None  # solids: capacity depends on the stored item's stack size
+    capacity_m3: float | None  # fluids
+
+    def capacity_for(self, item: Item) -> float:
+        """Capacity in the item's own unit: items for solids, m3 for fluids."""
+        if item.form.is_fluid:
+            return self.capacity_m3 or 0.0
+        return (self.slots or 0) * item.stack_size
+
+
+class GameData(BaseModel):
+    """The injected catalogue. Lookups fail loudly rather than returning None."""
+
+    model_config = ConfigDict(frozen=True)
+
+    items: dict[str, Item] = Field(default_factory=dict)
+    recipes: dict[str, Recipe] = Field(default_factory=dict)
+    buildings: dict[str, Building] = Field(default_factory=dict)
+    extractors: dict[str, Extractor] = Field(default_factory=dict)
+    belts: dict[str, Belt] = Field(default_factory=dict)
+    pipes: dict[str, Pipe] = Field(default_factory=dict)
+    storages: dict[str, Storage] = Field(default_factory=dict)
+
+    @classmethod
+    def from_rows(
+        cls,
+        *,
+        items: Iterable[Item] = (),
+        recipes: Iterable[Recipe] = (),
+        buildings: Iterable[Building] = (),
+        extractors: Iterable[Extractor] = (),
+        belts: Iterable[Belt] = (),
+        pipes: Iterable[Pipe] = (),
+        storages: Iterable[Storage] = (),
+    ) -> Self:
+        return cls(
+            items={row.class_name: row for row in items},
+            recipes={row.class_name: row for row in recipes},
+            buildings={row.class_name: row for row in buildings},
+            extractors={row.class_name: row for row in extractors},
+            belts={row.class_name: row for row in belts},
+            pipes={row.class_name: row for row in pipes},
+            storages={row.class_name: row for row in storages},
+        )
+
+    def item(self, class_name: str) -> Item:
+        return _get(self.items, class_name, "item")
+
+    def recipe(self, class_name: str) -> Recipe:
+        return _get(self.recipes, class_name, "recette")
+
+    def building(self, class_name: str) -> Building:
+        return _get(self.buildings, class_name, "batiment")
+
+    def extractor(self, class_name: str) -> Extractor:
+        return _get(self.extractors, class_name, "extracteur")
+
+    def storage(self, class_name: str) -> Storage:
+        return _get(self.storages, class_name, "stockage")
+
+    def transport_capacity(self, class_name: str) -> float:
+        """Throughput of a belt or a pipe, in the unit of what it carries."""
+        if class_name in self.belts:
+            return self.belts[class_name].items_per_minute
+        if class_name in self.pipes:
+            return self.pipes[class_name].cubic_metres_per_minute
+        msg = f"transport inconnu : {class_name}"
+        raise UnknownClassError(msg)
+
+    def transport_form_matches(self, class_name: str, form: ItemForm) -> bool:
+        """A solid needs a belt, a fluid needs a pipe."""
+        if class_name in self.belts:
+            return not form.is_fluid
+        if class_name in self.pipes:
+            return form.is_fluid
+        msg = f"transport inconnu : {class_name}"
+        raise UnknownClassError(msg)
+
+    def transports_for(self, form: ItemForm) -> list[Belt] | list[Pipe]:
+        """Every transport able to carry this form, sorted by increasing capacity."""
+        if form.is_fluid:
+            return sorted(self.pipes.values(), key=lambda pipe: pipe.cubic_metres_per_minute)
+        return sorted(self.belts.values(), key=lambda belt: belt.items_per_minute)
+
+    def smallest_transport_for(self, form: ItemForm, rate: float) -> Belt | Pipe | None:
+        """Cheapest tier whose capacity covers ``rate``, or None if none is enough."""
+        for transport in self.transports_for(form):
+            if self.transport_capacity(transport.class_name) >= rate:
+                return transport
+        return None
+
+
+def _get[T](mapping: dict[str, T], class_name: str, label: str) -> T:
+    try:
+        return mapping[class_name]
+    except KeyError:
+        msg = f"{label} inconnu(e) dans les donnees du jeu : {class_name}"
+        raise UnknownClassError(msg) from None

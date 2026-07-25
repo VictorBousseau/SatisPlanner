@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "resource",
+      "id": "mine",
+      "item_class": "Desc_OreIron_C",
+      "extractor_class": "Build_MinerMk1_C",
+      "purity": "normal",
+      "count": 1
+    },
+    {
+      "kind": "storage",
+      "id": "buffer",
+      "label": "Conteneur tampon",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": "Desc_OreIron_C",
+      "initial_content": 0
+    },
+    {
+      "kind": "machine",
+      "id": "smelter",
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "output",
+      "id": "out",
+      "item_class": "Desc_IronIngot_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "mine",
+      "target": "buffer",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e2",
+      "source": "buffer",
+      "target": "smelter",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e3",
+      "source": "smelter",
+      "target": "out",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    }
+  ]
+}

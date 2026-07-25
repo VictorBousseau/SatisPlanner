@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "storage",
+      "id": "buffer",
+      "label": "Citerne pleine, sans apport",
+      "storage_class": "Build_PipeStorageTank_C",
+      "item_class": "Desc_LiquidOil_C",
+      "initial_content": 400
+    },
+    {
+      "kind": "machine",
+      "id": "refinery",
+      "recipe_class": "Recipe_Plastic_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "output",
+      "id": "plastic_out",
+      "item_class": "Desc_Plastic_C"
+    },
+    {
+      "kind": "output",
+      "id": "residue_flare",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "is_sink": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "buffer",
+      "target": "refinery",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e2",
+      "source": "refinery",
+      "target": "plastic_out",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e3",
+      "source": "refinery",
+      "target": "residue_flare",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "transport_class": "Build_Pipeline_C"
+    }
+  ]
+}

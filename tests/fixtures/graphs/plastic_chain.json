@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "resource",
+      "id": "oil",
+      "label": "Gisement de petrole",
+      "item_class": "Desc_LiquidOil_C",
+      "extractor_class": "Build_OilPump_C",
+      "purity": "normal",
+      "count": 1
+    },
+    {
+      "kind": "machine",
+      "id": "refinery",
+      "recipe_class": "Recipe_Plastic_C",
+      "machine_count": 4
+    },
+    {
+      "kind": "output",
+      "id": "plastic_out",
+      "item_class": "Desc_Plastic_C"
+    },
+    {
+      "kind": "output",
+      "id": "residue_flare",
+      "label": "Torchere",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "is_sink": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "oil",
+      "target": "refinery",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e2",
+      "source": "refinery",
+      "target": "plastic_out",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e3",
+      "source": "refinery",
+      "target": "residue_flare",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "transport_class": "Build_Pipeline_C"
+    }
+  ]
+}

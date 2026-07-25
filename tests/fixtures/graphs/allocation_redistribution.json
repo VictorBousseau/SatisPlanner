@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "external_source",
+      "id": "ingots",
+      "label": "60 lingots",
+      "item_class": "Desc_IronIngot_C",
+      "rate_per_minute": 60
+    },
+    {
+      "kind": "machine",
+      "id": "blocked",
+      "label": "Demande 30, mais sa sortie ne va nulle part",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "machine",
+      "id": "working",
+      "label": "Demande 45, doit tout obtenir",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 1.5
+    },
+    {
+      "kind": "output",
+      "id": "out",
+      "item_class": "Desc_IronPlate_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "ingots",
+      "target": "blocked",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e2",
+      "source": "ingots",
+      "target": "working",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e3",
+      "source": "working",
+      "target": "out",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    }
+  ]
+}

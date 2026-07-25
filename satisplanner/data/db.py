@@ -14,19 +14,20 @@ from pathlib import Path
 from typing import Final
 
 from satisplanner import __version__
-from satisplanner.core.models import ItemForm
-from satisplanner.data.docs_parser import (
+from satisplanner.core.models import (
+    Belt,
+    Building,
     BuildingKind,
-    GameDataset,
-    ParsedBelt,
-    ParsedBuilding,
-    ParsedExtractor,
-    ParsedItem,
-    ParsedPipe,
-    ParsedRecipe,
-    ParsedStorage,
+    Extractor,
+    GameData,
+    Item,
+    ItemForm,
+    Pipe,
+    Recipe,
     RecipeSlot,
+    Storage,
 )
+from satisplanner.data.docs_parser import GameDataset
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,14 @@ SCHEMA_VERSION: Final = 1
 GAME_VERSION: Final = "1.2"
 
 DEFAULT_DATABASE_NAME: Final = f"game_{GAME_VERSION}.sqlite"
+
+RESOURCES_DIRECTORY: Final = Path(__file__).resolve().parent.parent / "resources"
+
+
+def default_database_path() -> Path:
+    """The database shipped inside the package, which is what the application uses."""
+    return RESOURCES_DIRECTORY / DEFAULT_DATABASE_NAME
+
 
 SCHEMA: Final = """
 CREATE TABLE meta (
@@ -52,7 +61,9 @@ CREATE TABLE items (
     stack_size      REAL NOT NULL,
     icon_file       TEXT,
     sink_points     INTEGER NOT NULL,
-    is_raw_resource INTEGER NOT NULL CHECK (is_raw_resource IN (0, 1))
+    is_raw_resource INTEGER NOT NULL CHECK (is_raw_resource IN (0, 1)),
+    -- Seasonal event content: kept in the database, hidden by default in the UI.
+    is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1))
 );
 
 CREATE TABLE buildings (
@@ -72,7 +83,8 @@ CREATE TABLE recipes (
     cycle_seconds   REAL NOT NULL,
     is_alternate    INTEGER NOT NULL CHECK (is_alternate IN (0, 1)),
     involves_fluid  INTEGER NOT NULL CHECK (involves_fluid IN (0, 1)),
-    product_count   INTEGER NOT NULL
+    product_count   INTEGER NOT NULL,
+    is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1))
 );
 
 CREATE TABLE recipe_ingredients (
@@ -181,10 +193,10 @@ def _insert_meta(connection: sqlite3.Connection, dataset: GameDataset) -> None:
     )
 
 
-def _insert_items(connection: sqlite3.Connection, items: tuple[ParsedItem, ...]) -> None:
+def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> None:
     connection.executemany(
         "INSERT INTO items (class_name, display_name, display_name_fr, form, stack_size,"
-        " icon_file, sink_points, is_raw_resource) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        " icon_file, sink_points, is_raw_resource, is_event) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 item.class_name,
@@ -195,15 +207,14 @@ def _insert_items(connection: sqlite3.Connection, items: tuple[ParsedItem, ...])
                 item.icon_file,
                 item.sink_points,
                 int(item.is_raw_resource),
+                int(item.is_event),
             )
             for item in items
         ],
     )
 
 
-def _insert_buildings(
-    connection: sqlite3.Connection, buildings: tuple[ParsedBuilding, ...]
-) -> None:
+def _insert_buildings(connection: sqlite3.Connection, buildings: tuple[Building, ...]) -> None:
     connection.executemany(
         "INSERT INTO buildings (class_name, display_name, display_name_fr, kind, power_mw,"
         " icon_file) VALUES (?, ?, ?, ?, ?, ?)",
@@ -221,18 +232,18 @@ def _insert_buildings(
     )
 
 
-def _slot_rows(recipe: ParsedRecipe, slots: tuple[RecipeSlot, ...]) -> list[tuple[object, ...]]:
+def _slot_rows(recipe: Recipe, slots: tuple[RecipeSlot, ...]) -> list[tuple[object, ...]]:
     return [
         (recipe.class_name, index, slot.item_class, slot.amount_per_cycle, slot.rate_per_minute)
         for index, slot in enumerate(slots)
     ]
 
 
-def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[ParsedRecipe, ...]) -> None:
+def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...]) -> None:
     connection.executemany(
         "INSERT INTO recipes (class_name, display_name, display_name_fr, building_class,"
-        " cycle_seconds, is_alternate, involves_fluid, product_count)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        " cycle_seconds, is_alternate, involves_fluid, product_count, is_event)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 recipe.class_name,
@@ -243,6 +254,7 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[ParsedRecipe,
                 int(recipe.is_alternate),
                 int(recipe.involves_fluid),
                 recipe.product_count,
+                int(recipe.is_event),
             )
             for recipe in recipes
         ],
@@ -259,9 +271,7 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[ParsedRecipe,
         )
 
 
-def _insert_extractors(
-    connection: sqlite3.Connection, extractors: tuple[ParsedExtractor, ...]
-) -> None:
+def _insert_extractors(connection: sqlite3.Connection, extractors: tuple[Extractor, ...]) -> None:
     connection.executemany(
         "INSERT INTO extractors (class_name, item_class, allowed_form, rate_per_minute,"
         " has_purity) VALUES (?, ?, ?, ?, ?)",
@@ -278,21 +288,21 @@ def _insert_extractors(
     )
 
 
-def _insert_belts(connection: sqlite3.Connection, belts: tuple[ParsedBelt, ...]) -> None:
+def _insert_belts(connection: sqlite3.Connection, belts: tuple[Belt, ...]) -> None:
     connection.executemany(
         "INSERT INTO belts (class_name, tier, items_per_minute) VALUES (?, ?, ?)",
         [(belt.class_name, belt.tier, belt.items_per_minute) for belt in belts],
     )
 
 
-def _insert_pipes(connection: sqlite3.Connection, pipes: tuple[ParsedPipe, ...]) -> None:
+def _insert_pipes(connection: sqlite3.Connection, pipes: tuple[Pipe, ...]) -> None:
     connection.executemany(
         "INSERT INTO pipes (class_name, tier, cubic_metres_per_minute) VALUES (?, ?, ?)",
         [(pipe.class_name, pipe.tier, pipe.cubic_metres_per_minute) for pipe in pipes],
     )
 
 
-def _insert_storages(connection: sqlite3.Connection, storages: tuple[ParsedStorage, ...]) -> None:
+def _insert_storages(connection: sqlite3.Connection, storages: tuple[Storage, ...]) -> None:
     connection.executemany(
         "INSERT INTO storages (class_name, form, slots, capacity_m3) VALUES (?, ?, ?, ?)",
         [
@@ -311,9 +321,9 @@ def read_meta(connection: sqlite3.Connection) -> dict[str, str]:
     return {row["key"]: row["value"] for row in connection.execute("SELECT key, value FROM meta")}
 
 
-def read_items(connection: sqlite3.Connection) -> list[ParsedItem]:
+def read_items(connection: sqlite3.Connection) -> list[Item]:
     return [
-        ParsedItem(
+        Item(
             class_name=row["class_name"],
             display_name=row["display_name"],
             display_name_fr=row["display_name_fr"],
@@ -322,14 +332,15 @@ def read_items(connection: sqlite3.Connection) -> list[ParsedItem]:
             icon_file=row["icon_file"],
             sink_points=row["sink_points"],
             is_raw_resource=bool(row["is_raw_resource"]),
+            is_event=bool(row["is_event"]),
         )
         for row in connection.execute("SELECT * FROM items ORDER BY class_name")
     ]
 
 
-def read_buildings(connection: sqlite3.Connection) -> list[ParsedBuilding]:
+def read_buildings(connection: sqlite3.Connection) -> list[Building]:
     return [
-        ParsedBuilding(
+        Building(
             class_name=row["class_name"],
             display_name=row["display_name"],
             display_name_fr=row["display_name_fr"],
@@ -341,7 +352,7 @@ def read_buildings(connection: sqlite3.Connection) -> list[ParsedBuilding]:
     ]
 
 
-def read_recipes(connection: sqlite3.Connection) -> list[ParsedRecipe]:
+def read_recipes(connection: sqlite3.Connection) -> list[Recipe]:
     slots: dict[str, dict[str, list[RecipeSlot]]] = {}
     for table, key in (("recipe_ingredients", "ingredients"), ("recipe_products", "products")):
         query = f"SELECT * FROM {table} ORDER BY recipe_class, slot_index"
@@ -354,7 +365,7 @@ def read_recipes(connection: sqlite3.Connection) -> list[ParsedRecipe]:
                 )
             )
     return [
-        ParsedRecipe(
+        Recipe(
             class_name=row["class_name"],
             display_name=row["display_name"],
             display_name_fr=row["display_name_fr"],
@@ -364,14 +375,15 @@ def read_recipes(connection: sqlite3.Connection) -> list[ParsedRecipe]:
             involves_fluid=bool(row["involves_fluid"]),
             ingredients=tuple(slots.get(row["class_name"], {}).get("ingredients", [])),
             products=tuple(slots.get(row["class_name"], {}).get("products", [])),
+            is_event=bool(row["is_event"]),
         )
         for row in connection.execute("SELECT * FROM recipes ORDER BY class_name")
     ]
 
 
-def read_extractors(connection: sqlite3.Connection) -> list[ParsedExtractor]:
+def read_extractors(connection: sqlite3.Connection) -> list[Extractor]:
     return [
-        ParsedExtractor(
+        Extractor(
             class_name=row["class_name"],
             item_class=row["item_class"],
             allowed_form=ItemForm(row["allowed_form"]),
@@ -382,9 +394,9 @@ def read_extractors(connection: sqlite3.Connection) -> list[ParsedExtractor]:
     ]
 
 
-def read_belts(connection: sqlite3.Connection) -> list[ParsedBelt]:
+def read_belts(connection: sqlite3.Connection) -> list[Belt]:
     return [
-        ParsedBelt(
+        Belt(
             class_name=row["class_name"],
             tier=row["tier"],
             items_per_minute=row["items_per_minute"],
@@ -393,9 +405,9 @@ def read_belts(connection: sqlite3.Connection) -> list[ParsedBelt]:
     ]
 
 
-def read_pipes(connection: sqlite3.Connection) -> list[ParsedPipe]:
+def read_pipes(connection: sqlite3.Connection) -> list[Pipe]:
     return [
-        ParsedPipe(
+        Pipe(
             class_name=row["class_name"],
             tier=row["tier"],
             cubic_metres_per_minute=row["cubic_metres_per_minute"],
@@ -404,9 +416,9 @@ def read_pipes(connection: sqlite3.Connection) -> list[ParsedPipe]:
     ]
 
 
-def read_storages(connection: sqlite3.Connection) -> list[ParsedStorage]:
+def read_storages(connection: sqlite3.Connection) -> list[Storage]:
     return [
-        ParsedStorage(
+        Storage(
             class_name=row["class_name"],
             form=ItemForm(row["form"]),
             slots=row["slots"],
@@ -414,3 +426,26 @@ def read_storages(connection: sqlite3.Connection) -> list[ParsedStorage]:
         )
         for row in connection.execute("SELECT * FROM storages ORDER BY class_name")
     ]
+
+
+def load_game_data(connection: sqlite3.Connection) -> GameData:
+    """Read the whole catalogue in the form the engine expects.
+
+    This is the injection point: the engine receives a ``GameData`` and never
+    touches SQLite itself.
+    """
+    return GameData.from_rows(
+        items=read_items(connection),
+        recipes=read_recipes(connection),
+        buildings=read_buildings(connection),
+        extractors=read_extractors(connection),
+        belts=read_belts(connection),
+        pipes=read_pipes(connection),
+        storages=read_storages(connection),
+    )
+
+
+def load_game_data_from_file(path: Path) -> GameData:
+    """Convenience wrapper that opens the database read-only and closes it."""
+    with connect(path) as connection:
+        return load_game_data(connection)

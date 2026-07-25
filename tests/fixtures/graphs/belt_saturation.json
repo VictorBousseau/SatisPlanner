@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "resource",
+      "id": "mine",
+      "label": "Foreuse Mk.3 sur gisement pur",
+      "item_class": "Desc_OreIron_C",
+      "extractor_class": "Build_MinerMk3_C",
+      "purity": "pure",
+      "count": 1
+    },
+    {
+      "kind": "output",
+      "id": "out",
+      "item_class": "Desc_OreIron_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "mine",
+      "target": "out",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    }
+  ]
+}

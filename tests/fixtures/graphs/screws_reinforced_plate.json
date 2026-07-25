@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "external_source",
+      "id": "ingots",
+      "label": "Lingots importes",
+      "item_class": "Desc_IronIngot_C",
+      "rate_per_minute": 60
+    },
+    {
+      "kind": "machine",
+      "id": "plates",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 1.5
+    },
+    {
+      "kind": "machine",
+      "id": "rods",
+      "recipe_class": "Recipe_IronRod_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "machine",
+      "id": "screws",
+      "recipe_class": "Recipe_Screw_C",
+      "machine_count": 1.5
+    },
+    {
+      "kind": "machine",
+      "id": "assembler",
+      "recipe_class": "Recipe_IronPlateReinforced_C",
+      "machine_count": 1
+    },
+    {
+      "kind": "output",
+      "id": "out",
+      "item_class": "Desc_IronPlateReinforced_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "ingots",
+      "target": "plates",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e2",
+      "source": "ingots",
+      "target": "rods",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e3",
+      "source": "rods",
+      "target": "screws",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e4",
+      "source": "plates",
+      "target": "assembler",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e5",
+      "source": "screws",
+      "target": "assembler",
+      "item_class": "Desc_IronScrew_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e6",
+      "source": "assembler",
+      "target": "out",
+      "item_class": "Desc_IronPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    }
+  ]
+}

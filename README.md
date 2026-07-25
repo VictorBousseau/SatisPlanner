@@ -51,8 +51,27 @@ ui  -->  core  <--  data
 ```
 
 `core/` est un domaine pur : il n'importe jamais Qt et ne lit jamais la base de données. Les données
-lui parviennent par injection. `tests/test_architecture.py` vérifie cette règle par analyse statique
-des imports et échoue sinon.
+lui parviennent par injection (`data.db.load_game_data` produit le catalogue `core.models.GameData`).
+`tests/test_architecture.py` vérifie cette règle par analyse statique des imports et échoue sinon.
+
+À l'intérieur de `core/`, l'ordre des dépendances est
+`models → graph → results → validation → engine` : les diagnostics lisent un rapport résolu sans
+jamais calculer de débit, et le moteur les appelle en fin de résolution.
+
+## Le moteur
+
+Calcul en régime permanent. Une seule grandeur par nœud, son **taux de fonctionnement** :
+
+```
+taux = min( satisfaction de chaque entrée, absorption de chaque sortie )
+```
+
+```bash
+.venv/Scripts/python.exe tools/show_report.py tests/fixtures/graphs/plastic_chain.json
+```
+
+affiche le `FactoryReport` complet en console : nœuds, lignes, bilan en trois catégories (solides,
+fluides et sous-produits, électricité), liste de courses et diagnostics.
 
 ## Données du jeu
 
@@ -98,6 +117,13 @@ Trois points ont été arbitrés au démarrage et gouvernent le moteur :
 3. **Le nombre de machines est une entrée**, saisie par l'utilisateur. Le moteur restitue en regard
    le nombre réellement utile compte tenu des intrants et l'écart. Le calcul descendant
    (« je veux 5 Ordinateurs/min ») relève de la V2.
+4. **L'itération de point fixe part optimiste et descend.** Tous les taux valent 1 au départ, et la
+   suite décroît jusqu'à se stabiliser. Partir de zéro donne une réponse dégénérée : dans une boucle
+   de recyclage, « tout est arrêté » est un état parfaitement cohérent dont un solveur initialisé à
+   zéro ne sort jamais. Le comportement réel est le **plus grand** état cohérent.
+5. **La capacité des lignes est diagnostiquée, jamais imposée.** Un convoyeur Mk.1 traversé par
+   480/min affiche 480/min et un avertissement proposant le Mk.4. Les débits restent ceux de la
+   production, ce qui permet de voir *ce qu'il faudrait* transporter.
 
 ## Licence
 

@@ -9,11 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from satisplanner.core.models import ItemForm
+from satisplanner.core.models import ItemForm, Recipe
 from satisplanner.data.docs_parser import (
     DocsFileError,
     GameDataset,
-    ParsedRecipe,
     french_labels,
     locate_docs_directory,
     parse_class_list,
@@ -167,7 +166,7 @@ def test_icon_file_name_extraction(raw: str | None, expected: str | None) -> Non
 # --------------------------------------------------------------------------- #
 
 
-def test_smelter_iron_ingot(recipes: dict[str, ParsedRecipe]) -> None:
+def test_smelter_iron_ingot(recipes: dict[str, Recipe]) -> None:
     recipe = recipes["Recipe_IngotIron_C"]
     assert recipe.building_class == "Build_SmelterMk1_C"
     assert slot_of(recipe.ingredients, "Desc_OreIron_C").rate_per_minute == 30
@@ -175,7 +174,7 @@ def test_smelter_iron_ingot(recipes: dict[str, ParsedRecipe]) -> None:
     assert recipe.involves_fluid is False
 
 
-def test_foundry_steel_ingot(recipes: dict[str, ParsedRecipe]) -> None:
+def test_foundry_steel_ingot(recipes: dict[str, Recipe]) -> None:
     recipe = recipes["Recipe_IngotSteel_C"]
     assert recipe.building_class == "Build_FoundryMk1_C"
     assert slot_of(recipe.ingredients, "Desc_OreIron_C").rate_per_minute == 45
@@ -183,14 +182,14 @@ def test_foundry_steel_ingot(recipes: dict[str, ParsedRecipe]) -> None:
     assert slot_of(recipe.products, "Desc_SteelIngot_C").rate_per_minute == 45
 
 
-def test_constructor_iron_plate(recipes: dict[str, ParsedRecipe]) -> None:
+def test_constructor_iron_plate(recipes: dict[str, Recipe]) -> None:
     recipe = recipes["Recipe_IronPlate_C"]
     assert recipe.building_class == "Build_ConstructorMk1_C"
     assert slot_of(recipe.ingredients, "Desc_IronIngot_C").rate_per_minute == 30
     assert slot_of(recipe.products, "Desc_IronPlate_C").rate_per_minute == 20
 
 
-def test_assembler_reinforced_iron_plate(recipes: dict[str, ParsedRecipe]) -> None:
+def test_assembler_reinforced_iron_plate(recipes: dict[str, Recipe]) -> None:
     recipe = recipes["Recipe_IronPlateReinforced_C"]
     assert recipe.building_class == "Build_AssemblerMk1_C"
     assert slot_of(recipe.ingredients, "Desc_IronPlate_C").rate_per_minute == 30
@@ -199,7 +198,7 @@ def test_assembler_reinforced_iron_plate(recipes: dict[str, ParsedRecipe]) -> No
 
 
 def test_refinery_plastic_locks_litres_fluids_and_byproducts(
-    recipes: dict[str, ParsedRecipe],
+    recipes: dict[str, Recipe],
 ) -> None:
     """The most important row of the control table.
 
@@ -220,7 +219,7 @@ def test_refinery_plastic_locks_litres_fluids_and_byproducts(
 
 
 def test_refinery_rubber_has_a_different_byproduct_ratio(
-    recipes: dict[str, ParsedRecipe],
+    recipes: dict[str, Recipe],
 ) -> None:
     recipe = recipes["Recipe_Rubber_C"]
     assert slot_of(recipe.ingredients, "Desc_LiquidOil_C").rate_per_minute == 30
@@ -228,7 +227,7 @@ def test_refinery_rubber_has_a_different_byproduct_ratio(
     assert slot_of(recipe.products, "Desc_HeavyOilResidue_C").rate_per_minute == 20
 
 
-def test_manufacturer_computer(recipes: dict[str, ParsedRecipe]) -> None:
+def test_manufacturer_computer(recipes: dict[str, Recipe]) -> None:
     """Computer: 2.5/min, as expected.
 
     The ingredients, however, are those of Satisfactory 1.2 as read from the game
@@ -245,7 +244,7 @@ def test_manufacturer_computer(recipes: dict[str, ParsedRecipe]) -> None:
     assert slot_of(recipe.ingredients, "Desc_Plastic_C").rate_per_minute == 40
 
 
-def test_packager_moves_a_fluid_into_a_solid(recipes: dict[str, ParsedRecipe]) -> None:
+def test_packager_moves_a_fluid_into_a_solid(recipes: dict[str, Recipe]) -> None:
     recipe = recipes["Recipe_PackagedWater_C"]
     assert recipe.building_class == "Build_Packager_C"
     assert slot_of(recipe.ingredients, "Desc_Water_C").rate_per_minute == 60
@@ -254,7 +253,7 @@ def test_packager_moves_a_fluid_into_a_solid(recipes: dict[str, ParsedRecipe]) -
 
 
 def test_recycling_loop_recipes_are_present_and_marked_alternate(
-    recipes: dict[str, ParsedRecipe],
+    recipes: dict[str, Recipe],
 ) -> None:
     """The phase 2 fixed point needs both halves of the loop."""
     plastic = recipes["Recipe_Alternate_Plastic_1_C"]
@@ -274,7 +273,7 @@ def test_recycling_loop_recipes_are_present_and_marked_alternate(
 # --------------------------------------------------------------------------- #
 
 
-def test_out_of_scope_recipes_are_dropped(recipes: dict[str, ParsedRecipe]) -> None:
+def test_out_of_scope_recipes_are_dropped(recipes: dict[str, Recipe]) -> None:
     # Present in the fixture on purpose: a Blender recipe and a build gun recipe.
     assert "Recipe_NitricAcid_C" not in recipes, "le Melangeur est hors perimetre V1"
     assert "Recipe_Wall_8x4_01_C" not in recipes, "le pistolet n'est pas une machine"
@@ -382,7 +381,7 @@ def test_the_alternate_flag_never_depends_on_the_french_label() -> None:
 
 
 def test_alternate_recipes_the_game_encodes_inconsistently(
-    recipes: dict[str, ParsedRecipe],
+    recipes: dict[str, Recipe],
 ) -> None:
     """Both encodings are authoritative; relying on either one alone mislabels a recipe.
 
@@ -400,6 +399,26 @@ def test_alternate_recipes_the_game_encodes_inconsistently(
 
 def test_the_fixture_parses_without_warnings(dataset: GameDataset) -> None:
     assert dataset.warnings == ()
+
+
+def test_event_content_is_marked_from_the_asset_path(dataset: GameDataset) -> None:
+    """FICSMAS items live under /Events/ -- a far safer marker than a name pattern."""
+    items = {item.class_name: item for item in dataset.items}
+    assert items["Desc_Gift_C"].is_event is True
+    assert items["Desc_XmasBall1_C"].is_event is True
+    # Ammunition is real content that a factory can produce: it must stay visible.
+    assert items["Desc_SpikedRebar_C"].is_event is False
+    assert items["Desc_Plastic_C"].is_event is False
+
+    recipes = {recipe.class_name: recipe for recipe in dataset.recipes}
+    assert recipes["Recipe_XmasBall1_C"].is_event is True
+    assert recipes["Recipe_Plastic_C"].is_event is False
+
+
+def test_event_content_is_kept_in_the_dataset_never_filtered_out(dataset: GameDataset) -> None:
+    """Filtering happens at display time only, like is_alternate."""
+    assert any(item.is_event for item in dataset.items)
+    assert any(recipe.is_event for recipe in dataset.recipes)
 
 
 def test_icons_are_resolved_for_the_items_of_the_control_table(dataset: GameDataset) -> None:

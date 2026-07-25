@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "resource",
+      "id": "oil",
+      "label": "Six extracteurs de petrole",
+      "item_class": "Desc_LiquidOil_C",
+      "extractor_class": "Build_OilPump_C",
+      "purity": "normal",
+      "count": 6
+    },
+    {
+      "kind": "output",
+      "id": "out",
+      "item_class": "Desc_LiquidOil_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "oil",
+      "target": "out",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_PipelineMK2_C"
+    }
+  ]
+}

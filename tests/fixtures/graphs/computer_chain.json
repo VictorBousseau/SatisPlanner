@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "kind": "external_source",
+      "id": "sheets",
+      "item_class": "Desc_CopperSheet_C",
+      "rate_per_minute": 60
+    },
+    {
+      "kind": "external_source",
+      "id": "plastic",
+      "item_class": "Desc_Plastic_C",
+      "rate_per_minute": 240
+    },
+    {
+      "kind": "external_source",
+      "id": "cables",
+      "item_class": "Desc_Cable_C",
+      "rate_per_minute": 60
+    },
+    {
+      "kind": "machine",
+      "id": "circuit_boards",
+      "recipe_class": "Recipe_CircuitBoard_C",
+      "machine_count": 4
+    },
+    {
+      "kind": "machine",
+      "id": "computers",
+      "recipe_class": "Recipe_Computer_C",
+      "machine_count": 3
+    },
+    {
+      "kind": "output",
+      "id": "out",
+      "item_class": "Desc_Computer_C"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "sheets",
+      "target": "circuit_boards",
+      "item_class": "Desc_CopperSheet_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e2",
+      "source": "plastic",
+      "target": "circuit_boards",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e3",
+      "source": "plastic",
+      "target": "computers",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e4",
+      "source": "cables",
+      "target": "computers",
+      "item_class": "Desc_Cable_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e5",
+      "source": "circuit_boards",
+      "target": "computers",
+      "item_class": "Desc_CircuitBoard_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e6",
+      "source": "computers",
+      "target": "out",
+      "item_class": "Desc_Computer_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    }
+  ]
+}
