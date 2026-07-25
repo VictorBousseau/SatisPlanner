@@ -13,18 +13,26 @@ with, which is what makes capacity being a constraint bearable to work with.
 
 import logging
 from collections.abc import Sequence
-from typing import Final
+from typing import Any, Final
 
-from PySide6.QtCore import QMimeData, QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QDrag, QMouseEvent
+from PySide6.QtCore import (
+    QAbstractListModel,
+    QMimeData,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QSize,
+    Qt,
+    Signal,
+)
+from PySide6.QtGui import QColor, QDrag
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
+    QListView,
     QVBoxLayout,
     QWidget,
 )
@@ -83,44 +91,113 @@ def decode_entry(payload: bytes, entries: Sequence[PaletteEntry]) -> PaletteEntr
     return None
 
 
-class PaletteList(QListWidget):
+class PaletteModel(QAbstractListModel):
+    """Rows of the palette: section headings and entries, icons fetched on demand.
+
+    A model rather than a widget full of items, for one measured reason: building the
+    icon of every row up front costs about nine milliseconds each, and seven hundred
+    of those is nearly ten seconds of a frozen window. Qt only asks a model for the
+    rows it is about to paint, so the cost follows the scrollbar instead of the
+    catalogue.
+    """
+
+    def __init__(self, icons: IconProvider, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.icons = icons
+        self._rows: list[PaletteEntry | str] = []
+
+    def set_rows(self, rows: Sequence[PaletteEntry | str]) -> None:
+        self.beginResetModel()
+        self._rows = list(rows)
+        self.endResetModel()
+
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008
+        return 0 if parent.isValid() else len(self._rows)
+
+    def entry_at(self, index: QModelIndex | QPersistentModelIndex) -> PaletteEntry | None:
+        if not index.isValid() or index.row() >= len(self._rows):
+            return None
+        row = self._rows[index.row()]
+        return row if isinstance(row, PaletteEntry) else None
+
+    def flags(self, index: QModelIndex | QPersistentModelIndex) -> Qt.ItemFlag:
+        if self.entry_at(index) is None:
+            return Qt.ItemFlag.NoItemFlags
+        return (
+            Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
+        )
+
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = int(Qt.ItemDataRole.DisplayRole),
+    ) -> Any:
+        if not index.isValid() or index.row() >= len(self._rows):
+            return None
+        row = self._rows[index.row()]
+        if isinstance(row, str):
+            if role == Qt.ItemDataRole.DisplayRole:
+                return row.upper()
+            if role == Qt.ItemDataRole.ForegroundRole:
+                return QColor(theme.TEXT_MUTED)
+            return None
+        match role:
+            case Qt.ItemDataRole.DisplayRole:
+                return f"{row.label}{_alternate_marker(row)}\n{row.detail}"
+            case Qt.ItemDataRole.DecorationRole:
+                return self.icons.icon_for(row.icon_class, row.icon_file, row.label)
+            case Qt.ItemDataRole.ToolTipRole:
+                return f"{row.label}\n{row.detail}\n{row.class_name}"
+            case _ if role == _ROLE_ENTRY:
+                return row
+            case _:
+                return None
+
+
+class PaletteList(QListView):
     """The list itself, split out so it can start a drag."""
 
     # A PaletteEntry is a plain dataclass, so it travels as an opaque Python object.
     entryActivated = Signal(object)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, model: PaletteModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setModel(model)
+        self.palette_model = model
         self.setIconSize(QSize(LIST_ICON_SIDE, LIST_ICON_SIDE))
         self.setDragEnabled(True)
-        self.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self.setUniformItemSizes(False)
-        self.itemDoubleClicked.connect(self._activate)
-        self._press_at = QPoint()
+        self.setSelectionMode(QListView.SelectionMode.SingleSelection)
+        self.setUniformItemSizes(True)
+        self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.doubleClicked.connect(self._activate)
 
-    def _activate(self, item: QListWidgetItem) -> None:
-        entry = item.data(_ROLE_ENTRY)
-        if isinstance(entry, PaletteEntry):
+    def _activate(self, index: QModelIndex) -> None:
+        entry = self.palette_model.entry_at(index)
+        if entry is not None:
             self.entryActivated.emit(entry)
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        self._press_at = event.pos()
-        super().mousePressEvent(event)
+    def current_entry(self) -> PaletteEntry | None:
+        return self.palette_model.entry_at(self.currentIndex())
 
     def startDrag(self, supported_actions: Qt.DropAction) -> None:
-        item = self.currentItem()
-        entry = item.data(_ROLE_ENTRY) if item is not None else None
-        if not isinstance(entry, PaletteEntry):
+        entry = self.current_entry()
+        if entry is None:
             super().startDrag(supported_actions)
             return
         payload = QMimeData()
         payload.setData(ENTRY_MIME_TYPE, encode_entry(entry))
         drag = QDrag(self)
         drag.setMimeData(payload)
-        icon = item.icon()
+        icon = self.palette_model.icons.icon_for(entry.icon_class, entry.icon_file, entry.label)
         if not icon.isNull():
             drag.setPixmap(icon.pixmap(LIST_ICON_SIDE * 2, LIST_ICON_SIDE * 2))
         drag.exec(Qt.DropAction.CopyAction)
+
+
+def _alternate_marker(entry: PaletteEntry) -> str:
+    """The French labels already say so for most alternates ("Alternative : ..."),
+    so the marker is only added where the game left it out."""
+    return " (alternative)" if entry.is_alternate and "alternative" not in fold(entry.label) else ""
 
 
 class PaletteWidget(QWidget):
@@ -164,7 +241,8 @@ class PaletteWidget(QWidget):
         for class_name, label in transport_choices(game_data, ItemForm.LIQUID):
             self.pipe_tier.addItem(label, class_name)
 
-        self.list = PaletteList(self)
+        self.model = PaletteModel(icons, self)
+        self.list = PaletteList(self.model, self)
         self.count_label = QLabel(self)
         self.count_label.setStyleSheet(f"color: {theme.TEXT_MUTED};")
 
@@ -225,35 +303,18 @@ class PaletteWidget(QWidget):
         return kept
 
     def refresh(self) -> None:
-        """Rebuild the list. Cheap: a few hundred rows at worst."""
+        """Rebuild the row list, headings included. Icons are fetched as they show."""
         entries = self.visible_entries()
-        self.list.clear()
+        rows: list[PaletteEntry | str] = []
         section = ""
         for entry in entries[:MAX_VISIBLE_ENTRIES]:
             heading = SECTION_LABELS[entry.kind]
             if heading != section:
                 section = heading
-                self.list.addItem(_heading_item(heading))
-            self.list.addItem(self._entry_item(entry))
+                rows.append(heading)
+            rows.append(entry)
+        self.model.set_rows(rows)
         self.count_label.setText(_count_text(len(entries)))
-
-    def _entry_item(self, entry: PaletteEntry) -> QListWidgetItem:
-        # The French labels already say so for most alternates ("Alternative : ..."),
-        # so the marker is only added where the game left it out.
-        marked = entry.is_alternate and "alternative" not in fold(entry.label)
-        suffix = " (alternative)" if marked else ""
-        item = QListWidgetItem(f"{entry.label}{suffix}\n{entry.detail}")
-        item.setIcon(self.icons.icon_for(entry.icon_class, entry.icon_file, entry.label))
-        item.setData(_ROLE_ENTRY, entry)
-        item.setToolTip(f"{entry.label}\n{entry.detail}\n{entry.class_name}")
-        return item
-
-
-def _heading_item(text: str) -> QListWidgetItem:
-    item = QListWidgetItem(text.upper())
-    item.setFlags(Qt.ItemFlag.NoItemFlags)
-    item.setForeground(Qt.GlobalColor.gray)
-    return item
 
 
 def _count_text(total: int) -> str:

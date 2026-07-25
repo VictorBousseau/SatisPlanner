@@ -237,11 +237,25 @@ class NodeItem(QGraphicsItem):
                 item = self.game_data.item(source.item_class)
                 return f"apport externe {formatting.rate(source.rate_per_minute, item)}"
             case StorageNode() as storage:
-                if storage.initial_content > 0:
-                    return f"tampon — stock initial {formatting.number(storage.initial_content)}"
-                return "tampon — vide au demarrage"
+                return self._storage_subtitle(storage)
             case OutputNode() as output:
                 return "rejet assume" if output.is_sink else "sortie de l'usine"
+
+    def _storage_subtitle(self, storage: StorageNode) -> str:
+        """What the buffer holds, and whether that was decided or deduced.
+
+        A buffer that silently keeps a content decided by a line the user has since
+        removed would refuse the next line for no visible reason, so the state is
+        spelled out: "(fixe)" means it was chosen and will not follow the lines.
+        """
+        if self.content_item is None:
+            return "tampon — contenu indetermine"
+        name = self.game_data.item(self.content_item).display_name_fr
+        origin = "fixe" if storage.item_class else "deduit des lignes"
+        stock = ""
+        if storage.initial_content > 0:
+            stock = f", stock initial {formatting.number(storage.initial_content)}"
+        return f"tampon — {name} ({origin}){stock}"
 
     def icon(self) -> QIcon:
         match self.node:

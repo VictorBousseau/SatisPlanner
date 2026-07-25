@@ -9,9 +9,14 @@ a change per pixel, and solving a big graph a hundred times a second would make 
 canvas stutter. Changes therefore restart a short timer and the solve happens once
 the user stops moving. :meth:`solve_now` is the synchronous door, used by the tests
 and before anything that has to read a fresh report.
+
+"Modified" is read off the undo stack rather than tracked by hand: undoing back to
+the point where the file was saved makes the document clean again, which is what a
+user expects and what a hand-kept boolean always gets wrong.
 """
 
 import logging
+from pathlib import Path
 from typing import Final
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -21,6 +26,7 @@ from satisplanner.core import engine
 from satisplanner.core.graph import FactoryGraph, Node
 from satisplanner.core.models import GameData
 from satisplanner.core.results import FactoryReport
+from satisplanner.data import factory_file
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +38,17 @@ SOLVE_DELAY_MS: Final = 120
 # long one cannot grow without limit.
 UNDO_LIMIT: Final = 500
 
+UNTITLED: Final = "Usine sans titre"
+
 
 class FactoryDocument(QObject):
     """One factory being edited."""
 
     graphChanged = Signal()
     reportChanged = Signal(FactoryReport)
+    # Emitted whenever the window title should change: a new file, or the first edit
+    # after a save.
+    identityChanged = Signal()
 
     def __init__(self, game_data: GameData, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -45,6 +56,11 @@ class FactoryDocument(QObject):
         self.graph = FactoryGraph()
         self.undo_stack = QUndoStack(self)
         self.undo_stack.setUndoLimit(UNDO_LIMIT)
+        # A bound method rather than a lambda: Qt then knows the document is the
+        # receiver and drops the connection when it is destroyed, instead of firing
+        # into an object that no longer exists.
+        self.undo_stack.cleanChanged.connect(self._clean_changed)
+        self._path: Path | None = None
         self._report: FactoryReport | None = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -58,8 +74,69 @@ class FactoryDocument(QObject):
         """The last computed answer, or ``None`` before the first solve."""
         return self._report
 
+    @property
+    def path(self) -> Path | None:
+        """Where this factory lives, or ``None`` while it has never been saved."""
+        return self._path
+
+    @property
+    def is_modified(self) -> bool:
+        return not self.undo_stack.isClean()
+
+    def _clean_changed(self, _clean: bool) -> None:
+        self.identityChanged.emit()
+
+    @property
+    def display_name(self) -> str:
+        return UNTITLED if self._path is None else self._path.stem
+
     def node(self, node_id: str) -> Node:
         return self.graph.node(node_id)
+
+    # ------------------------------------------------------------ persistence
+
+    def reset(self, graph: FactoryGraph | None = None, path: Path | None = None) -> None:
+        """Replace the whole factory. Clears the history: there is nothing to undo
+        back into, and offering it would restore half of the previous document."""
+        self.graph = graph if graph is not None else FactoryGraph()
+        self._path = path
+        self.undo_stack.clear()
+        self.undo_stack.setClean()
+        self.graphChanged.emit()
+        self.identityChanged.emit()
+        self.solve_now()
+
+    def open(self, path: Path) -> factory_file.LoadedFactory:
+        """Load a ``.sfp``. Raises :class:`FactoryFileError` with a French reason."""
+        loaded = factory_file.load(path)
+        self.adopt(loaded.graph, path, loaded.warnings)
+        return loaded
+
+    def adopt(
+        self,
+        graph: FactoryGraph,
+        path: Path | None = None,
+        warnings: list[str] | None = None,
+    ) -> list[str]:
+        """Take on a factory from anywhere, dropping what the catalogue cannot describe.
+
+        A document that comes in is never "modified": it is exactly what was received
+        until the user changes something.
+        """
+        missing, removed = factory_file.prune_unknown(graph, self.game_data)
+        if missing and warnings is not None:
+            warnings.append(factory_file.describe_unknown(missing, removed))
+        self.reset(graph, path)
+        return missing
+
+    def save_as(self, path: Path, thumbnail: bytes | None = None) -> None:
+        factory_file.save(path, self.graph, thumbnail)
+        self._path = path
+        self.undo_stack.setClean()
+        self.identityChanged.emit()
+
+    def share_code(self) -> str:
+        return factory_file.encode_share_code(self.graph)
 
     # ----------------------------------------------------------------- change
 

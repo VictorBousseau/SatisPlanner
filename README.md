@@ -62,7 +62,12 @@ pareil dans un avertissement et sur un nœud.
 
 `ui/` ne contient pas de logique de calcul : `document.py` porte le graphe édité et la pile
 d'annulation, `commands.py` les opérations, `catalogue.py` la passerelle entre le catalogue et la
-palette (sans Qt, donc testable sans fenêtre), et `canvas.py` / `canvas_items.py` le rendu.
+palette (sans Qt, donc testable sans fenêtre), `canvas.py` / `canvas_items.py` le rendu,
+`report_html.py` le rapport en HTML — partagé par le panneau des totaux et l'export PDF, pour que
+la page imprimée et le panneau à côté ne puissent pas afficher deux chiffres différents.
+
+`data/factory_file.py` lit et écrit les usines : c'est de l'entrée-sortie, donc c'est dans `data/`,
+au même titre que le parseur du jeu et la base SQLite.
 
 ## Le moteur
 
@@ -102,6 +107,37 @@ Palette à gauche, canvas au centre, emplacements réservés à droite pour les 
 - **Annulation** : toutes les opérations sans exception passent par une `QUndoCommand`, y compris
   les déplacements. Le moteur est relancé après chaque changement, avec un regroupement de 120 ms
   pour ne pas résoudre le graphe à chaque pixel d'un glissement.
+
+Trois panneaux à droite, alimentés par le même rapport que le canvas :
+
+- **Tableau** : un nœud par ligne, tri et filtre, sélection synchronisée dans les deux sens avec le
+  canvas, et une colonne de quantité éditable — dont l'édition passe par la pile d'annulation
+  comme le reste.
+- **Totaux** : matières brutes, fluides et sous-produits, électricité, puis liste de courses.
+  Quand l'usine vit sur un stock, un bandeau rouge et deux colonnes de chiffres — « avec les
+  stocks » et « régime établi » — remplacent le silence qui laisserait croire à une réussite.
+- **Diagnostics** : triés par niveau, filtrables, et **cliquables** : sélectionner une ligne
+  sélectionne et centre le nœud ou la ligne concernée. Quand un diagnostic nomme une correction,
+  un bouton l'applique depuis la ligne même.
+
+## Fichiers et partage
+
+Une usine s'enregistre en `.sfp` : une archive ZIP contenant `factory.json`, un `manifest.json`
+(version de l'application, version des données de jeu, date, version de schéma) et une vignette
+`thumbnail.png`. `Ctrl+S`, `Ctrl+O`, `Ctrl+N`, liste des fichiers récents, indicateur de
+modification dans le titre et confirmation avant de perdre du travail.
+
+Le même graphe se partage en une ligne de texte, `SFP1:<base64url(zlib(json))>`, avec « copier le
+code » et « importer depuis un code ». Un code tronqué, corrompu, mal collé ou venu d'une version
+future est refusé par une phrase en français — jamais par une trace d'exécution.
+
+`satisplanner/data/factory_file.py` porte aussi le **point d'entrée unique de migration** :
+`migrate(payload, schema_version)` fait remonter un document une version à la fois jusqu'à la
+version courante. Il n'a rien à faire aujourd'hui ; il existe pour que le jour où il aura quelque
+chose à faire, il n'y ait qu'un endroit où l'écrire et qu'un endroit où le tester.
+
+Exports : PNG du canvas, PDF avec le canvas en première page et, au choix, les totaux et les
+diagnostics en seconde.
 
 ## Données du jeu
 
@@ -167,7 +203,12 @@ Trois points ont été arbitrés au démarrage et gouvernent le moteur :
    affiché, jusqu'à ce qu'elles soient vides. `FactoryReport.is_sustainable` passe à faux dès qu'un
    tampon a un débit net négatif, et le rapport porte alors le régime réellement établi, résolu une
    seconde fois avec les tampons ne fournissant plus rien.
-8. **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Un nœud à trois lignes sortantes
+8. **Un fichier qui référence une classe disparue s'ouvre quand même**, mais le nœud concerné est
+   retiré et nommé. Le garder serait pire : le solveur, le canvas et le tableau cherchent tous sa
+   recette dans le catalogue et sont en droit de l'y trouver, et affaiblir cette garantie partout
+   pour accommoder un fichier d'une autre version du jeu coûterait plus qu'elle ne rapporte. Ce
+   que l'utilisateur risquait de perdre — la disposition de tout le reste — est préservé.
+9. **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Un nœud à trois lignes sortantes
    se dessine comme trois lignes, ce qui est la façon dont le joueur y pense. Ils restent des
    bâtiments à construire et sont comptés dans la liste de courses, déduits du nombre de lignes qui
    partagent un nœud. Leur débit n'est pas modélisé : un répartiteur passe 2000 items/min quand le

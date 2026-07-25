@@ -33,6 +33,7 @@ from PySide6.QtGui import (
     QWheelEvent,
 )
 from PySide6.QtWidgets import (
+    QGraphicsItem,
     QGraphicsPathItem,
     QGraphicsScene,
     QGraphicsSceneMouseEvent,
@@ -416,6 +417,27 @@ class FactoryScene(QGraphicsScene):
                 return item.node.id, port
         return None
 
+    def select_nodes(self, node_ids: Sequence[str]) -> None:
+        """Mirror a selection made elsewhere -- the table, or a diagnostic."""
+        wanted = set(node_ids)
+        self.clearSelection()
+        for node_id, item in self.nodes.items():
+            item.setSelected(node_id in wanted)
+
+    def select_target(self, node_id: str, edge_id: str) -> QGraphicsItem | None:
+        """Select what a diagnostic points at, and hand back the item to centre on.
+
+        A finding carries a node or a line, never both, and sometimes neither -- the
+        sustainability warning is about the whole factory.
+        """
+        self.clearSelection()
+        item: QGraphicsItem | None = self.nodes.get(node_id) if node_id else None
+        if item is None and edge_id:
+            item = self.edges.get(edge_id)
+        if item is not None:
+            item.setSelected(True)
+        return item
+
     def selected_nodes(self) -> list[NodeItem]:
         return [item for item in self.selectedItems() if isinstance(item, NodeItem)]
 
@@ -471,11 +493,59 @@ class FactoryScene(QGraphicsScene):
             count = QAction("Nombre de machines...", menu)
             count.triggered.connect(lambda: self.ask_machine_count(item.node.id, parent))
             menu.addAction(count)
+        if isinstance(item.node, StorageNode):
+            menu.addMenu(self._storage_content_menu(item.node, menu))
         delete = QAction("Supprimer", menu)
         delete.triggered.connect(self.delete_selection)
         menu.addSeparator()
         menu.addAction(delete)
         return menu
+
+    def _storage_content_menu(self, node: StorageNode, parent: QMenu) -> QMenu:
+        """Choose what a buffer holds, or hand the decision back to the lines.
+
+        Deduction is the default and covers the usual case, but two different items
+        arriving leaves it undecidable, and a buffer pinned by hand must be
+        un-pinnable -- otherwise it refuses the next line without saying why.
+        """
+        menu = QMenu("Contenu du tampon", parent)
+        deduced = QAction("Deduit des lignes raccordees", menu)
+        deduced.setCheckable(True)
+        deduced.setChecked(node.item_class is None)
+        deduced.triggered.connect(lambda: self.set_storage_item(node.id, None))
+        menu.addAction(deduced)
+        menu.addSeparator()
+
+        arriving = sorted({edge.item_class for edge in self.document.graph.incoming(node.id)})
+        for item_class in arriving:
+            label = self.document.game_data.item(item_class).display_name_fr
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(node.item_class == item_class)
+            action.triggered.connect(
+                lambda _checked=False, cls=item_class: self.set_storage_item(node.id, cls)
+            )
+            menu.addAction(action)
+        if not arriving:
+            empty = QAction("aucune ligne entrante", menu)
+            empty.setEnabled(False)
+            menu.addAction(empty)
+        return menu
+
+    def set_storage_item(self, node_id: str, item_class: str | None) -> None:
+        """Pin a buffer's content, or ``None`` to go back to deducing it."""
+        node = self.document.graph.node(node_id)
+        assert isinstance(node, StorageNode)
+        if node.item_class == item_class:
+            return
+        label = (
+            "deduction du contenu"
+            if item_class is None
+            else f"contenu fixe a {self.document.game_data.item(item_class).display_name_fr}"
+        )
+        self.document.undo_stack.push(
+            SetNodeFieldCommand(self.document, node_id, "item_class", item_class, label)
+        )
 
     def sufficient_tier(self, edge_id: str) -> str | None:
         """The smallest tier that would carry what this line is being asked to carry.

@@ -1,8 +1,13 @@
-"""Main window: the palette on the left, the canvas in the middle.
+"""Main window: palette on the left, canvas in the middle, three panels on the right.
 
-The side docks of phase 4 -- the synchronised table, the totals, the diagnostics --
-have their places reserved here and nothing more: an empty dock that says what is
-coming is honest, a dock full of placeholder numbers would not be.
+This is where the application becomes an application rather than a canvas: a document
+has a name, a place on disk and a modified state, closing it asks before throwing
+work away, and the three panels are kept in step with the same report the canvas
+draws from.
+
+Selection is synchronised in both directions between the canvas and the table. The
+loop is broken with one flag rather than by disconnecting signals, because
+disconnecting means remembering to reconnect and this way the invariant is local.
 
 The catalogue is read once from the database embedded in the package. There is no
 setup step and no path to point at: the application is autonomous, and a machine
@@ -10,35 +15,51 @@ without Satisfactory installed runs it exactly the same way.
 """
 
 import logging
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Final
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QDockWidget, QLabel, QMainWindow, QMessageBox, QToolBar
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QAction, QCloseEvent, QGuiApplication, QKeySequence
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QDockWidget,
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPlainTextEdit,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from satisplanner import __version__
 from satisplanner.core.models import GameData
 from satisplanner.core.results import FactoryReport, Severity
-from satisplanner.data import db
-from satisplanner.ui import theme
-from satisplanner.ui.canvas import FactoryScene, FactoryView
+from satisplanner.data import db, factory_file
+from satisplanner.data.factory_file import FILE_FILTER, FILE_SUFFIX, FactoryFileError
+from satisplanner.ui import exporters, theme
+from satisplanner.ui.canvas import MAX_SCALE, FactoryScene, FactoryView
 from satisplanner.ui.catalogue import PaletteEntry, build_entries
+from satisplanner.ui.diagnostics_panel import DiagnosticsPanel
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.palette import PaletteWidget
+from satisplanner.ui.table_panel import NodeTablePanel
+from satisplanner.ui.totals_panel import TotalsPanel
 
 logger = logging.getLogger(__name__)
 
 PALETTE_WIDTH: Final = 320
-RESERVED_DOCK_WIDTH: Final = 320
+PANEL_WIDTH: Final = 380
 
-# Placeholder text for the docks phase 4 fills in. Named so it is obvious in the UI
-# that the space is reserved rather than broken.
-_PHASE_4_DOCKS: Final[tuple[tuple[str, str], ...]] = (
-    ("Tableau", "Le tableau synchronise avec le canvas arrive en phase 4."),
-    ("Totaux", "Les totaux (matieres, electricite, liste de courses) arrivent en phase 4."),
-    ("Diagnostics", "Le panneau de diagnostics arrive en phase 4."),
-)
+SETTINGS_ORGANISATION: Final = "SatisPlanner"
+SETTINGS_APPLICATION: Final = "SatisPlanner"
+RECENT_FILES_KEY: Final = "recent_files"
+MAX_RECENT_FILES: Final = 8
 
 
 def load_catalogue() -> GameData:
@@ -46,6 +67,68 @@ def load_catalogue() -> GameData:
     path = db.default_database_path()
     logger.info("catalogue : %s", path)
     return db.load_game_data_from_file(path)
+
+
+class ShareCodeDialog(QDialog):
+    """One box for both directions: show a code to copy, or paste one to import."""
+
+    def __init__(self, title: str, code: str = "", *, read_only: bool = False, parent=None) -> None:  # type: ignore[no-untyped-def]
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(560, 260)
+        self.edit = QPlainTextEdit(code, self)
+        self.edit.setReadOnly(read_only)
+        self.edit.setPlaceholderText("Collez ici un code commencant par SFP1:")
+        self.edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+
+        buttons = QDialogButtonBox(self)
+        if read_only:
+            copy = buttons.addButton("Copier le code", QDialogButtonBox.ButtonRole.ActionRole)
+            copy.clicked.connect(self._copy)
+            buttons.addButton(QDialogButtonBox.StandardButton.Close)
+            buttons.rejected.connect(self.reject)
+            buttons.clicked.connect(self._maybe_close)
+        else:
+            buttons.setStandardButtons(
+                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            )
+            buttons.accepted.connect(self.accept)
+            buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.edit)
+        layout.addWidget(buttons)
+
+    def _copy(self) -> None:
+        QGuiApplication.clipboard().setText(self.edit.toPlainText())
+
+    def _maybe_close(self, button) -> None:  # type: ignore[no-untyped-def]
+        if button.text() == "Close":
+            self.accept()
+
+    def code(self) -> str:
+        return self.edit.toPlainText()
+
+
+class PdfOptionsDialog(QDialog):
+    """The single choice a PDF export offers."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Export PDF")
+        self.totals = QCheckBox("Inclure le tableau des totaux et les diagnostics", self)
+        self.totals.setChecked(True)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.totals)
+        layout.addWidget(buttons)
+
+    def include_totals(self) -> bool:
+        return self.totals.isChecked()
 
 
 class MainWindow(QMainWindow):
@@ -57,54 +140,100 @@ class MainWindow(QMainWindow):
         self.icons = IconProvider.from_default_roots()
         self.entries: list[PaletteEntry] = build_entries(self.game_data)
         self.document = FactoryDocument(self.game_data, self)
+        self.settings = QSettings(SETTINGS_ORGANISATION, SETTINGS_APPLICATION)
+        self._syncing_selection = False
 
-        self.setWindowTitle(f"SatisPlanner {__version__} — Satisfactory 1.2")
-        self.resize(1600, 950)
-
+        self.resize(1700, 980)
         self.scene = FactoryScene(self.document, self.icons, self.entries, self)
         self.view = FactoryView(self.scene, self)
         self.setCentralWidget(self.view)
 
         self.palette_widget = PaletteWidget(self.game_data, self.icons, self.entries, self)
-        self._add_palette_dock()
-        self._reserve_phase_4_docks()
+        self.table_panel = NodeTablePanel(self.document, self)
+        self.totals_panel = TotalsPanel(self.document, self)
+        self.diagnostics_panel = DiagnosticsPanel(self.document, self)
+
+        self._build_docks()
         self._build_actions()
         self._connect()
 
         self._show_catalogue_summary()
+        self.refresh_title()
         self.document.solve_now()
 
     # ------------------------------------------------------------------ layout
 
-    def _add_palette_dock(self) -> None:
-        dock = QDockWidget("Palette", self)
-        dock.setObjectName("dock_palette")
-        dock.setWidget(self.palette_widget)
-        dock.setAllowedAreas(
-            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
-        )
-        dock.setMinimumWidth(PALETTE_WIDTH)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
-        self.palette_dock = dock
+    def _build_docks(self) -> None:
+        self.palette_dock = self._dock("Palette", "palette", self.palette_widget, PALETTE_WIDTH)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.palette_dock)
 
-    def _reserve_phase_4_docks(self) -> None:
-        """Create the right-hand docks empty, so the layout is already the final one."""
-        self.reserved_docks: list[QDockWidget] = []
-        for title, message in _PHASE_4_DOCKS:
-            dock = QDockWidget(title, self)
-            dock.setObjectName(f"dock_{title.lower()}")
-            label = QLabel(message, dock)
-            label.setWordWrap(True)
-            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setStyleSheet(f"color: {theme.TEXT_MUTED}; padding: 12px;")
-            dock.setWidget(label)
-            dock.setMinimumWidth(RESERVED_DOCK_WIDTH)
+        self.table_dock = self._dock("Tableau", "tableau", self.table_panel, PANEL_WIDTH)
+        self.totals_dock = self._dock("Totaux", "totaux", self.totals_panel, PANEL_WIDTH)
+        self.diagnostics_dock = self._dock(
+            "Diagnostics", "diagnostics", self.diagnostics_panel, PANEL_WIDTH
+        )
+        for dock in (self.table_dock, self.totals_dock, self.diagnostics_dock):
             self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
-            self.reserved_docks.append(dock)
-        for previous, following in zip(self.reserved_docks, self.reserved_docks[1:], strict=False):
-            self.splitDockWidget(previous, following, Qt.Orientation.Vertical)
+        self.splitDockWidget(self.table_dock, self.totals_dock, Qt.Orientation.Vertical)
+        self.splitDockWidget(self.totals_dock, self.diagnostics_dock, Qt.Orientation.Vertical)
+        self.panel_docks = (self.table_dock, self.totals_dock, self.diagnostics_dock)
+
+    def _dock(self, title: str, name: str, widget: QWidget, width: int) -> QDockWidget:
+        dock = QDockWidget(title, self)
+        dock.setObjectName(f"dock_{name}")
+        dock.setWidget(widget)
+        dock.setMinimumWidth(width)
+        return dock
+
+    # ----------------------------------------------------------------- actions
 
     def _build_actions(self) -> None:
+        self._build_file_actions()
+        self._build_edit_actions()
+        self._build_view_actions()
+        self._build_help_actions()
+
+    def _build_file_actions(self) -> None:
+        self.new_action = _action(self, "Nouveau", QKeySequence.StandardKey.New, self.new_factory)
+        self.open_action = _action(self, "Ouvrir...", QKeySequence.StandardKey.Open, self.open_file)
+        self.save_action = _action(self, "Enregistrer", QKeySequence.StandardKey.Save, self.save)
+        self.save_as_action = _action(
+            self, "Enregistrer sous...", QKeySequence.StandardKey.SaveAs, self.save_as
+        )
+        self.copy_code_action = _action(self, "Copier le code de partage", None, self.copy_code)
+        self.import_code_action = _action(
+            self, "Importer depuis un code...", None, self.import_code
+        )
+        self.export_png_action = _action(self, "Exporter en PNG...", None, self.export_png)
+        self.export_pdf_action = _action(self, "Exporter en PDF...", None, self.export_pdf)
+        self.quit_action = _action(self, "Quitter", QKeySequence.StandardKey.Quit, self.close)
+
+        menu = self.menuBar().addMenu("&Fichier")
+        menu.addAction(self.new_action)
+        menu.addAction(self.open_action)
+        self.recent_menu = menu.addMenu("Fichiers recents")
+        menu.addSeparator()
+        menu.addAction(self.save_action)
+        menu.addAction(self.save_as_action)
+        menu.addSeparator()
+        menu.addAction(self.copy_code_action)
+        menu.addAction(self.import_code_action)
+        menu.addSeparator()
+        menu.addAction(self.export_png_action)
+        menu.addAction(self.export_pdf_action)
+        menu.addSeparator()
+        menu.addAction(self.quit_action)
+        self.refresh_recent_menu()
+
+        toolbar = QToolBar("Fichier", self)
+        toolbar.setObjectName("toolbar_fichier")
+        toolbar.setMovable(False)
+        toolbar.addAction(self.new_action)
+        toolbar.addAction(self.open_action)
+        toolbar.addAction(self.save_action)
+        self.addToolBar(toolbar)
+
+    def _build_edit_actions(self) -> None:
         toolbar = QToolBar("Edition", self)
         toolbar.setObjectName("toolbar_edition")
         toolbar.setMovable(False)
@@ -118,26 +247,15 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.redo_action)
         toolbar.addSeparator()
 
-        self.delete_action = QAction("Supprimer", self)
-        self.delete_action.setShortcut(QKeySequence.StandardKey.Delete)
-        self.delete_action.triggered.connect(self.scene.delete_selection)
-        toolbar.addAction(self.delete_action)
-
-        self.adjust_action = QAction("Ajuster ce noeud", self)
+        self.delete_action = _action(
+            self, "Supprimer", QKeySequence.StandardKey.Delete, self.scene.delete_selection
+        )
+        self.adjust_action = _action(self, "Ajuster ce noeud", None, self._adjust_selection)
         self.adjust_action.setToolTip(
             "Dimensionne le noeud selectionne a ce que ses intrants permettent (calcul local)"
         )
-        self.adjust_action.triggered.connect(self._adjust_selection)
+        toolbar.addAction(self.delete_action)
         toolbar.addAction(self.adjust_action)
-        toolbar.addSeparator()
-
-        self.reset_zoom_action = QAction("Zoom 100 %", self)
-        self.reset_zoom_action.triggered.connect(self.view.reset_zoom)
-        toolbar.addAction(self.reset_zoom_action)
-
-        self.fit_action = QAction("Tout afficher", self)
-        self.fit_action.triggered.connect(self.fit_to_factory)
-        toolbar.addAction(self.fit_action)
 
         menu = self.menuBar().addMenu("&Edition")
         menu.addAction(self.undo_action)
@@ -146,42 +264,293 @@ class MainWindow(QMainWindow):
         menu.addAction(self.delete_action)
         menu.addAction(self.adjust_action)
 
-        view_menu = self.menuBar().addMenu("&Affichage")
-        view_menu.addAction(self.palette_dock.toggleViewAction())
-        for dock in self.reserved_docks:
-            view_menu.addAction(dock.toggleViewAction())
-        view_menu.addSeparator()
-        view_menu.addAction(self.reset_zoom_action)
-        view_menu.addAction(self.fit_action)
+    def _build_view_actions(self) -> None:
+        self.reset_zoom_action = _action(self, "Zoom 100 %", None, self.view.reset_zoom)
+        self.fit_action = _action(self, "Tout afficher", None, self.fit_to_factory)
 
-        help_menu = self.menuBar().addMenu("&Aide")
-        about = QAction("A propos", self)
-        about.triggered.connect(self._show_about)
-        help_menu.addAction(about)
+        toolbar = self.findChild(QToolBar, "toolbar_edition")
+        if toolbar is not None:
+            toolbar.addSeparator()
+            toolbar.addAction(self.reset_zoom_action)
+            toolbar.addAction(self.fit_action)
+
+        menu = self.menuBar().addMenu("&Affichage")
+        menu.addAction(self.palette_dock.toggleViewAction())
+        for dock in self.panel_docks:
+            menu.addAction(dock.toggleViewAction())
+        menu.addSeparator()
+        menu.addAction(self.reset_zoom_action)
+        menu.addAction(self.fit_action)
+
+    def _build_help_actions(self) -> None:
+        menu = self.menuBar().addMenu("&Aide")
+        menu.addAction(_action(self, "A propos", None, self._show_about))
 
     def _connect(self) -> None:
         self.palette_widget.entryActivated.connect(self._add_at_view_centre)
         self.palette_widget.defaultTransportsChanged.connect(self.scene.set_default_transports)
         self.scene.selectionSummaryChanged.connect(self._show_hint)
+        self.scene.selectionChanged.connect(self._canvas_selection_changed)
+        self.table_panel.selectionChangedTo.connect(self._table_selection_changed)
+        self.diagnostics_panel.targetPicked.connect(self.reveal)
+        self.diagnostics_panel.fixRequested.connect(self.apply_fix)
         self.document.reportChanged.connect(self._show_report_summary)
+        self.document.identityChanged.connect(self.refresh_title)
         self.scene.set_default_transports(*self.palette_widget.default_transports())
 
-    # ----------------------------------------------------------------- actions
+    # -------------------------------------------------------------- selection
+
+    def _canvas_selection_changed(self) -> None:
+        if self._syncing_selection:
+            return
+        self._syncing_selection = True
+        try:
+            self.table_panel.show_selection([item.node.id for item in self.scene.selected_nodes()])
+        finally:
+            self._syncing_selection = False
+
+    def _table_selection_changed(self, node_ids: Sequence[str]) -> None:
+        if self._syncing_selection:
+            return
+        self._syncing_selection = True
+        try:
+            self.scene.select_nodes(node_ids)
+        finally:
+            self._syncing_selection = False
+
+    def reveal(self, node_id: str, edge_id: str) -> None:
+        """Select and centre what a diagnostic is talking about."""
+        target = self.scene.select_target(node_id, edge_id)
+        if target is not None:
+            self.view.centerOn(target)
+
+    def apply_fix(self, node_id: str, edge_id: str) -> None:
+        """The one-click fix a diagnostic offers, carried out on the right object."""
+        if edge_id and self.scene.upgrade_line(edge_id):
+            return
+        if node_id:
+            self.scene.adjust_node_if_machine(node_id)
+
+    # ------------------------------------------------------- document actions
+
+    def new_factory(self) -> None:
+        if not self.confirm_discard():
+            return
+        self.document.reset()
+        self.statusBar().showMessage("Nouvelle usine.", 4000)
+
+    def open_file(self, path: Path | None = None) -> bool:
+        if not self.confirm_discard():
+            return False
+        if path is None:
+            chosen, _ = QFileDialog.getOpenFileName(self, "Ouvrir une usine", "", FILE_FILTER)
+            if not chosen:
+                return False
+            path = Path(chosen)
+        try:
+            loaded = self.document.open(path)
+        except FactoryFileError as exc:
+            QMessageBox.warning(self, "Ouverture impossible", str(exc))
+            return False
+        self.remember_recent(path)
+        self.fit_to_factory()
+        self._report_warnings(loaded.warnings, path.name)
+        return True
+
+    def save(self) -> bool:
+        if self.document.path is None:
+            return self.save_as()
+        return self._write(self.document.path)
+
+    def save_as(self) -> bool:
+        suggestion = str(self.document.path or f"{self.document.display_name}{FILE_SUFFIX}")
+        chosen, _ = QFileDialog.getSaveFileName(
+            self, "Enregistrer l'usine", suggestion, FILE_FILTER
+        )
+        if not chosen:
+            return False
+        path = Path(chosen).with_suffix(FILE_SUFFIX)
+        return self._write(path)
+
+    def _write(self, path: Path) -> bool:
+        try:
+            self.document.save_as(path, exporters.thumbnail_bytes(self.scene))
+        except OSError as exc:
+            QMessageBox.warning(self, "Enregistrement impossible", f"{path.name} : {exc.strerror}")
+            return False
+        self.remember_recent(path)
+        self.statusBar().showMessage(f"Usine enregistree dans {path.name}.", 4000)
+        return True
+
+    def confirm_discard(self) -> bool:
+        """Ask before throwing away unsaved work. True means "go ahead"."""
+        if not self.document.is_modified:
+            return True
+        answer = QMessageBox.question(
+            self,
+            "Modifications non enregistrees",
+            f"« {self.document.display_name} » a ete modifiee. Enregistrer avant de continuer ?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if answer == QMessageBox.StandardButton.Save:
+            return self.save()
+        return answer == QMessageBox.StandardButton.Discard
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self.confirm_discard():
+            event.accept()
+        else:
+            event.ignore()
+
+    # ----------------------------------------------------------- share codes
+
+    def copy_code(self) -> str:
+        code = self.document.share_code()
+        QGuiApplication.clipboard().setText(code)
+        dialog = ShareCodeDialog("Code de partage", code, read_only=True, parent=self)
+        dialog.exec()
+        self.statusBar().showMessage("Code copie dans le presse-papiers.", 4000)
+        return code
+
+    def import_code(self, code: str | None = None) -> bool:
+        if code is None:
+            if not self.confirm_discard():
+                return False
+            dialog = ShareCodeDialog("Importer depuis un code", parent=self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return False
+            code = dialog.code()
+        try:
+            loaded = factory_file.decode_share_code(code)
+        except FactoryFileError as exc:
+            QMessageBox.warning(self, "Code refuse", str(exc))
+            return False
+        warnings = list(loaded.warnings)
+        self.document.adopt(loaded.graph, warnings=warnings)
+        self.fit_to_factory()
+        self._report_warnings(warnings, "le code importe")
+        return True
+
+    def _report_warnings(self, warnings: Sequence[str], subject: str) -> None:
+        if not warnings:
+            return
+        QMessageBox.information(
+            self, "Usine ouverte avec des reserves", f"{subject} :\n\n" + "\n\n".join(warnings)
+        )
+
+    # --------------------------------------------------------------- exports
+
+    def export_png(self, path: Path | None = None) -> bool:
+        if path is None:
+            chosen, _ = QFileDialog.getSaveFileName(
+                self, "Exporter le canvas", f"{self.document.display_name}.png", "Image PNG (*.png)"
+            )
+            if not chosen:
+                return False
+            path = Path(chosen)
+        if not exporters.export_png(self.scene, path):
+            QMessageBox.information(self, "Rien a exporter", "L'usine est vide.")
+            return False
+        self.statusBar().showMessage(f"Canvas exporte dans {path.name}.", 4000)
+        return True
+
+    def export_pdf(self, path: Path | None = None, *, include_totals: bool = True) -> bool:
+        if path is None:
+            dialog = PdfOptionsDialog(self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return False
+            include_totals = dialog.include_totals()
+            chosen, _ = QFileDialog.getSaveFileName(
+                self, "Exporter en PDF", f"{self.document.display_name}.pdf", "Document PDF (*.pdf)"
+            )
+            if not chosen:
+                return False
+            path = Path(chosen)
+        written = exporters.export_pdf(
+            self.scene,
+            path,
+            self.document.report,
+            self.game_data,
+            include_totals=include_totals,
+        )
+        if written:
+            self.statusBar().showMessage(f"Usine exportee dans {path.name}.", 4000)
+        return written
+
+    # --------------------------------------------------------- recent files
+
+    def recent_files(self) -> list[Path]:
+        """QSettings hands a one-element list back as a bare string, hence the check."""
+        stored = self.settings.value(RECENT_FILES_KEY, [])
+        if isinstance(stored, str):
+            entries: list[object] = [stored]
+        elif isinstance(stored, list):
+            entries = list(stored)
+        else:
+            entries = []
+        return [Path(str(entry)) for entry in entries if entry]
+
+    def remember_recent(self, path: Path) -> None:
+        """Most recent first, no duplicates, bounded."""
+        newest = path.resolve()
+        kept = [newest]
+        kept.extend(entry.resolve() for entry in self.recent_files() if entry.resolve() != newest)
+        self.settings.setValue(RECENT_FILES_KEY, [str(entry) for entry in kept[:MAX_RECENT_FILES]])
+        self.refresh_recent_menu()
+
+    def refresh_recent_menu(self) -> None:
+        self.recent_menu.clear()
+        entries = self.recent_files()
+        if not entries:
+            empty = self.recent_menu.addAction("Aucun fichier recent")
+            empty.setEnabled(False)
+            return
+        for path in entries:
+            action = self.recent_menu.addAction(path.name)
+            action.setToolTip(str(path))
+            action.triggered.connect(lambda _checked=False, target=path: self.open_file(target))
+        self.recent_menu.addSeparator()
+        self.recent_menu.addAction("Oublier la liste", self.forget_recent)
+
+    def forget_recent(self) -> None:
+        self.settings.setValue(RECENT_FILES_KEY, [])
+        self.refresh_recent_menu()
+
+    # ----------------------------------------------------------------- misc
 
     def _add_at_view_centre(self, entry: PaletteEntry) -> None:
         """Double-click in the palette drops the node in the middle of the view."""
-        centre = self.view.mapToScene(self.view.viewport().rect().center())
-        self.scene.add_entry(entry, centre)
+        self.scene.add_entry(entry, self.view.mapToScene(self.view.viewport().rect().center()))
 
     def _adjust_selection(self) -> None:
         for item in self.scene.selected_nodes():
             self.scene.adjust_node_if_machine(item.node.id)
 
     def fit_to_factory(self) -> None:
+        """Frame the whole factory, without magnifying a small one past legibility.
+
+        ``fitInView`` does not know about the wheel's zoom limit, so a factory of two
+        nodes would otherwise be blown up to eight times its size.
+        """
         rect = self.scene.itemsBoundingRect()
         if rect.isEmpty():
             return
         self.view.fitInView(rect.adjusted(-40, -40, 40, 40), Qt.AspectRatioMode.KeepAspectRatio)
+        scale = self.view.transform().m11()
+        if scale > MAX_SCALE:
+            self.view.resetTransform()
+            self.view.scale(MAX_SCALE, MAX_SCALE)
+            self.view.centerOn(rect.center())
+
+    def refresh_title(self) -> None:
+        marker = " •" if self.document.is_modified else ""
+        self.setWindowTitle(
+            f"{self.document.display_name}{marker} — SatisPlanner {__version__} "
+            f"— Satisfactory {db.GAME_VERSION}"
+        )
 
     # ------------------------------------------------------------- status bar
 
@@ -230,9 +599,22 @@ class MainWindow(QMainWindow):
             self,
             "A propos de SatisPlanner",
             f"<b>SatisPlanner {__version__}</b><br>"
-            "Planificateur d'usines theoriques pour Satisfactory 1.2.<br><br>"
+            f"Planificateur d'usines theoriques pour Satisfactory {db.GAME_VERSION}.<br><br>"
             "L'outil raisonne en <b>debits</b>, pas en geometrie 3D : ni distances, ni "
             "elevations, ni hauteur de refoulement des pompes.<br><br>"
             "Satisfactory, ses donnees et ses icones sont la propriete de "
             "Coffee Stain Studios.",
         )
+
+
+def _action(
+    window: QMainWindow,
+    text: str,
+    shortcut: QKeySequence.StandardKey | None,
+    slot: object,
+) -> QAction:
+    action = QAction(text, window)
+    if shortcut is not None:
+        action.setShortcut(shortcut)
+    action.triggered.connect(slot)
+    return action

@@ -21,10 +21,21 @@ from satisplanner.ui.palette import ENTRY_MIME_TYPE, encode_entry
 
 @pytest.fixture
 def window(qtbot: QtBot, game_data: GameData) -> Iterator[MainWindow]:
+    """A window this test file closes itself, in a known order.
+
+    Deliberately **not** handed to ``qtbot.addWidget``: qtbot closes the widgets it
+    owns during teardown, and closing a modified document opens a modal box asking
+    whether to save. That is exactly right in front of a user and exactly wrong in
+    front of a test runner, which has nobody to click it. The window is therefore
+    marked clean and closed here, and the dialog itself is tested on purpose below.
+    """
+    del qtbot
     built = MainWindow(game_data)
-    qtbot.addWidget(built)
     yield built
+    built.document.undo_stack.setClean()
     built.scene.dispose()
+    built.close()
+    built.deleteLater()
 
 
 def entry_of(window: MainWindow, kind: EntryKind, class_name: str) -> PaletteEntry:
@@ -46,7 +57,6 @@ def _drop(window: MainWindow, payload: QMimeData, at: QPointF) -> None:
 def test_main_window_builds_and_shows(qtbot: QtBot) -> None:
     """No argument: the catalogue comes from the database inside the package."""
     built = MainWindow()
-    qtbot.addWidget(built)
     with qtbot.waitExposed(built):
         built.show()
 
@@ -54,13 +64,22 @@ def test_main_window_builds_and_shows(qtbot: QtBot) -> None:
     assert "SatisPlanner" in built.windowTitle()
     assert built.centralWidget() is built.view
     assert built.game_data.recipes, "le catalogue embarque doit etre lisible sans le jeu"
+    assert built.document.is_modified is False
     built.scene.dispose()
+    built.close()
+    built.deleteLater()
 
 
-def test_the_phase_4_docks_are_reserved_and_empty(window: MainWindow) -> None:
-    titles = [dock.windowTitle() for dock in window.reserved_docks]
-    assert titles == ["Tableau", "Totaux", "Diagnostics"]
+def test_the_four_docks_are_in_place(window: MainWindow) -> None:
+    assert [dock.windowTitle() for dock in window.panel_docks] == [
+        "Tableau",
+        "Totaux",
+        "Diagnostics",
+    ]
     assert window.palette_dock.widget() is window.palette_widget
+    assert window.table_dock.widget() is window.table_panel
+    assert window.totals_dock.widget() is window.totals_panel
+    assert window.diagnostics_dock.widget() is window.diagnostics_panel
 
 
 def test_double_clicking_the_palette_drops_a_node_in_the_view(window: MainWindow) -> None:
