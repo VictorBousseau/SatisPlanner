@@ -145,6 +145,14 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
             else f"{storage.capacity_m3:.0f} m3"
         )
         log("    %-24s %s", names.get(storage.class_name, storage.class_name), capacity)
+    for attachment in sorted(dataset.attachments, key=lambda a: a.class_name):
+        roles = "/".join(role.value for role in attachment.roles)
+        log(
+            "    %-24s %s, %d branches",
+            names.get(attachment.class_name, attachment.class_name),
+            roles,
+            attachment.branches,
+        )
 
     _report_icons(dataset, icons)
 

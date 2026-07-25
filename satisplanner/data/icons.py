@@ -21,15 +21,21 @@ ICON_SUFFIXES: Final[frozenset[str]] = frozenset({".png", ".webp", ".jpg", ".jpe
 # Icons shipped with the application.
 EMBEDDED_ICON_DIRECTORY: Final = Path(__file__).resolve().parent.parent / "resources" / "icons"
 
-# Optional user directory, configurable from the preferences in phase 5.
-USER_ICON_SUBPATH: Final = Path("SatisPlanner") / "icons"
+# Subdirectory of the application's own data directory where a user may drop their
+# own export. Made configurable from the preferences in phase 5.
+USER_ICON_SUBPATH: Final = Path("icons")
 
 
-def default_icon_roots(local_app_data: Path | None = None) -> list[Path]:
-    """Icon directories in resolution order: embedded first, then user-provided."""
+def default_icon_roots(app_data_directory: Path | None = None) -> list[Path]:
+    """Icon directories in resolution order: embedded first, then user-provided.
+
+    ``app_data_directory`` is the application's own data directory, which only the UI
+    layer can locate; this module stays free of Qt. Directories that do not exist are
+    dropped, so a user who never exported anything costs nothing.
+    """
     roots = [EMBEDDED_ICON_DIRECTORY]
-    if local_app_data is not None:
-        roots.append(local_app_data / USER_ICON_SUBPATH)
+    if app_data_directory is not None:
+        roots.append(app_data_directory / USER_ICON_SUBPATH)
     return [root for root in roots if root.is_dir()]
 
 

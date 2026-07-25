@@ -61,6 +61,9 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG001"]  # pytest fixtures are injected, not called
+# Qt signals and slot overrides are camelCase by convention; renaming them would make
+# the code harder to match against the Qt documentation, not easier.
+"satisplanner/ui/*.py" = ["N802", "N815"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -8,6 +8,7 @@ number that lets the user fix the problem -- a rate, a ratio, a tier.
 import math
 from collections.abc import Iterator
 
+from satisplanner.core import formatting
 from satisplanner.core.graph import (
     Edge,
     ExternalSourceNode,
@@ -42,8 +43,9 @@ def diagnose(graph: FactoryGraph, game_data: GameData, report: FactoryReport) ->
     findings.extend(_convergence(report))
     findings.extend(_structure(graph, game_data))
     findings.extend(_nodes(graph, game_data, report))
-    findings.extend(_lines(graph, game_data, report))
+    findings.extend(_lines(game_data, report))
     findings.extend(_buffers(graph, game_data, report))
+    findings.extend(_sustainability(game_data, report))
     order = {Severity.ERROR: 0, Severity.WARNING: 1, Severity.INFO: 2}
     return sorted(
         findings,
@@ -225,7 +227,12 @@ def _deficit(
 def _throttled(
     node: Node, graph: FactoryGraph, solution: NodeSolution, game_data: GameData
 ) -> Iterator[Diagnostic]:
-    """Output side: back pressure on a machine, wasted capacity on a source."""
+    """Output side: back pressure on a machine, wasted capacity on a source.
+
+    A node held back by a line of its own is not reported here: the finding on the
+    line itself carries the tier to upgrade to, and repeating it as "back pressure"
+    would send the user looking in the wrong place.
+    """
     if solution.limiting is not LimitingFactor.OUTPUTS:
         return
     if solution.ratio >= 1.0 - RATIO_TOLERANCE:
@@ -295,30 +302,87 @@ def _source_potential(node: Node, game_data: GameData) -> float:
 # --------------------------------------------------------------------------- #
 
 
-def _lines(graph: FactoryGraph, game_data: GameData, report: FactoryReport) -> Iterator[Diagnostic]:
-    """Transport capacity is diagnosed, not enforced: the flows stay physical."""
+def _lines(game_data: GameData, report: FactoryReport) -> Iterator[Diagnostic]:
+    """Transport capacity is a constraint: what does not fit is quantified here.
+
+    The rate carried is capped by the tier, so the number that matters to the user is
+    the one the line *would* carry -- the uncapped companion run's figure -- and how
+    much of it is being turned away.
+    """
     for solution in report.edges:
         if not solution.is_saturated:
             continue
         item = game_data.item(solution.item_class)
-        upgrade = game_data.smallest_transport_for(item.form, solution.rate_per_minute)
+        upgrade = game_data.smallest_transport_for(item.form, solution.demanded_rate)
         current = _building_name(solution.transport_class, game_data)
         if upgrade is not None and upgrade.class_name != solution.transport_class:
             advice = f"passez en {_building_name(upgrade.class_name, game_data)}"
         else:
-            lines = math.ceil(solution.rate_per_minute / solution.capacity_per_minute)
+            lines = math.ceil(solution.demanded_rate / solution.capacity_per_minute)
             advice = f"aucun palier ne suffit : doublez la ligne sur {lines} voies"
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.LINE_SATURATION,
             message=(
-                f"Ligne saturee : {_rate(solution.rate_per_minute, item)} pour "
+                f"Ligne saturee : {_rate(solution.demanded_rate, item)} demandes pour "
                 f"{_rate(solution.capacity_per_minute, item)} de capacite en {current} "
-                f"({_percent(solution.saturation)}). {advice[0].upper()}{advice[1:]}."
+                f"({_percent(solution.saturation)}). Le debit est bride a "
+                f"{_rate(solution.rate_per_minute, item)} et "
+                f"{_rate(solution.blocked_rate, item)} refluent en amont. "
+                f"{advice[0].upper()}{advice[1:]}."
             ),
             edge_id=solution.edge_id,
         )
-        _ = graph
+
+
+# --------------------------------------------------------------------------- #
+# Sustainability
+# --------------------------------------------------------------------------- #
+
+
+def _sustainability(game_data: GameData, report: FactoryReport) -> Iterator[Diagnostic]:
+    """The headline figures hold for a while, and then they do not.
+
+    A factory whose tanks are emptying runs at the rate shown -- until they are
+    empty. Saying "100 %" without saying "for thirteen minutes" is a lie of omission,
+    so the report carries both the deadline and the regime that follows it.
+    """
+    if report.is_sustainable:
+        return
+    autonomy = report.shortest_autonomy_minutes
+    deadline = f" pendant {_duration(autonomy)}" if autonomy is not None else ""
+    drained = ", ".join(
+        f"{buffer.node_id} ({_rate(buffer.net, _buffer_item(buffer.item_class, game_data))})"
+        for buffer in report.draining_buffers
+    )
+    established = ""
+    if report.sustained is not None:
+        established = (
+            " Le regime etabli, une fois les stocks epuises, est donne en regard : "
+            f"{_outputs_summary(report.sustained, game_data)}."
+        )
+    yield Diagnostic(
+        severity=Severity.WARNING,
+        code=DiagnosticCode.NOT_SUSTAINABLE,
+        message=(
+            f"Ces debits ne sont pas tenables : ils vivent sur un stock{deadline}. "
+            f"Tampon(s) en vidage : {drained}.{established}"
+        ),
+    )
+
+
+def _buffer_item(item_class: str | None, game_data: GameData) -> Item | None:
+    return None if item_class is None else game_data.item(item_class)
+
+
+def _outputs_summary(report: FactoryReport, game_data: GameData) -> str:
+    """Final outputs of a report, as a short French enumeration."""
+    if not report.final_outputs:
+        return "plus aucune production"
+    return ", ".join(
+        f"{_rate(rate, game_data.item(item_class))} de {game_data.item(item_class).display_name_fr}"
+        for item_class, rate in sorted(report.final_outputs.items())
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -370,32 +434,10 @@ def _buffers(
 # French formatting
 # --------------------------------------------------------------------------- #
 
-
-def _number(value: float) -> str:
-    """Compact French number: comma as decimal separator, no trailing zeros."""
-    rounded = round(value, 3)
-    if rounded == int(rounded):
-        return str(int(rounded))
-    return f"{rounded}".replace(".", ",")
-
-
-def _rate(value: float, item: Item | None) -> str:
-    """Rates read in the game's own units: m³/min for fluids, plain /min for solids."""
-    if item is not None and item.form.is_fluid:
-        return f"{_number(abs(value))} m³/min"
-    return f"{_number(abs(value))}/min"
-
-
-def _percent(ratio: float) -> str:
-    return f"{_number(ratio * 100)} %"
-
-
-def _duration(minutes: float) -> str:
-    if minutes < 1:
-        return f"{_number(minutes * 60)} s"
-    if minutes < 60:
-        return f"{_number(minutes)} min"
-    return f"{_number(minutes / 60)} h"
+_number = formatting.number
+_rate = formatting.rate
+_percent = formatting.percent
+_duration = formatting.duration
 
 
 def _building_name(class_name: str, game_data: GameData) -> str:

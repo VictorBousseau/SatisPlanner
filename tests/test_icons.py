@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from satisplanner.data.icons import IconIndex, default_icon_roots
+from satisplanner.data.icons import USER_ICON_SUBPATH, IconIndex, default_icon_roots
 
 
 def _icon(directory: Path, name: str) -> Path:
@@ -66,5 +66,13 @@ def test_missing_lists_only_unresolved_names(tmp_path: Path) -> None:
 
 
 def test_default_roots_skip_directories_that_do_not_exist(tmp_path: Path) -> None:
-    roots = default_icon_roots(local_app_data=tmp_path / "nope")
+    roots = default_icon_roots(app_data_directory=tmp_path / "nope")
     assert all(root.is_dir() for root in roots)
+
+
+def test_the_user_directory_comes_after_the_embedded_one(tmp_path: Path) -> None:
+    """First root wins, so a user export never shadows what the package ships."""
+    user_icons = tmp_path / USER_ICON_SUBPATH
+    user_icons.mkdir(parents=True)
+    roots = default_icon_roots(app_data_directory=tmp_path)
+    assert roots[-1] == user_icons

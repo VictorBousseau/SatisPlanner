@@ -66,6 +66,20 @@ def show(report: FactoryReport, game_data: GameData) -> None:
     _show_totals(report, game_data)
     _show_shopping_list(report, game_data)
     _show_diagnostics(report)
+    _show_sustained(report, game_data)
+
+
+def _show_sustained(report: FactoryReport, game_data: GameData) -> None:
+    """The second set of figures, once the stocks are gone."""
+    if report.sustained is None:
+        return
+    log("%s\nREGIME ETABLI (une fois les stocks epuises)\n%s", RULE, RULE)
+    log("Production finale : %s", rates(report.sustained.final_outputs, game_data))
+    log("Solides bruts     : %s", rates(report.sustained.raw_solids, game_data))
+    log("Fluides bruts     : %s", rates(report.sustained.raw_fluids, game_data))
+    for node in report.sustained.nodes:
+        if node.machine_count is not None:
+            log("   %-22s %6.1f%%", node.node_id, node.ratio * 100)
 
 
 def _show_nodes(report: FactoryReport, game_data: GameData) -> None:
@@ -90,7 +104,11 @@ def _show_nodes(report: FactoryReport, game_data: GameData) -> None:
 def _show_edges(report: FactoryReport, game_data: GameData) -> None:
     log("%s\nLIGNES\n%s", RULE, RULE)
     for edge in report.edges:
-        flag = "  SATUREE" if edge.is_saturated else ""
+        flag = ""
+        if edge.is_saturated:
+            flag = f"  SATUREE, {edge.blocked_rate:g} refoules"
+        elif edge.is_at_capacity:
+            flag = "  pleine"
         log(
             "%-10s %-18s -> %-18s %10.3f%s de %g%s (%.0f%%)%s",
             edge.edge_id,
@@ -143,6 +161,8 @@ def _show_shopping_list(report: FactoryReport, game_data: GameData) -> None:
         log("   %-28s %4d ligne(s)", f"convoyeur Mk.{tier}", count)
     for tier, count in sorted(report.shopping_list.pipes_by_tier.items()):
         log("   %-28s %4d ligne(s)", f"tuyauterie Mk.{tier}", count)
+    for attachment, count in sorted(report.shopping_list.attachments.items()):
+        log("   %-28s %4d", building_name(attachment, game_data), count)
 
 
 def _show_diagnostics(report: FactoryReport) -> None:

@@ -25,6 +25,8 @@ from pydantic import BaseModel, ConfigDict
 
 from satisplanner.core import constants
 from satisplanner.core.models import (
+    Attachment,
+    AttachmentRole,
     Belt,
     Building,
     BuildingKind,
@@ -250,6 +252,30 @@ FLUID_TANKS: Final[frozenset[str]] = frozenset(
     {"Build_PipeStorageTank_C", "Build_IndustrialTank_C"}
 )
 
+# Line attachments. They are never nodes on the canvas -- a node with three outgoing
+# lines is drawn as three lines -- but they have to be built, so the shopping list
+# counts them. Port counts come from the buildings themselves and are not in the
+# documentation dump: a conveyor splitter is one input and three outputs, a conveyor
+# merger three inputs and one output, and a pipe junction has four ports and so does
+# either job. The smart and programmable splitters and the priority merger are V2.
+ATTACHMENTS: Final[dict[str, tuple[ItemForm, tuple[AttachmentRole, ...], int]]] = {
+    "Build_ConveyorAttachmentSplitter_C": (ItemForm.SOLID, (AttachmentRole.SPLIT,), 3),
+    "Build_ConveyorAttachmentMerger_C": (ItemForm.SOLID, (AttachmentRole.MERGE,), 3),
+    "Build_PipelineJunction_Cross_C": (
+        ItemForm.LIQUID,
+        (AttachmentRole.SPLIT, AttachmentRole.MERGE),
+        3,
+    ),
+}
+
+# Native classes the attachments above live under, so a class that moves between
+# them in a future game version shows up as missing instead of being ignored.
+ATTACHMENT_NATIVE_CLASSES: Final[tuple[str, ...]] = (
+    "FGBuildableAttachmentSplitter",
+    "FGBuildableAttachmentMerger",
+    "FGBuildablePipelineJunction",
+)
+
 _BELT_TIER_RE: Final = re.compile(r"ConveyorBeltMk(\d)_C$")
 _PIPE_TIER_RE: Final = re.compile(r"Build_Pipeline(?:MK(\d))?_C$", re.IGNORECASE)
 
@@ -280,6 +306,7 @@ class GameDataset(BaseModel):
     belts: tuple[Belt, ...]
     pipes: tuple[Pipe, ...]
     storages: tuple[Storage, ...]
+    attachments: tuple[Attachment, ...]
     warnings: tuple[str, ...]
 
     def to_game_data(self) -> GameData:
@@ -292,6 +319,7 @@ class GameDataset(BaseModel):
             belts=self.belts,
             pipes=self.pipes,
             storages=self.storages,
+            attachments=self.attachments,
         )
 
 
@@ -485,6 +513,7 @@ def parse_buildings(
     list[Belt],
     list[Pipe],
     list[Storage],
+    list[Attachment],
 ]:
     """Parse every buildable within V1 scope, plus its transport or storage rates."""
     descriptors = {
@@ -497,6 +526,7 @@ def parse_buildings(
     belts: list[Belt] = []
     pipes: list[Pipe] = []
     storages: list[Storage] = []
+    attachments: list[Attachment] = []
 
     # Production machines
     for cls in grouped.get("FGBuildableManufacturer", []):
@@ -600,6 +630,22 @@ def parse_buildings(
             )
         )
 
+    # Splitters, mergers and pipe junctions
+    for native in ATTACHMENT_NATIVE_CLASSES:
+        for cls in grouped.get(native, []):
+            class_name = cls["ClassName"]
+            declared = ATTACHMENTS.get(class_name)
+            if declared is None:
+                continue
+            form, roles, branches = declared
+            buildings.append(_building(cls, BuildingKind.ATTACHMENT, labels, descriptors))
+            attachments.append(
+                Attachment(class_name=class_name, form=form, roles=roles, branches=branches)
+            )
+    absent = sorted(set(ATTACHMENTS) - {attachment.class_name for attachment in attachments})
+    if absent:
+        warnings.append(f"attachement(s) de ligne introuvable(s) : {', '.join(absent)}")
+
     missing_icons = [b.class_name for b in buildings if b.icon_file is None]
     if missing_icons:
         warnings.append(
@@ -608,7 +654,8 @@ def parse_buildings(
         )
 
     buildings.sort(key=lambda building: building.class_name)
-    return buildings, extractors, belts, pipes, storages
+    attachments.sort(key=lambda attachment: attachment.class_name)
+    return buildings, extractors, belts, pipes, storages, attachments
 
 
 def parse_dataset(
@@ -624,7 +671,9 @@ def parse_dataset(
     items = parse_items(reference, labels)
     forms = {item.class_name: item.form for item in items}
     recipes = parse_recipes(reference, labels, forms, warnings)
-    buildings, extractors, belts, pipes, storages = parse_buildings(reference, labels, warnings)
+    buildings, extractors, belts, pipes, storages, attachments = parse_buildings(
+        reference, labels, warnings
+    )
 
     known_buildings = {building.class_name for building in buildings}
     orphans = sorted({r.building_class for r in recipes} - known_buildings)
@@ -642,6 +691,7 @@ def parse_dataset(
         belts=tuple(belts),
         pipes=tuple(pipes),
         storages=tuple(storages),
+        attachments=tuple(attachments),
         warnings=tuple(warnings),
     )
 

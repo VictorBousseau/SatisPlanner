@@ -13,9 +13,10 @@ from satisplanner.core.graph import (
     FactoryGraph,
     MachineNode,
     OutputNode,
+    StorageNode,
     condensation_order,
 )
-from satisplanner.core.models import GameData
+from satisplanner.core.models import AttachmentRole, GameData, ItemForm
 from satisplanner.core.results import (
     BufferState,
     DiagnosticCode,
@@ -89,6 +90,49 @@ def test_iron_plate_power_and_shopping_list(game_data: GameData) -> None:
     }
     assert report.shopping_list.belts_by_tier == {1: 3}
     assert report.shopping_list.pipes_by_tier == {}
+    # Every line goes from one node to one node: nothing to split or merge.
+    assert report.shopping_list.attachments == {}
+
+
+# --------------------------------------------------------------------------- #
+# Splitters, mergers and junctions
+# --------------------------------------------------------------------------- #
+
+
+def test_three_lines_out_of_one_node_need_one_splitter(game_data: GameData) -> None:
+    """One conveyor splitter serves three lines, so a three-way fan-out costs one."""
+    report = solved("screws_reinforced_plate", game_data)
+    assert report.shopping_list.attachments == {"Build_ConveyorAttachmentSplitter_C": 1}
+    # And it is counted in the total, alongside the machines.
+    assert report.shopping_list.total_buildings == sum(report.shopping_list.buildings.values()) + 1
+
+
+def test_fluids_use_a_pipe_junction_rather_than_a_splitter(game_data: GameData) -> None:
+    """The recycling loop splits two solids and one fluid."""
+    report = solved("recycling_loop", game_data)
+    assert report.shopping_list.attachments == {
+        "Build_ConveyorAttachmentSplitter_C": 2,
+        "Build_PipelineJunction_Cross_C": 1,
+    }
+
+
+def test_a_splitter_serves_three_lines_at_a_time(game_data: GameData) -> None:
+    """Each unit adds two lines to whatever it is chained onto, hence the ceiling."""
+    splitter = game_data.attachments["Build_ConveyorAttachmentSplitter_C"]
+    assert splitter.branches == 3
+    assert [splitter.units_for(lines) for lines in range(1, 8)] == [0, 1, 1, 2, 2, 3, 3]
+
+
+def test_the_shopping_list_picks_the_attachment_by_form_and_role(game_data: GameData) -> None:
+    solid, fluid = ItemForm.SOLID, ItemForm.LIQUID
+    assert game_data.attachment_for(solid, AttachmentRole.SPLIT) is not None
+    assert game_data.attachment_for(solid, AttachmentRole.SPLIT) is not game_data.attachment_for(
+        solid, AttachmentRole.MERGE
+    )
+    # A pipe junction does both jobs, so the same class answers either question.
+    assert game_data.attachment_for(fluid, AttachmentRole.SPLIT) is game_data.attachment_for(
+        fluid, AttachmentRole.MERGE
+    )
 
 
 def test_screw_and_reinforced_plate_chain(game_data: GameData) -> None:
@@ -279,13 +323,19 @@ def test_input_deficit(game_data: GameData) -> None:
     assert "66,667 %" in message, message
 
 
-def test_allocation_is_proportional_to_demand(game_data: GameData) -> None:
-    """60 ingots for 90 asked: each consumer gets its share of the shortage."""
+def test_allocation_shares_equally_rather_than_proportionally(game_data: GameData) -> None:
+    """60 ingots for 90 asked, split the way the game's splitter splits.
+
+    A splitter gives each output an equal turn: 30 each. The smaller consumer only
+    wants 30, so it is served in full and it is the larger one that absorbs the whole
+    shortage. Dividing in proportion to demand would have given 20 and 40 and left
+    *both* machines limping, which is not what the game does.
+    """
     report = solved("allocation", game_data)
-    assert report.node("small").inputs == {"Desc_IronIngot_C": 20.0}
-    assert report.node("large").inputs == {"Desc_IronIngot_C": 40.0}
-    assert report.node("small").ratio == pytest.approx(2 / 3, abs=TOLERANCE)
-    assert report.node("large").ratio == pytest.approx(2 / 3, abs=TOLERANCE)
+    assert report.node("small").inputs == {"Desc_IronIngot_C": 30.0}
+    assert report.node("large").inputs == {"Desc_IronIngot_C": 30.0}
+    assert report.node("small").ratio == 1.0
+    assert report.node("large").ratio == pytest.approx(0.5, abs=TOLERANCE)
     # Nothing is lost: the source is fully drained.
     assert report.node("ingots").outputs == {"Desc_IronIngot_C": 60.0}
 
@@ -311,29 +361,68 @@ def test_surplus_is_redistributed_to_whoever_can_take_it(game_data: GameData) ->
 # --------------------------------------------------------------------------- #
 
 
-def test_belt_saturation_suggests_the_smallest_sufficient_tier(game_data: GameData) -> None:
-    """480 items/min on a Mk.1 belt. Capacity is diagnosed, never silently enforced."""
+def test_a_belt_carries_its_tier_and_backs_the_rest_up(game_data: GameData) -> None:
+    """480 items/min offered to a Mk.1 belt: 60 travel, the miner throttles to 12,5 %.
+
+    Capacity is a constraint, not a remark. The rate carried is the belt's, and the
+    480 the mine could produce survives as the *demanded* rate, which is what names
+    the tier to upgrade to.
+    """
     report = solved("belt_saturation", game_data)
     edge = report.edge("e1")
-    assert edge.rate_per_minute == 480.0
+    assert edge.rate_per_minute == 60.0, "un Mk.1 transporte 60/min, pas 480"
     assert edge.capacity_per_minute == 60.0
+    assert edge.demanded_rate == 480.0
+    assert edge.blocked_rate == 420.0
     assert edge.is_saturated
+    assert edge.is_at_capacity
     assert edge.saturation == 8.0
+
+    # The back pressure reaches the extractor, and it is the line that is blamed.
+    mine = report.node("mine")
+    assert mine.ratio == pytest.approx(0.125, abs=TOLERANCE)
+    assert mine.limiting is LimitingFactor.LINE
+    assert mine.line_limited_items == ("Desc_OreIron_C",)
 
     message = message_for(report, DiagnosticCode.LINE_SATURATION)
     assert "Convoyeur Mk.4" in message, message
+    assert "480/min" in message, message
+    assert "60/min" in message, message
+    # No surplus finding on top: the line is the single actionable cause.
+    assert DiagnosticCode.SURPLUS not in codes(report)
 
 
 def test_pipe_saturation_when_no_tier_is_enough(game_data: GameData) -> None:
     """720 m3/min: even a Mk.2 pipe tops out at 600, so the line must be doubled."""
     report = solved("pipe_saturation", game_data)
     edge = report.edge("e1")
-    assert edge.rate_per_minute == 720.0
+    assert edge.rate_per_minute == 600.0
     assert edge.capacity_per_minute == 600.0
+    assert edge.demanded_rate == 720.0
 
     message = message_for(report, DiagnosticCode.LINE_SATURATION)
     assert "2 voies" in message, message
     assert "m³/min" in message, message
+
+
+def test_a_line_that_fits_exactly_is_not_reported(game_data: GameData) -> None:
+    """A Mk.1 belt carrying exactly 60/min is full, not undersized."""
+    report = solved("iron_plate", game_data)
+    edge = report.edge("e1")
+    assert (edge.rate_per_minute, edge.capacity_per_minute) == (60.0, 60.0)
+    assert edge.is_at_capacity
+    assert not edge.is_saturated
+    assert DiagnosticCode.LINE_SATURATION not in codes(report)
+    assert report.node("smelter").limiting is LimitingFactor.NONE
+
+
+def test_a_shortage_is_not_blamed_on_the_line(game_data: GameData) -> None:
+    """The deficit chain runs its Mk.1 belts at exactly 60/min: the ore is what is short."""
+    report = solved("deficit", game_data)
+    assert report.edge("e1").is_at_capacity
+    assert not report.edge("e1").is_saturated
+    assert report.node("smelter").limiting is LimitingFactor.INPUTS
+    assert report.node("smelter").line_limited_items == ()
 
 
 # --------------------------------------------------------------------------- #
@@ -372,6 +461,70 @@ def test_a_buffer_that_drains(game_data: GameData) -> None:
     assert severities[DiagnosticCode.BUFFER_DRAINING] is Severity.WARNING
 
 
+def test_a_draining_factory_is_not_sustainable_and_says_so(game_data: GameData) -> None:
+    """The report that would otherwise lie for thirteen minutes.
+
+    "The refinery runs at 100 %" and "the tank empties in 13,333 min" are both true
+    and sit in different parts of the report. The flag and the companion resolution
+    are what stop the first from being read as a steady state.
+    """
+    report = solved("buffer_draining", game_data)
+    assert report.is_sustainable is False
+    assert [buffer.node_id for buffer in report.draining_buffers] == ["buffer"]
+    assert report.shortest_autonomy_minutes == pytest.approx(400 / 30, abs=TOLERANCE)
+
+    message = message_for(report, DiagnosticCode.NOT_SUSTAINABLE)
+    assert "vivent sur un stock" in message, message
+    assert "13,333 min" in message, message
+    assert "plus aucune production" in message, message
+
+
+def test_the_established_regime_is_solved_without_the_stocks(game_data: GameData) -> None:
+    """The second set of figures: the same factory once the tank is dry."""
+    report = solved("buffer_draining", game_data)
+    sustained = report.sustained
+    assert sustained is not None
+    assert sustained.converged
+    # Nothing feeds the tank, so nothing leaves it and the refinery stops.
+    assert sustained.node("refinery").ratio == 0.0
+    assert sustained.final_outputs == {}
+    assert sustained.raw_fluids == {}
+    # The established regime is itself sustainable: it invents nothing, so the
+    # companion report is never nested a second time.
+    assert sustained.is_sustainable
+    assert sustained.sustained is None
+
+
+def test_a_buffer_that_only_passes_material_through_stays_sustainable(
+    game_data: GameData,
+) -> None:
+    """A buffer between a source and a machine is not a stock: it is a pipe with a lid."""
+    graph = FactoryGraph()
+    graph.add_node(ExternalSourceNode(id="src", item_class="Desc_OreIron_C", rate_per_minute=60))
+    graph.add_node(StorageNode(id="buffer", storage_class="Build_StorageContainerMk1_C"))
+    graph.add_node(MachineNode(id="smelter", recipe_class="Recipe_IngotIron_C", machine_count=2))
+    graph.add_node(OutputNode(id="out", item_class="Desc_IronIngot_C"))
+    belt = "Build_ConveyorBeltMk1_C"
+    graph.connect("src", "buffer", "Desc_OreIron_C", belt, game_data)
+    graph.connect("buffer", "smelter", "Desc_OreIron_C", belt, game_data)
+    graph.connect("smelter", "out", "Desc_IronIngot_C", belt, game_data)
+
+    report = engine.solve(graph, game_data)
+    assert report.is_sustainable
+    assert report.sustained is None
+    (buffer,) = report.buffers
+    assert (buffer.inflow, buffer.outflow) == (60.0, 60.0)
+    assert buffer.state is BufferState.BALANCED
+    assert report.final_outputs == {"Desc_IronIngot_C": 60.0}
+
+
+def test_a_filling_buffer_still_counts_as_sustainable(game_data: GameData) -> None:
+    """A buffer that accumulates costs nothing to the steady state: it only fills up."""
+    report = solved("buffer_filling", game_data)
+    assert report.is_sustainable
+    assert report.sustained is None
+
+
 # --------------------------------------------------------------------------- #
 # Robustness
 # --------------------------------------------------------------------------- #
@@ -400,7 +553,7 @@ def test_non_convergence_is_reported_instead_of_hanging(
     assert DiagnosticCode.NOT_CONVERGED in codes(report)
     assert report.has_errors()
     # The last iteration's figures are still returned, flagged as unstable.
-    assert report.node("small").inputs == {"Desc_IronIngot_C": 20.0}
+    assert report.node("small").inputs == {"Desc_IronIngot_C": 30.0}
     assert "instables" in message_for(report, DiagnosticCode.NOT_CONVERGED)
 
 

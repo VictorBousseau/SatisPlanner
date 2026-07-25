@@ -41,6 +41,7 @@ class DiagnosticCode(StrEnum):
     AMBIGUOUS_BUFFER = "ambiguous_buffer"
     BUFFER_FILLING = "buffer_filling"
     BUFFER_DRAINING = "buffer_draining"
+    NOT_SUSTAINABLE = "not_sustainable"
     NOT_CONVERGED = "not_converged"
 
 
@@ -68,6 +69,9 @@ class LimitingFactor(StrEnum):
     NONE = "none"
     INPUTS = "inputs"
     OUTPUTS = "outputs"
+    # A conveyor or a pipe cannot carry what the node would send or receive. The
+    # material exists and there is room for it: only the line is too small.
+    LINE = "line"
     BLOCKED = "blocked"
 
 
@@ -86,6 +90,9 @@ class NodeSolution(_Result):
     # nothing left. An item that is short only because the node is idle for another
     # reason is not listed -- that is a consequence, not a cause.
     starved_items: tuple[str, ...] = ()
+    # Items the node cannot get enough of, or cannot get rid of, purely because a
+    # line is too small. Filled in once the uncapped companion run is known.
+    line_limited_items: tuple[str, ...] = ()
     building_class: str | None = None
     machine_count: float | None = None  # what the user set
     useful_machine_count: float | None = None  # what the inputs actually feed
@@ -105,7 +112,13 @@ class NodeSolution(_Result):
 
 
 class EdgeSolution(_Result):
-    """What one conveyor or pipe carries, and how close to its limit it runs."""
+    """What one conveyor or pipe carries, and how close to its limit it runs.
+
+    ``rate_per_minute`` is what the line really moves and never exceeds its
+    capacity, because a Mk.1 belt fed 480 items a minute carries 60 and backs the
+    rest up. ``desired_rate_per_minute`` is what would flow if the line were
+    infinite -- the figure that says which tier would actually be needed.
+    """
 
     edge_id: str
     source: str
@@ -114,17 +127,39 @@ class EdgeSolution(_Result):
     transport_class: str
     rate_per_minute: float
     capacity_per_minute: float
+    desired_rate_per_minute: float | None = None
+
+    @property
+    def demanded_rate(self) -> float:
+        """What the factory wants to push through, capacity aside."""
+        if self.desired_rate_per_minute is None:
+            return self.rate_per_minute
+        return self.desired_rate_per_minute
 
     @property
     def saturation(self) -> float:
-        """Fraction of the line's capacity in use; above 1 the line cannot cope."""
+        """Demanded flow over capacity; above 1 the line cannot cope."""
         if self.capacity_per_minute <= 0:
             return 0.0
-        return self.rate_per_minute / self.capacity_per_minute
+        return self.demanded_rate / self.capacity_per_minute
 
     @property
     def is_saturated(self) -> bool:
-        return self.rate_per_minute > self.capacity_per_minute + FLOW_EPSILON
+        """The line is the binding constraint: more is wanted than it can carry."""
+        return self.demanded_rate > self.capacity_per_minute + FLOW_EPSILON
+
+    @property
+    def is_at_capacity(self) -> bool:
+        """Running at its ceiling, which may simply mean it fits exactly."""
+        return (
+            self.capacity_per_minute > 0
+            and self.rate_per_minute >= self.capacity_per_minute - FLOW_EPSILON
+        )
+
+    @property
+    def blocked_rate(self) -> float:
+        """What the line refuses to carry."""
+        return max(self.demanded_rate - self.rate_per_minute, 0.0)
 
 
 class BufferState(StrEnum):
@@ -172,20 +207,33 @@ class ShoppingList(_Result):
     buildings: dict[str, int] = Field(default_factory=dict)
     belts_by_tier: dict[int, int] = Field(default_factory=dict)
     pipes_by_tier: dict[int, int] = Field(default_factory=dict)
+    # Splitters, mergers and pipe junctions, deduced from the lines that share a
+    # node rather than placed by hand: they are never nodes on the canvas.
+    attachments: dict[str, int] = Field(default_factory=dict)
 
     @property
     def total_buildings(self) -> int:
-        return sum(self.buildings.values())
+        return sum(self.buildings.values()) + sum(self.attachments.values())
 
 
 class FactoryReport(_Result):
-    """The complete steady-state answer for one factory."""
+    """The complete steady-state answer for one factory.
+
+    A report whose buffers are draining describes a factory that runs *for now*, on
+    stock. That is a real and useful answer -- it is what the game shows -- but it
+    is not the established regime, so :attr:`sustained` carries the same factory
+    solved again with the buffers supplying nothing. The two sets of figures are
+    meant to be read side by side: "with the stocks" and "once they run out".
+    """
 
     converged: bool
     iterations: int
     nodes: tuple[NodeSolution, ...] = ()
     edges: tuple[EdgeSolution, ...] = ()
     buffers: tuple[BufferSolution, ...] = ()
+    # Present only when this report is not sustainable; never nested twice, since a
+    # buffer that supplies nothing can only fill up or stay level.
+    sustained: "FactoryReport | None" = None
 
     # Category 1: raw solids consumed per minute, by ore.
     raw_solids: dict[str, float] = Field(default_factory=dict)
@@ -221,5 +269,32 @@ class FactoryReport(_Result):
     def by_severity(self, severity: Severity) -> tuple[Diagnostic, ...]:
         return tuple(item for item in self.diagnostics if item.severity is severity)
 
+    @property
+    def is_sustainable(self) -> bool:
+        """False as soon as one buffer has a negative net flow.
+
+        A factory living off a stock is not in steady state: the headline figures
+        stop being true the minute the tank runs dry.
+        """
+        return not self.draining_buffers
+
+    @property
+    def draining_buffers(self) -> tuple[BufferSolution, ...]:
+        """Buffers being emptied, in report order, with their remaining autonomy."""
+        return tuple(buffer for buffer in self.buffers if buffer.net < -FLOW_EPSILON)
+
+    @property
+    def shortest_autonomy_minutes(self) -> float | None:
+        """Time until the first buffer runs dry, i.e. until these figures stop holding."""
+        times = [
+            buffer.minutes_to_empty
+            for buffer in self.draining_buffers
+            if buffer.minutes_to_empty is not None
+        ]
+        return min(times) if times else None
+
     def with_diagnostics(self, diagnostics: tuple[Diagnostic, ...]) -> "FactoryReport":
         return self.model_copy(update={"diagnostics": diagnostics})
+
+    def with_sustained(self, sustained: "FactoryReport") -> "FactoryReport":
+        return self.model_copy(update={"sustained": sustained})

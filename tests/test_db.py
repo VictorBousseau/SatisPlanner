@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from satisplanner.core.models import AttachmentRole, ItemForm
 from satisplanner.data import db
 from satisplanner.data.docs_parser import GameDataset
 
@@ -35,6 +36,8 @@ def test_every_table_of_the_specification_exists(database: Path) -> None:
         "extractors",
         "belts",
         "pipes",
+        "storages",
+        "attachments",
     }
     with db.connect(database) as connection:
         tables = {
@@ -69,6 +72,24 @@ def test_transport_and_storage_survive_the_round_trip(database: Path, dataset: G
             dataset.extractors, key=lambda e: e.class_name
         )
         assert db.read_storages(connection) == sorted(dataset.storages, key=lambda s: s.class_name)
+        assert db.read_attachments(connection) == sorted(
+            dataset.attachments, key=lambda a: a.class_name
+        )
+
+
+def test_an_attachment_that_does_both_jobs_keeps_both_roles(
+    database: Path, dataset: GameDataset
+) -> None:
+    """Two boolean columns rather than a packed string, so SQL can filter on them."""
+    with db.connect(database) as connection:
+        junction = next(
+            attachment
+            for attachment in db.read_attachments(connection)
+            if attachment.class_name == "Build_PipelineJunction_Cross_C"
+        )
+    assert junction.roles == (AttachmentRole.SPLIT, AttachmentRole.MERGE)
+    assert junction.form is ItemForm.LIQUID
+    assert dataset.attachments
 
 
 def test_fluid_rates_are_stored_in_cubic_metres(database: Path) -> None:

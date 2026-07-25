@@ -55,8 +55,14 @@ lui parviennent par injection (`data.db.load_game_data` produit le catalogue `co
 `tests/test_architecture.py` vérifie cette règle par analyse statique des imports et échoue sinon.
 
 À l'intérieur de `core/`, l'ordre des dépendances est
-`models → graph → results → validation → engine` : les diagnostics lisent un rapport résolu sans
-jamais calculer de débit, et le moteur les appelle en fin de résolution.
+`models → formatting, graph → results → validation → engine` : les diagnostics lisent un rapport
+résolu sans jamais calculer de débit, et le moteur les appelle en fin de résolution. `formatting`
+tient les règles d'écriture françaises des nombres — une seule fois, pour que « 66,667 % » s'écrive
+pareil dans un avertissement et sur un nœud.
+
+`ui/` ne contient pas de logique de calcul : `document.py` porte le graphe édité et la pile
+d'annulation, `commands.py` les opérations, `catalogue.py` la passerelle entre le catalogue et la
+palette (sans Qt, donc testable sans fenêtre), et `canvas.py` / `canvas_items.py` le rendu.
 
 ## Le moteur
 
@@ -72,6 +78,30 @@ taux = min( satisfaction de chaque entrée, absorption de chaque sortie )
 
 affiche le `FactoryReport` complet en console : nœuds, lignes, bilan en trois catégories (solides,
 fluides et sous-produits, électricité), liste de courses et diagnostics.
+
+Un `solve()` enchaîne en réalité plusieurs points fixes : la réponse, sa **jumelle sans plafond de
+ligne** — qui donne le débit qu'une ligne *voudrait* porter, et donc le tier à installer — et, quand
+un tampon se vide, la même paire résolue une seconde fois avec les tampons ne fournissant rien.
+C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
+
+## L'interface
+
+Palette à gauche, canvas au centre, emplacements réservés à droite pour les panneaux de la phase 4.
+
+- **Palette** : recherche insensible aux accents, filtre par machine, bascules pour les recettes
+  alternatives et pour les objets d'événement (masqués par défaut), et le tier par défaut des
+  nouvelles lignes. Glisser-déposer vers le canvas, ou double-clic pour poser au centre de la vue.
+- **Canvas** : zoom molette, pan au clic milieu, grille magnétique. Une connexion se tire d'un port
+  de sortie vers un port d'entrée ; **une liaison impossible est refusée pendant le tirage**, le
+  trait devenant rouge avec la raison en infobulle, et non signalée après coup.
+- **Nœuds** : icône, libellé français, recette, nombre de machines, débits d'entrée et de sortie, et
+  un liseré vert / orange / rouge. Clic droit : « ajuster ce nœud », qui appelle
+  `engine.suggest_machine_count` — un calcul local sur un nœud, jamais une optimisation globale.
+- **Lignes** : les tuyauteries sont plus épaisses et bleues, les convoyeurs fins et pâles. Une ligne
+  saturée passe en rouge pointillé et propose son tier suffisant au clic droit.
+- **Annulation** : toutes les opérations sans exception passent par une `QUndoCommand`, y compris
+  les déplacements. Le moteur est relancé après chaque changement, avec un regroupement de 120 ms
+  pour ne pas résoudre le graphe à chaque pixel d'un glissement.
 
 ## Données du jeu
 
@@ -95,8 +125,11 @@ d'origine — les tests traversent donc le même chemin de décodage que la prod
 
 Les icônes appartiennent à Coffee Stain Studios : `satisplanner/resources/icons/` est ignoré par git
 et reconstituable par extraction FModel (procédure documentée en phase 5). L'application reste
-**100 % fonctionnelle sans icônes** : un fallback génératif dessine un carré coloré avec les
-initiales de l'item.
+**100 % fonctionnelle sans icônes** : `ui/icon_provider.py` essaie le dossier embarqué, puis un
+dossier utilisateur, puis dessine lui-même un carré arrondi dont la teinte vient d'un hachage stable
+du nom de classe, avec les initiales du libellé français au centre. Ce troisième chemin est le
+fonctionnement nominal — l'exe distribué ne contient aucune icône de bâtiment — et non une
+dégradation.
 
 ## Décisions de conception
 
@@ -121,9 +154,24 @@ Trois points ont été arbitrés au démarrage et gouvernent le moteur :
    suite décroît jusqu'à se stabiliser. Partir de zéro donne une réponse dégénérée : dans une boucle
    de recyclage, « tout est arrêté » est un état parfaitement cohérent dont un solveur initialisé à
    zéro ne sort jamais. Le comportement réel est le **plus grand** état cohérent.
-5. **La capacité des lignes est diagnostiquée, jamais imposée.** Un convoyeur Mk.1 traversé par
-   480/min affiche 480/min et un avertissement proposant le Mk.4. Les débits restent ceux de la
-   production, ce qui permet de voir *ce qu'il faudrait* transporter.
+5. **La capacité des lignes est une contrainte.** Un convoyeur Mk.1 alimenté à 480/min en transporte
+   60 et refoule le reste en amont, exactement comme dans le jeu. Le diagnostic donne les deux
+   chiffres — le débit porté et le débit demandé — parce que c'est le second qui nomme le tier à
+   installer. Ce débit demandé vient d'une résolution jumelle où les plafonds sont ignorés : il est
+   calculé, pas estimé.
+6. **L'allocation est une répartition max-min, pas une répartition proportionnelle.** Un répartiteur
+   donne à chaque sortie une part égale et, quand l'une sature, partage le reste également entre les
+   autres. 60 lingots pour deux consommateurs qui en demandent 30 et 60 donnent donc 30 et 30 — le
+   petit est servi entièrement — et non 20 et 40, qui feraient boiter les deux.
+7. **Un rapport peut mentir treize minutes.** Une usine dont les citernes se vident tourne au débit
+   affiché, jusqu'à ce qu'elles soient vides. `FactoryReport.is_sustainable` passe à faux dès qu'un
+   tampon a un débit net négatif, et le rapport porte alors le régime réellement établi, résolu une
+   seconde fois avec les tampons ne fournissant plus rien.
+8. **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Un nœud à trois lignes sortantes
+   se dessine comme trois lignes, ce qui est la façon dont le joueur y pense. Ils restent des
+   bâtiments à construire et sont comptés dans la liste de courses, déduits du nombre de lignes qui
+   partagent un nœud. Leur débit n'est pas modélisé : un répartiteur passe 2000 items/min quand le
+   meilleur convoyeur plafonne à 1200, il ne peut donc jamais être le goulot.
 
 ## Licence
 

@@ -126,6 +126,13 @@ KEEP: Final[frozenset[str]] = frozenset(
         "Build_PipelineMK2_C",
         "Build_Pipeline_NoIndicator_C",
         "Build_PipelineMK2_NoIndicator_C",
+        # -- line attachments, counted in the shopping list, plus the two V2 variants
+        # kept to prove they stay out of scope
+        "Build_ConveyorAttachmentSplitter_C",
+        "Build_ConveyorAttachmentMerger_C",
+        "Build_PipelineJunction_Cross_C",
+        "Build_ConveyorAttachmentSplitterSmart_C",
+        "Build_ConveyorAttachmentMergerPriority_C",
         # -- storage
         "Build_StorageContainerMk1_C",
         "Build_StorageContainerMk2_C",

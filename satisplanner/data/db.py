@@ -15,6 +15,8 @@ from typing import Final
 
 from satisplanner import __version__
 from satisplanner.core.models import (
+    Attachment,
+    AttachmentRole,
     Belt,
     Building,
     BuildingKind,
@@ -31,7 +33,8 @@ from satisplanner.data.docs_parser import GameDataset
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION: Final = 1
+# 2 added the `attachments` table: splitters, mergers and pipe junctions.
+SCHEMA_VERSION: Final = 2
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -132,6 +135,15 @@ CREATE TABLE storages (
     capacity_m3 REAL
 );
 
+-- Line attachments: never nodes on the canvas, only entries in the shopping list.
+CREATE TABLE attachments (
+    class_name TEXT PRIMARY KEY REFERENCES buildings (class_name),
+    form       TEXT NOT NULL CHECK (form IN ('solid', 'liquid', 'gas')),
+    can_split  INTEGER NOT NULL CHECK (can_split IN (0, 1)),
+    can_merge  INTEGER NOT NULL CHECK (can_merge IN (0, 1)),
+    branches   INTEGER NOT NULL
+);
+
 CREATE INDEX idx_recipes_building ON recipes (building_class);
 CREATE INDEX idx_ingredients_item ON recipe_ingredients (item_class);
 CREATE INDEX idx_products_item    ON recipe_products (item_class);
@@ -169,6 +181,7 @@ def build_database(dataset: GameDataset, path: Path) -> None:
         _insert_belts(connection, dataset.belts)
         _insert_pipes(connection, dataset.pipes)
         _insert_storages(connection, dataset.storages)
+        _insert_attachments(connection, dataset.attachments)
         connection.commit()
         # Fails loudly if a reference does not resolve, rather than shipping a
         # database whose recipes point at nothing.
@@ -312,6 +325,25 @@ def _insert_storages(connection: sqlite3.Connection, storages: tuple[Storage, ..
     )
 
 
+def _insert_attachments(
+    connection: sqlite3.Connection, attachments: tuple[Attachment, ...]
+) -> None:
+    connection.executemany(
+        "INSERT INTO attachments (class_name, form, can_split, can_merge, branches)"
+        " VALUES (?, ?, ?, ?, ?)",
+        [
+            (
+                attachment.class_name,
+                attachment.form.value,
+                int(AttachmentRole.SPLIT in attachment.roles),
+                int(AttachmentRole.MERGE in attachment.roles),
+                attachment.branches,
+            )
+            for attachment in attachments
+        ],
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Reading
 # --------------------------------------------------------------------------- #
@@ -428,6 +460,26 @@ def read_storages(connection: sqlite3.Connection) -> list[Storage]:
     ]
 
 
+def read_attachments(connection: sqlite3.Connection) -> list[Attachment]:
+    rows = connection.execute("SELECT * FROM attachments ORDER BY class_name")
+    return [
+        Attachment(
+            class_name=row["class_name"],
+            form=ItemForm(row["form"]),
+            roles=tuple(
+                role
+                for role, flag in (
+                    (AttachmentRole.SPLIT, row["can_split"]),
+                    (AttachmentRole.MERGE, row["can_merge"]),
+                )
+                if flag
+            ),
+            branches=row["branches"],
+        )
+        for row in rows
+    ]
+
+
 def load_game_data(connection: sqlite3.Connection) -> GameData:
     """Read the whole catalogue in the form the engine expects.
 
@@ -442,6 +494,7 @@ def load_game_data(connection: sqlite3.Connection) -> GameData:
         belts=read_belts(connection),
         pipes=read_pipes(connection),
         storages=read_storages(connection),
+        attachments=read_attachments(connection),
     )
 
 

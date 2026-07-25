@@ -64,6 +64,14 @@ class BuildingKind(StrEnum):
     BELT = "belt"
     PIPE = "pipe"
     STORAGE = "storage"
+    ATTACHMENT = "attachment"
+
+
+class AttachmentRole(StrEnum):
+    """What a conveyor attachment or pipe junction does to a line."""
+
+    SPLIT = "split"
+    MERGE = "merge"
 
 
 class _Row(BaseModel):
@@ -151,6 +159,34 @@ class Pipe(_Row):
     cubic_metres_per_minute: float
 
 
+class Attachment(_Row):
+    """A splitter, a merger, or a pipe junction.
+
+    These never appear as nodes on the canvas: a node with three outgoing lines is
+    drawn as three lines, exactly as the player thinks of it. They are still real
+    buildings that have to be placed, so they are counted in the shopping list.
+    Their throughput is deliberately not modelled: a splitter moves 2000 items/min
+    while the fastest conveyor tops out at 1200, so it can never be the bottleneck.
+    """
+
+    class_name: str
+    form: ItemForm
+    roles: tuple[AttachmentRole, ...]
+    # Lines one unit can serve on its many-line side: 3 for a conveyor splitter
+    # (one input, three outputs) and 3 for a pipe junction (four ports, one used
+    # as the trunk).
+    branches: int
+
+    def units_for(self, lines: int) -> int:
+        """How many of these are needed to fan a single line out to ``lines``.
+
+        Each unit adds ``branches - 1`` lines to whatever it is chained onto.
+        """
+        if lines <= 1 or self.branches <= 1:
+            return 0
+        return -(-(lines - 1) // (self.branches - 1))  # ceiling division
+
+
 class Storage(_Row):
     class_name: str
     form: ItemForm
@@ -176,6 +212,7 @@ class GameData(BaseModel):
     belts: dict[str, Belt] = Field(default_factory=dict)
     pipes: dict[str, Pipe] = Field(default_factory=dict)
     storages: dict[str, Storage] = Field(default_factory=dict)
+    attachments: dict[str, Attachment] = Field(default_factory=dict)
 
     @classmethod
     def from_rows(
@@ -188,6 +225,7 @@ class GameData(BaseModel):
         belts: Iterable[Belt] = (),
         pipes: Iterable[Pipe] = (),
         storages: Iterable[Storage] = (),
+        attachments: Iterable[Attachment] = (),
     ) -> Self:
         return cls(
             items={row.class_name: row for row in items},
@@ -197,6 +235,7 @@ class GameData(BaseModel):
             belts={row.class_name: row for row in belts},
             pipes={row.class_name: row for row in pipes},
             storages={row.class_name: row for row in storages},
+            attachments={row.class_name: row for row in attachments},
         )
 
     def item(self, class_name: str) -> Item:
@@ -244,6 +283,19 @@ class GameData(BaseModel):
             if self.transport_capacity(transport.class_name) >= rate:
                 return transport
         return None
+
+    def attachment_for(self, form: ItemForm, role: AttachmentRole) -> Attachment | None:
+        """The splitter, merger or junction this form uses for that role.
+
+        Solids and fluids use different hardware, and a pipe junction does both
+        jobs, so the lookup is by form and role rather than by class name.
+        """
+        candidates = [
+            attachment
+            for attachment in self.attachments.values()
+            if attachment.form.is_fluid is form.is_fluid and role in attachment.roles
+        ]
+        return min(candidates, key=lambda a: a.class_name) if candidates else None
 
 
 def _get[T](mapping: dict[str, T], class_name: str, label: str) -> T:

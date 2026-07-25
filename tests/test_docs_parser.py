@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from satisplanner.core.models import ItemForm, Recipe
+from satisplanner.core.models import AttachmentRole, ItemForm, Recipe
 from satisplanner.data.docs_parser import (
     DocsFileError,
     GameDataset,
@@ -324,6 +324,36 @@ def test_storages_expose_slots_for_solids_and_volume_for_fluids(dataset: GameDat
     # mStorageCapacity is already in m3 -- it must not go through the litre division.
     assert storages["Build_PipeStorageTank_C"].capacity_m3 == 400
     assert storages["Build_IndustrialTank_C"].capacity_m3 == 2400
+
+
+def test_line_attachments_are_parsed_with_their_roles(dataset: GameDataset) -> None:
+    """Splitter, merger and pipe junction, each with the job it can do."""
+    attachments = {attachment.class_name: attachment for attachment in dataset.attachments}
+    assert set(attachments) == {
+        "Build_ConveyorAttachmentSplitter_C",
+        "Build_ConveyorAttachmentMerger_C",
+        "Build_PipelineJunction_Cross_C",
+    }
+    assert attachments["Build_ConveyorAttachmentSplitter_C"].roles == (AttachmentRole.SPLIT,)
+    assert attachments["Build_ConveyorAttachmentMerger_C"].roles == (AttachmentRole.MERGE,)
+    junction = attachments["Build_PipelineJunction_Cross_C"]
+    assert junction.roles == (AttachmentRole.SPLIT, AttachmentRole.MERGE)
+    assert junction.form is ItemForm.LIQUID
+
+
+def test_smart_and_priority_variants_stay_out_of_scope(dataset: GameDataset) -> None:
+    """They are in the fixture on purpose: programmable routing is V2."""
+    classes = {attachment.class_name for attachment in dataset.attachments}
+    assert "Build_ConveyorAttachmentSplitterSmart_C" not in classes
+    assert "Build_ConveyorAttachmentMergerPriority_C" not in classes
+
+
+def test_attachments_use_the_french_labels_of_the_game(dataset: GameDataset) -> None:
+    """ "Groupeur", not the "fusionneur" of a translation done by hand."""
+    names = {building.class_name: building.display_name_fr for building in dataset.buildings}
+    assert names["Build_ConveyorAttachmentSplitter_C"] == "Répartiteur de convoyeurs"
+    assert names["Build_ConveyorAttachmentMerger_C"] == "Groupeur de convoyeurs"
+    assert names["Build_PipelineJunction_Cross_C"] == "Jonction de pipeline"
 
 
 def test_machine_power_draw(dataset: GameDataset) -> None:

@@ -195,6 +195,13 @@ class FactoryGraph(BaseModel):
         msg = f"noeud inconnu : {node_id}"
         raise GraphError(msg)
 
+    def edge(self, edge_id: str) -> Edge:
+        for edge in self.edges:
+            if edge.id == edge_id:
+                return edge
+        msg = f"arete inconnue : {edge_id}"
+        raise GraphError(msg)
+
     def outgoing(self, node_id: str) -> list[Edge]:
         return [edge for edge in self.edges if edge.source == node_id]
 

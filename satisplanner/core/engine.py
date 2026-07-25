@@ -28,6 +28,18 @@ make the system bistable: "blocked, therefore nothing flows, therefore blocked" 
 as self-consistent as the running state. Once a route exists, a route that only
 absorbs part of the output no longer blocks anything -- it throttles, which is what
 the game does on average when a machine stutters.
+
+**Transport capacity is a constraint, not a remark.** A Mk.1 belt fed 480 items a
+minute carries 60 and backs the rest up, so the flow on an edge is capped by its
+tier and the shortfall propagates upstream as back pressure. To still be able to
+say *which* tier would be needed, every solve is run twice: once with the caps and
+once without. The uncapped run gives each line the rate it would carry if it were
+infinite, which is what the diagnostics quote.
+
+:func:`solve` therefore returns up to four fixed points in one report: the answer,
+its uncapped companion, and -- when a buffer is being drained -- the same pair
+solved again with the buffers supplying nothing, which is the regime that actually
+holds once the stock is gone.
 """
 
 import logging
@@ -52,7 +64,7 @@ from satisplanner.core.graph import (
     machine_building,
     storage_item,
 )
-from satisplanner.core.models import GameData
+from satisplanner.core.models import AttachmentRole, GameData
 from satisplanner.core.results import (
     FLOW_EPSILON,
     BufferSolution,
@@ -71,11 +83,24 @@ logger = logging.getLogger(__name__)
 DAMPING_AFTER: Final = 100
 DAMPING_FACTOR: Final = 0.5
 
-# Inner allocation loop: redistributing surplus converges far faster than this.
-MAX_ALLOCATION_ROUNDS: Final = 50
+# Inner allocation loop: each round either saturates a line or a consumer, or moves
+# everything left, so this bound is far above what any real factory needs.
+MAX_ALLOCATION_ROUNDS: Final = 200
 
 # Factor applied to a node's machine count when probing how much it could absorb.
 PROBE_FACTOR: Final = 1e6
+
+
+@dataclass(frozen=True)
+class SolveOptions:
+    """Switches that turn one solve into a different question about the same graph."""
+
+    # False ignores every belt and pipe ceiling. Used for the companion run that
+    # answers "what would this line carry if it were big enough?".
+    enforce_line_capacity: bool = True
+    # False forbids a buffer from handing out more than it receives, which gives the
+    # regime that holds once its stock is exhausted.
+    buffers_supply: bool = True
 
 
 @dataclass
@@ -161,9 +186,12 @@ class _NodeState:
 class _Solver:
     """One solve. Holds the mutable iteration state; ``run`` returns the report."""
 
-    def __init__(self, graph: FactoryGraph, game_data: GameData) -> None:
+    def __init__(
+        self, graph: FactoryGraph, game_data: GameData, options: SolveOptions | None = None
+    ) -> None:
         self.graph = graph
         self.game_data = game_data
+        self.options = options or SolveOptions()
         self.states: dict[str, _NodeState] = {}
         self.flows: dict[str, float] = {edge.id: 0.0 for edge in graph.edges}
         self.out_edges: dict[str, list[Edge]] = {node.id: [] for node in graph.nodes}
@@ -171,6 +199,10 @@ class _Solver:
         for edge in graph.sorted_edges():
             self.out_edges[edge.source].append(edge)
             self.in_edges[edge.target].append(edge)
+        self.limits: dict[str, float] = {
+            edge.id: self._capacity(edge) if self.options.enforce_line_capacity else math.inf
+            for edge in graph.edges
+        }
         self.converged = False
         self.iterations = 0
         # Per item, what each producer still had on offer after the last allocation.
@@ -286,6 +318,13 @@ class _Solver:
         For a downstream node that absorbs without limit -- another buffer, an output
         -- there is no figure to match, so the buffer passes on its own intake and
         nothing more. It never invents material for a sink.
+
+        When buffers are forbidden from supplying, the buffer also becomes *required*
+        to receive what it hands out -- ``nominal_in`` stops being infinite and
+        matches the offer. Its satisfaction ratio then throttles the offer down to
+        its real intake, through the same mechanism that starves a machine, and the
+        iteration descends from the optimistic start instead of having to guess a
+        first value.
         """
         for state in self._sorted_states():
             if not isinstance(state.node, StorageNode):
@@ -303,6 +342,10 @@ class _Solver:
                     asked += downstream.nominal_in.get(item, 0.0) * downstream.ratio_excluding(item)
             state.nominal_out = {item: asked}
             state.ratio_out = {item: 1.0}
+            if not self.options.buffers_supply:
+                # Absorption stays unlimited (``absorbs_without_limit`` bypasses this
+                # figure on the intake side); what it constrains is the offer.
+                state.nominal_in = {item: asked}
 
     def _offers(self) -> tuple[dict[str, dict[str, float]], dict[str, dict[str, float]]]:
         """Per item: what each producer can send, and what each consumer can take."""
@@ -332,7 +375,7 @@ class _Solver:
         self.leftovers = {}
         for item in sorted(by_item):
             item_supplies = supplies.get(item, {})
-            item_flows = allocate(item_supplies, caps.get(item, {}), by_item[item])
+            item_flows = allocate(item_supplies, caps.get(item, {}), by_item[item], self.limits)
             flows.update(item_flows)
             sent: dict[str, float] = {}
             for edge in by_item[item]:
@@ -393,6 +436,8 @@ class _Solver:
     # ----------------------------------------------------------------- report
 
     def _report(self) -> FactoryReport:
+        """The bare figures. Diagnostics are attached by :func:`solve`, which alone
+        knows the companion run the line findings are phrased against."""
         nodes = tuple(self._node_solution(state) for state in self._sorted_states())
         edges = tuple(
             EdgeSolution(
@@ -401,7 +446,7 @@ class _Solver:
                 target=edge.target,
                 item_class=edge.item_class,
                 transport_class=edge.transport_class,
-                rate_per_minute=self.flows[edge.id],
+                rate_per_minute=round(self.flows[edge.id], 9),
                 capacity_per_minute=self._capacity(edge),
             )
             for edge in self.graph.sorted_edges()
@@ -411,7 +456,7 @@ class _Solver:
             for state in self._sorted_states()
             if isinstance(state.node, StorageNode)
         )
-        report = FactoryReport(
+        return FactoryReport(
             converged=self.converged,
             iterations=self.iterations,
             nodes=nodes,
@@ -425,9 +470,6 @@ class _Solver:
             final_outputs=self._outputs(discarded=False),
             discarded_outputs=self._outputs(discarded=True),
             shopping_list=self._shopping_list(nodes),
-        )
-        return report.with_diagnostics(
-            tuple(validation.diagnose(self.graph, self.game_data, report))
         )
 
     def _capacity(self, edge: Edge) -> float:
@@ -628,27 +670,61 @@ class _Solver:
             buildings=dict(sorted(buildings.items())),
             belts_by_tier=dict(sorted(belts.items())),
             pipes_by_tier=dict(sorted(pipes.items())),
+            attachments=self._attachments(),
         )
+
+    def _attachments(self) -> dict[str, int]:
+        """Splitters, mergers and junctions implied by lines that share a node.
+
+        Two lines leaving one node with the same item means the player has to split
+        that output, and two arriving means a merge. The count follows from the
+        number of lines alone -- a splitter serves three, so each unit adds two --
+        which is as far as a throughput model can honestly go: how the units are
+        physically chained is geometry, and geometry is out of scope.
+        """
+        totals: dict[str, int] = {}
+        for node in self.graph.sorted_nodes():
+            for role, edges in (
+                (AttachmentRole.SPLIT, self.out_edges[node.id]),
+                (AttachmentRole.MERGE, self.in_edges[node.id]),
+            ):
+                lines: dict[str, int] = {}
+                for edge in edges:
+                    lines[edge.item_class] = lines.get(edge.item_class, 0) + 1
+                for item_class, count in sorted(lines.items()):
+                    attachment = self.game_data.attachment_for(
+                        self.game_data.item(item_class).form, role
+                    )
+                    if attachment is None:
+                        continue
+                    units = attachment.units_for(count)
+                    if units:
+                        totals[attachment.class_name] = totals.get(attachment.class_name, 0) + units
+        return dict(sorted(totals.items()))
 
 
 def allocate(
     supplies: Mapping[str, float],
     caps: Mapping[str, float],
     edges: Sequence[Edge],
+    limits: Mapping[str, float] | None = None,
 ) -> dict[str, float]:
     """Share each producer's output between the consumers it is wired to.
 
-    The rule, in order:
+    The rule is **max-min fairness**, which is what the game's own splitter does: it
+    hands each output an equal turn and, when one of them is full, shares what is
+    left equally between the others. In order:
 
-    1. every producer splits what it has **in proportion to what each consumer
-       still asks for**;
-    2. a consumer that cannot take its share leaves the remainder on the table, and
-       the next round hands it to the others -- that is the surplus redistribution;
+    1. every producer splits what it has **into equal shares**, one per line -- not
+       in proportion to what each consumer asks for;
+    2. a consumer that cannot take its whole share, or a line too small to carry it,
+       leaves the remainder on the table and the next round hands it to the others;
     3. consumers that absorb without limit (buffers, outputs, flares) are served
        **last**, with whatever nobody else could take. Treating their appetite as
        infinite in step 1 would let a flare starve a machine standing next to it.
 
-    Deterministic: producers, consumers and edges are all walked in sorted order.
+    ``limits`` caps each line by its transport tier. Deterministic: producers,
+    consumers and edges are all walked in sorted order.
     """
     flows = {edge.id: 0.0 for edge in edges}
     if not edges:
@@ -656,10 +732,13 @@ def allocate(
 
     ordered = sorted(edges, key=lambda edge: edge.id)
     remaining_supply = {node_id: max(supplies.get(node_id, 0.0), 0.0) for node_id in supplies}
+    remaining_line = {
+        edge.id: math.inf if limits is None else limits.get(edge.id, math.inf) for edge in ordered
+    }
     finite = {node: cap for node, cap in caps.items() if math.isfinite(cap)}
     unlimited = sorted(node for node, cap in caps.items() if not math.isfinite(cap))
 
-    _water_fill(flows, ordered, remaining_supply, dict(finite))
+    _water_fill(flows, ordered, remaining_supply, dict(finite), remaining_line)
     if unlimited:
         # Second pass: the leftovers go to the unlimited absorbers.
         leftovers = {
@@ -671,6 +750,7 @@ def allocate(
             sink_edges,
             leftovers,
             dict.fromkeys(unlimited, math.inf),
+            remaining_line,
             unlimited_caps=True,
         )
         for node_id, value in leftovers.items():
@@ -683,6 +763,7 @@ def _water_fill(
     edges: Sequence[Edge],
     remaining_supply: dict[str, float],
     remaining_cap: dict[str, float],
+    remaining_line: dict[str, float],
     *,
     unlimited_caps: bool = False,
 ) -> None:
@@ -693,32 +774,27 @@ def _water_fill(
             for edge in edges
             if remaining_supply.get(edge.source, 0.0) > FLOW_EPSILON
             and (unlimited_caps or remaining_cap.get(edge.target, 0.0) > FLOW_EPSILON)
+            and remaining_line[edge.id] > FLOW_EPSILON
         ]
         if not active:
             return
 
-        # Step 1: each producer offers its stock, weighted by what consumers still want.
+        # Step 1: each producer offers an equal share per line, never more than the
+        # line can still carry. What a share does not use comes back next round.
         offers: dict[str, float] = {}
         by_source: dict[str, list[Edge]] = {}
         for edge in active:
             by_source.setdefault(edge.source, []).append(edge)
         for source, group in sorted(by_source.items()):
-            weights = {
-                edge.id: 1.0 if unlimited_caps else remaining_cap.get(edge.target, 0.0)
-                for edge in group
-            }
-            total = sum(weights.values())
-            if total <= FLOW_EPSILON:
-                continue
-            available = remaining_supply[source]
+            share = remaining_supply[source] / len(group)
             for edge in group:
-                offers[edge.id] = available * weights[edge.id] / total
+                offers[edge.id] = min(share, remaining_line[edge.id])
 
         # Step 2: each consumer accepts what it can, scaling every offer alike.
         moved = 0.0
         by_target: dict[str, list[Edge]] = {}
         for edge in active:
-            if offers.get(edge.id, 0.0) > 0:
+            if offers.get(edge.id, 0.0) > FLOW_EPSILON:
                 by_target.setdefault(edge.target, []).append(edge)
         for target, group in sorted(by_target.items()):
             offered = sum(offers[edge.id] for edge in group)
@@ -732,6 +808,7 @@ def _water_fill(
                     continue
                 flows[edge.id] += accepted
                 remaining_supply[edge.source] -= accepted
+                remaining_line[edge.id] -= accepted
                 if not unlimited_caps:
                     remaining_cap[target] -= accepted
                 moved += accepted
@@ -747,8 +824,75 @@ def _clean(values: Mapping[str, float]) -> dict[str, float]:
 
 
 def solve(graph: FactoryGraph, game_data: GameData) -> FactoryReport:
-    """Compute the steady state of ``graph`` and return the complete report."""
-    return _Solver(graph, game_data).run()
+    """Compute the steady state of ``graph`` and return the complete report.
+
+    When the answer only holds because a buffer is being drained, the report carries
+    a second one under :attr:`FactoryReport.sustained`: the same factory with the
+    buffers supplying nothing, which is the regime that survives the stock.
+    """
+    report = _solve_pair(graph, game_data, buffers_supply=True)
+    if report.is_sustainable:
+        return report
+    combined = report.with_sustained(_solve_pair(graph, game_data, buffers_supply=False))
+    # Diagnosed once more now that the established regime is known: the finding that
+    # says "these figures are not sustainable" quotes what remains without the stock.
+    return combined.with_diagnostics(tuple(validation.diagnose(graph, game_data, combined)))
+
+
+def _solve_pair(graph: FactoryGraph, game_data: GameData, *, buffers_supply: bool) -> FactoryReport:
+    """One diagnosed answer, plus the uncapped companion its line findings need."""
+    uncapped = _Solver(
+        graph,
+        game_data,
+        SolveOptions(enforce_line_capacity=False, buffers_supply=buffers_supply),
+    ).run()
+    report = _with_desired_rates(
+        _Solver(graph, game_data, SolveOptions(buffers_supply=buffers_supply)).run(),
+        {solution.edge_id: solution.rate_per_minute for solution in uncapped.edges},
+    )
+    return report.with_diagnostics(tuple(validation.diagnose(graph, game_data, report)))
+
+
+def _with_desired_rates(report: FactoryReport, desired: Mapping[str, float]) -> FactoryReport:
+    """Fold the uncapped companion into the report.
+
+    Each line learns what it would carry if it were big enough, and each node learns
+    which of its items a line is holding back. That last point cannot be decided by
+    the capped run alone: a line running at exactly its ceiling because production
+    happens to match it is not a bottleneck, and only the uncapped rate tells the
+    two apart.
+    """
+    edges = tuple(
+        solution.model_copy(update={"desired_rate_per_minute": desired.get(solution.edge_id)})
+        for solution in report.edges
+    )
+    starving = {edge.target: set[str]() for edge in edges} | {
+        edge.source: set[str]() for edge in edges
+    }
+    for edge in edges:
+        if edge.is_saturated:
+            starving[edge.target].add(edge.item_class)
+            starving[edge.source].add(edge.item_class)
+    nodes = tuple(
+        _with_line_limits(solution, sorted(starving.get(solution.node_id, set())))
+        for solution in report.nodes
+    )
+    return report.model_copy(update={"edges": edges, "nodes": nodes})
+
+
+def _with_line_limits(solution: NodeSolution, saturated: Sequence[str]) -> NodeSolution:
+    """Attribute a node's shortfall to its lines when that is what is holding it back.
+
+    A genuine shortage wins: if nothing upstream had any of the item left over, the
+    node is starved and the line's size is beside the point.
+    """
+    if not saturated or solution.starved_items:
+        return solution
+    if solution.limiting not in (LimitingFactor.INPUTS, LimitingFactor.OUTPUTS):
+        return solution
+    return solution.model_copy(
+        update={"line_limited_items": tuple(saturated), "limiting": LimitingFactor.LINE}
+    )
 
 
 def suggest_machine_count(graph: FactoryGraph, game_data: GameData, node_id: str) -> float:
