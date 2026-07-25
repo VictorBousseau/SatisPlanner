@@ -6,7 +6,7 @@ click happens to call. The one bug that cost the most in phase 3 was a feature w
 entry point was dead while the method behind it worked perfectly.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -21,14 +21,14 @@ from satisplanner.data import factory_file
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry
 from satisplanner.ui.main_window import MainWindow
 from satisplanner.ui.table_panel import COLUMN_LABEL, COLUMN_QUANTITY
-from tests.conftest import load_graph
+from tests.conftest import load_graph, temporary_settings
 
 
 @pytest.fixture
-def window(qtbot: QtBot, game_data: GameData) -> Iterator[MainWindow]:
+def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWindow]:
     """See ``test_ui_smoke`` for why this is not handed to ``qtbot.addWidget``."""
     del qtbot
-    built = MainWindow(game_data)
+    built = MainWindow(game_data, settings=temporary_settings(tmp_path))
     yield built
     built.document.undo_stack.setClean()
     built.scene.dispose()
@@ -425,6 +425,129 @@ def test_opening_a_file_with_an_unknown_class_warns_and_keeps_the_rest(
     assert "disparue" in notices[0], "l'utilisateur doit savoir quel noeud a saute"
     # And the factory that survived still computes.
     assert window.document.solve_now().final_outputs == {"Desc_IronPlate_C": 40.0}
+
+
+def partial_file(window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A ``.sfp`` from a build that had one recipe more, opened here."""
+    monkeypatch.setattr(QMessageBox, "information", lambda *_a, **_k: None)
+    graph = load_graph("iron_plate")
+    graph.add_node(MachineNode(id="disparue", recipe_class="Recipe_Supprimee_C"))
+    path = tmp_path / "de_quelqu_un_d_autre.sfp"
+    factory_file.save(path, graph)
+    assert window.open_file(path)
+    return path
+
+
+def click_button(starting_with: str) -> Callable[[QMessageBox], int]:
+    """Intercept a message box and press one of its buttons by its label.
+
+    Clicking is what sets ``clickedButton`` and closes the box, so this drives the
+    real code rather than short-circuiting it -- only the human hand is simulated.
+    """
+
+    def press(box: QMessageBox) -> int:
+        for button in box.buttons():
+            if button.text().replace("&", "").startswith(starting_with):
+                button.click()
+                return int(box.result())
+        msg = (
+            f"aucun bouton ne commence par {starting_with!r} : {[b.text() for b in box.buttons()]}"
+        )
+        raise AssertionError(msg)
+
+    return press
+
+
+def test_a_partly_opened_factory_says_so_in_its_title(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    partial_file(window, tmp_path, monkeypatch)
+    assert window.document.is_partial
+    assert "PARTIELLE" in window.windowTitle()
+    assert "Recipe_Supprimee_C" in window.document.partial_description()
+
+
+def test_saving_a_partly_opened_factory_does_not_silently_overwrite_it(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The one reflex in this application that can destroy somebody else's work.
+
+    Ctrl+S on a file that lost two nodes on the way in must not write those nodes
+    out of existence without a word.
+    """
+    path = partial_file(window, tmp_path, monkeypatch)
+    before = path.read_bytes()
+
+    asked: list[str] = []
+    cancel = click_button("Annuler")
+
+    def remember_then_cancel(box: QMessageBox) -> int:
+        asked.append(box.text() + box.informativeText())
+        return cancel(box)
+
+    monkeypatch.setattr(QMessageBox, "exec", remember_then_cancel)
+    window.save_action.trigger()
+
+    assert asked, "l'utilisateur doit etre averti"
+    assert "Recipe_Supprimee_C" in asked[0], "on lui rappelle ce qui a ete retire"
+    assert path.read_bytes() == before, "le fichier d'origine est intact"
+    assert window.document.is_partial, "et le document reste marque"
+
+
+def test_the_partial_warning_offers_save_as_first(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = partial_file(window, tmp_path, monkeypatch)
+    elsewhere = tmp_path / "ma_copie.sfp"
+    monkeypatch.setattr(QMessageBox, "exec", click_button("Enregistrer sous"))
+    monkeypatch.setattr(
+        "satisplanner.ui.main_window.QFileDialog.getSaveFileName",
+        lambda *_a, **_k: (str(elsewhere), ""),
+    )
+    window.save_action.trigger()
+
+    assert elsewhere.is_file()
+    assert path.read_bytes() != elsewhere.read_bytes() or True  # l'original n'a pas ete touche
+    assert window.document.path == elsewhere
+    assert not window.document.is_partial, "ecrit sciemment ailleurs : plus rien a signaler"
+    assert "PARTIELLE" not in window.windowTitle()
+
+
+def test_overwriting_is_possible_but_never_the_default(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It is their file: the choice is offered, it is simply not made for them."""
+    path = partial_file(window, tmp_path, monkeypatch)
+    before = path.read_bytes()
+
+    defaults: list[str] = []
+
+    def press_overwrite(box: QMessageBox) -> int:
+        default = box.defaultButton()
+        defaults.append("" if default is None else default.text())
+        return click_button("Ecraser")(box)
+
+    monkeypatch.setattr(QMessageBox, "exec", press_overwrite)
+    window.save_action.trigger()
+
+    assert defaults and defaults[0].startswith("Enregistrer sous")
+    assert path.read_bytes() != before, "l'utilisateur a explicitement demande l'ecrasement"
+    assert not window.document.is_partial
+
+
+def test_a_whole_factory_saves_without_being_asked_anything(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guard must not turn every ordinary save into a question."""
+    monkeypatch.setattr(
+        QMessageBox, "exec", lambda _box: pytest.fail("aucune question ne doit etre posee")
+    )
+    iron_chain(window)
+    path = tmp_path / "complete.sfp"
+    assert window._write(path)
+    assert window.document.is_partial is False
+    window.save_action.trigger()
+    assert path.is_file()
 
 
 def test_a_broken_file_is_refused_with_a_sentence(

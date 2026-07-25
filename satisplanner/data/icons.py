@@ -6,7 +6,7 @@ recursively once and looked up from a flat mapping afterwards.
 
 This module stays free of Qt on purpose -- it answers "where is this file", not
 "give me a pixmap". The pixmap side, including the generative fallback, belongs to
-the UI layer and lands in phase 3.
+the UI layer.
 """
 
 import logging
@@ -14,29 +14,28 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
+from satisplanner import paths
+
 logger = logging.getLogger(__name__)
 
 ICON_SUFFIXES: Final[frozenset[str]] = frozenset({".png", ".webp", ".jpg", ".jpeg"})
 
-# Icons shipped with the application.
-EMBEDDED_ICON_DIRECTORY: Final = Path(__file__).resolve().parent.parent / "resources" / "icons"
 
-# Subdirectory of the application's own data directory where a user may drop their
-# own export. Made configurable from the preferences in phase 5.
-USER_ICON_SUBPATH: Final = Path("icons")
+def embedded_icon_directory() -> Path:
+    """Icons shipped with the application, if any were built into it at all."""
+    return paths.resource_directory() / "icons"
 
 
-def default_icon_roots(app_data_directory: Path | None = None) -> list[Path]:
-    """Icon directories in resolution order: embedded first, then user-provided.
+def default_icon_roots(user_directory: Path | None = None) -> list[Path]:
+    """Icon directories in resolution order: embedded first, then the user's own.
 
-    ``app_data_directory`` is the application's own data directory, which only the UI
-    layer can locate; this module stays free of Qt. Directories that do not exist are
-    dropped, so a user who never exported anything costs nothing.
+    ``user_directory`` is a folder the user pointed the preferences at, or the default
+    one under ``%LOCALAPPDATA%`` when they never chose. Directories that do not exist
+    are dropped, so an installation with neither costs nothing and falls back to the
+    generated icons.
     """
-    roots = [EMBEDDED_ICON_DIRECTORY]
-    if app_data_directory is not None:
-        roots.append(app_data_directory / USER_ICON_SUBPATH)
-    return [root for root in roots if root.is_dir()]
+    chosen = user_directory if user_directory is not None else paths.default_user_icon_directory()
+    return [root for root in (embedded_icon_directory(), chosen) if root.is_dir()]
 
 
 class IconIndex:

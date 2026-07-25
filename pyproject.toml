@@ -30,7 +30,9 @@ satisplanner = "satisplanner.__main__:main"
 include = ["satisplanner*"]
 
 [tool.setuptools.package-data]
-satisplanner = ["resources/*.sqlite"]
+# The icons directory is deliberately absent: it is not versioned and not
+# redistributable. See NOTICE.md.
+satisplanner = ["resources/*.sqlite", "resources/*.ico"]
 
 # ---------------------------------------------------------------- ruff
 

@@ -150,6 +150,19 @@ class FactoryScene(QGraphicsScene):
         if report is not None:
             self.apply_report(report)
 
+    def set_icons(self, icons: IconProvider) -> None:
+        """Adopt a new icon source, after the preferences pointed somewhere else.
+
+        Node items take their provider once, at construction, so the honest way to
+        change it is to throw them away and let :meth:`rebuild` make them again. The
+        graph is untouched, so nothing here goes near the undo stack.
+        """
+        self.icons = icons
+        for item in list(self.nodes.values()):
+            self.removeItem(item)
+        self.nodes.clear()
+        self.rebuild()
+
     def dispose(self) -> None:
         """Detach from the document and let go of every item, in that order.
 
@@ -438,6 +451,11 @@ class FactoryScene(QGraphicsScene):
             item.setSelected(True)
         return item
 
+    def select_all(self) -> None:
+        """Nodes and lines alike, so that Ctrl+A then Suppr clears the canvas."""
+        for item in (*self.nodes.values(), *self.edges.values()):
+            item.setSelected(True)
+
     def selected_nodes(self) -> list[NodeItem]:
         return [item for item in self.selectedItems() if isinstance(item, NodeItem)]
 
@@ -696,11 +714,24 @@ class FactoryView(QGraphicsView):
 
     # -------------------------------------------------------------- zoom, pan
 
-    def wheelEvent(self, event: QWheelEvent) -> None:
-        step = ZOOM_STEP if event.angleDelta().y() > 0 else 1 / ZOOM_STEP
+    def zoom_by(self, step: float) -> None:
+        """One zoom step, refused rather than clamped outside the allowed range.
+
+        The single door for zooming, so the wheel and the menu cannot drift apart --
+        which is exactly how ``fitInView`` ended up ignoring the limit.
+        """
         scale = self.transform().m11() * step
         if MIN_SCALE <= scale <= MAX_SCALE:
             self.scale(step, step)
+
+    def zoom_in(self) -> None:
+        self.zoom_by(ZOOM_STEP)
+
+    def zoom_out(self) -> None:
+        self.zoom_by(1 / ZOOM_STEP)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        self.zoom_by(ZOOM_STEP if event.angleDelta().y() > 0 else 1 / ZOOM_STEP)
         event.accept()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:

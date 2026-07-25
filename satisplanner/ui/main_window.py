@@ -16,6 +16,7 @@ without Satisfactory installed runs it exactly the same way.
 
 import logging
 from collections.abc import Sequence
+from enum import Enum
 from pathlib import Path
 from typing import Final
 
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QToolBar,
@@ -36,7 +38,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from satisplanner import __version__
+from satisplanner import __version__, logging_setup
+from satisplanner.core.graph import SCHEMA_VERSION as DOCUMENT_SCHEMA_VERSION
 from satisplanner.core.models import GameData
 from satisplanner.core.results import FactoryReport, Severity
 from satisplanner.data import db, factory_file
@@ -46,8 +49,11 @@ from satisplanner.ui.canvas import MAX_SCALE, FactoryScene, FactoryView
 from satisplanner.ui.catalogue import PaletteEntry, build_entries
 from satisplanner.ui.diagnostics_panel import DiagnosticsPanel
 from satisplanner.ui.document import FactoryDocument
+from satisplanner.ui.help_dialog import HelpDialog, shortcut_rows
 from satisplanner.ui.icon_provider import IconProvider
+from satisplanner.ui.localisation import install_french_translations
 from satisplanner.ui.palette import PaletteWidget
+from satisplanner.ui.preferences import Preferences, PreferencesDialog
 from satisplanner.ui.table_panel import NodeTablePanel
 from satisplanner.ui.totals_panel import TotalsPanel
 
@@ -55,11 +61,6 @@ logger = logging.getLogger(__name__)
 
 PALETTE_WIDTH: Final = 320
 PANEL_WIDTH: Final = 380
-
-SETTINGS_ORGANISATION: Final = "SatisPlanner"
-SETTINGS_APPLICATION: Final = "SatisPlanner"
-RECENT_FILES_KEY: Final = "recent_files"
-MAX_RECENT_FILES: Final = 8
 
 
 def load_catalogue() -> GameData:
@@ -85,9 +86,10 @@ class ShareCodeDialog(QDialog):
         if read_only:
             copy = buttons.addButton("Copier le code", QDialogButtonBox.ButtonRole.ActionRole)
             copy.clicked.connect(self._copy)
+            # Close carries the reject role, so ``rejected`` closes the box. Matching
+            # on the button's own text would work only until Qt speaks French.
             buttons.addButton(QDialogButtonBox.StandardButton.Close)
             buttons.rejected.connect(self.reject)
-            buttons.clicked.connect(self._maybe_close)
         else:
             buttons.setStandardButtons(
                 QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -102,12 +104,47 @@ class ShareCodeDialog(QDialog):
     def _copy(self) -> None:
         QGuiApplication.clipboard().setText(self.edit.toPlainText())
 
-    def _maybe_close(self, button) -> None:  # type: ignore[no-untyped-def]
-        if button.text() == "Close":
-            self.accept()
-
     def code(self) -> str:
         return self.edit.toPlainText()
+
+
+class PartialSaveChoice(Enum):
+    """What to do about saving a factory that did not open whole."""
+
+    SAVE_AS = "save_as"
+    OVERWRITE = "overwrite"
+    CANCEL = "cancel"
+
+
+def ask_partial_save(parent: QWidget, name: str, description: str) -> PartialSaveChoice:
+    """The one place in this application where a reflex can destroy someone's work.
+
+    A file opened partly is missing nodes the catalogue could not describe. Writing it
+    back over itself throws those nodes away for good, and the user's hands are
+    already on ``Ctrl+S``. So the overwrite is offered -- it is their file and their
+    decision -- but never as the default, and never without saying again what is
+    about to be lost.
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Warning)
+    box.setWindowTitle("Cette usine n'a pas ete ouverte en entier")
+    box.setText(
+        f"« {name} » contenait des elements que ce catalogue ne connait pas.\n"
+        "Enregistrer par-dessus le fichier d'origine les supprimerait definitivement."
+    )
+    box.setInformativeText(description)
+    save_as = box.addButton("Enregistrer sous...", QMessageBox.ButtonRole.AcceptRole)
+    overwrite = box.addButton(f"Ecraser {name}", QMessageBox.ButtonRole.DestructiveRole)
+    box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(save_as)
+    box.exec()
+
+    clicked = box.clickedButton()
+    if clicked is save_as:
+        return PartialSaveChoice.SAVE_AS
+    if clicked is overwrite:
+        return PartialSaveChoice.OVERWRITE
+    return PartialSaveChoice.CANCEL
 
 
 class PdfOptionsDialog(QDialog):
@@ -134,14 +171,24 @@ class PdfOptionsDialog(QDialog):
 class MainWindow(QMainWindow):
     """Application shell around one edited factory."""
 
-    def __init__(self, game_data: GameData | None = None) -> None:
+    def __init__(
+        self, game_data: GameData | None = None, settings: QSettings | None = None
+    ) -> None:
         super().__init__()
+        # Before any dialog can be built: "Cancel" under a French question is this
+        # application's own text and Qt's text disagreeing.
+        install_french_translations()
         self.game_data = game_data if game_data is not None else load_catalogue()
-        self.icons = IconProvider.from_default_roots()
+        # Injectable so a test never writes to the developer's own settings.
+        self.preferences = Preferences(settings)
+        self.icons = IconProvider.from_default_roots(
+            user_directory=self.preferences.effective_icon_directory
+        )
         self.entries: list[PaletteEntry] = build_entries(self.game_data)
         self.document = FactoryDocument(self.game_data, self)
-        self.settings = QSettings(SETTINGS_ORGANISATION, SETTINGS_APPLICATION)
         self._syncing_selection = False
+        # In creation order, which is menu order, which is the order the help lists.
+        self.menus: list[QMenu] = []
 
         self.resize(1700, 980)
         self.scene = FactoryScene(self.document, self.icons, self.entries, self)
@@ -157,6 +204,7 @@ class MainWindow(QMainWindow):
         self._build_actions()
         self._connect()
 
+        self.apply_preferences()
         self._show_catalogue_summary()
         self.refresh_title()
         self.document.solve_now()
@@ -200,15 +248,23 @@ class MainWindow(QMainWindow):
         self.save_as_action = _action(
             self, "Enregistrer sous...", QKeySequence.StandardKey.SaveAs, self.save_as
         )
-        self.copy_code_action = _action(self, "Copier le code de partage", None, self.copy_code)
-        self.import_code_action = _action(
-            self, "Importer depuis un code...", None, self.import_code
+        self.copy_code_action = _action(
+            self, "Copier le code de partage", "Ctrl+Shift+C", self.copy_code
         )
-        self.export_png_action = _action(self, "Exporter en PNG...", None, self.export_png)
-        self.export_pdf_action = _action(self, "Exporter en PDF...", None, self.export_pdf)
+        self.import_code_action = _action(
+            self, "Importer depuis un code...", "Ctrl+Shift+V", self.import_code
+        )
+        self.export_png_action = _action(
+            self, "Exporter en PNG...", "Ctrl+Shift+E", self.export_png
+        )
+        self.export_pdf_action = _action(
+            self, "Exporter en PDF...", QKeySequence.StandardKey.Print, self.export_pdf
+        )
+        self.preferences_action = _action(self, "Preferences...", "Ctrl+,", self.edit_preferences)
         self.quit_action = _action(self, "Quitter", QKeySequence.StandardKey.Quit, self.close)
 
         menu = self.menuBar().addMenu("&Fichier")
+        self.menus.append(menu)
         menu.addAction(self.new_action)
         menu.addAction(self.open_action)
         self.recent_menu = menu.addMenu("Fichiers recents")
@@ -222,6 +278,7 @@ class MainWindow(QMainWindow):
         menu.addAction(self.export_png_action)
         menu.addAction(self.export_pdf_action)
         menu.addSeparator()
+        menu.addAction(self.preferences_action)
         menu.addAction(self.quit_action)
         self.refresh_recent_menu()
 
@@ -250,7 +307,10 @@ class MainWindow(QMainWindow):
         self.delete_action = _action(
             self, "Supprimer", QKeySequence.StandardKey.Delete, self.scene.delete_selection
         )
-        self.adjust_action = _action(self, "Ajuster ce noeud", None, self._adjust_selection)
+        self.select_all_action = _action(
+            self, "Tout selectionner", QKeySequence.StandardKey.SelectAll, self.scene.select_all
+        )
+        self.adjust_action = _action(self, "Ajuster ce noeud", "Ctrl+E", self._adjust_selection)
         self.adjust_action.setToolTip(
             "Dimensionne le noeud selectionne a ce que ses intrants permettent (calcul local)"
         )
@@ -258,15 +318,26 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.adjust_action)
 
         menu = self.menuBar().addMenu("&Edition")
+        self.menus.append(menu)
         menu.addAction(self.undo_action)
         menu.addAction(self.redo_action)
         menu.addSeparator()
+        menu.addAction(self.select_all_action)
         menu.addAction(self.delete_action)
         menu.addAction(self.adjust_action)
 
     def _build_view_actions(self) -> None:
-        self.reset_zoom_action = _action(self, "Zoom 100 %", None, self.view.reset_zoom)
-        self.fit_action = _action(self, "Tout afficher", None, self.fit_to_factory)
+        self.zoom_in_action = _action(
+            self, "Zoom avant", QKeySequence.StandardKey.ZoomIn, self.view.zoom_in
+        )
+        self.zoom_out_action = _action(
+            self, "Zoom arriere", QKeySequence.StandardKey.ZoomOut, self.view.zoom_out
+        )
+        self.reset_zoom_action = _action(self, "Zoom 100 %", "Ctrl+0", self.view.reset_zoom)
+        self.fit_action = _action(self, "Tout afficher", "Ctrl+Shift+F", self.fit_to_factory)
+        self.search_action = _action(
+            self, "Rechercher dans la palette", "Ctrl+F", self.focus_search
+        )
 
         toolbar = self.findChild(QToolBar, "toolbar_edition")
         if toolbar is not None:
@@ -275,20 +346,36 @@ class MainWindow(QMainWindow):
             toolbar.addAction(self.fit_action)
 
         menu = self.menuBar().addMenu("&Affichage")
+        self.menus.append(menu)
         menu.addAction(self.palette_dock.toggleViewAction())
         for dock in self.panel_docks:
             menu.addAction(dock.toggleViewAction())
         menu.addSeparator()
+        menu.addAction(self.zoom_in_action)
+        menu.addAction(self.zoom_out_action)
         menu.addAction(self.reset_zoom_action)
         menu.addAction(self.fit_action)
+        menu.addSeparator()
+        menu.addAction(self.search_action)
+        # Actions reachable only by their shortcut still have to belong to a widget
+        # that is visible, or Qt never delivers the key.
+        self.addAction(self.search_action)
 
     def _build_help_actions(self) -> None:
+        self.help_action = _action(
+            self, "Gestes et raccourcis", QKeySequence.StandardKey.HelpContents, self.show_help
+        )
         menu = self.menuBar().addMenu("&Aide")
+        self.menus.append(menu)
+        menu.addAction(self.help_action)
+        menu.addSeparator()
         menu.addAction(_action(self, "A propos", None, self._show_about))
 
     def _connect(self) -> None:
         self.palette_widget.entryActivated.connect(self._add_at_view_centre)
         self.palette_widget.defaultTransportsChanged.connect(self.scene.set_default_transports)
+        self.palette_widget.defaultTransportsChanged.connect(self._store_transports)
+        self.palette_widget.filtersChanged.connect(self._store_filters)
         self.scene.selectionSummaryChanged.connect(self._show_hint)
         self.scene.selectionChanged.connect(self._canvas_selection_changed)
         self.table_panel.selectionChangedTo.connect(self._table_selection_changed)
@@ -360,6 +447,15 @@ class MainWindow(QMainWindow):
     def save(self) -> bool:
         if self.document.path is None:
             return self.save_as()
+        if self.document.is_partial:
+            choice = ask_partial_save(
+                self, self.document.path.name, self.document.partial_description()
+            )
+            if choice is PartialSaveChoice.CANCEL:
+                return False
+            if choice is PartialSaveChoice.SAVE_AS:
+                return self.save_as()
+            logger.warning("ecrasement demande d'un fichier ouvert partiellement")
         return self._write(self.document.path)
 
     def save_as(self) -> bool:
@@ -480,25 +576,83 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Usine exportee dans {path.name}.", 4000)
         return written
 
+    # ----------------------------------------------------------- preferences
+
+    def apply_preferences(self) -> None:
+        """Push what was stored into the widgets that show it."""
+        self.palette_widget.apply_stored(
+            self.preferences.default_belt,
+            self.preferences.default_pipe,
+            show_alternates=self.preferences.show_alternates,
+            show_events=self.preferences.show_events,
+        )
+        self.refresh_recent_menu()
+
+    def edit_preferences(self) -> bool:
+        """Open the box and, if it is accepted, act on what changed."""
+        before = self.preferences.effective_icon_directory
+        dialog = PreferencesDialog(
+            self.preferences, self.game_data, len(self.icons.index), parent=self
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+        if self.preferences.effective_icon_directory != before:
+            self.reload_icons()
+        self.apply_preferences()
+        self.statusBar().showMessage("Preferences enregistrees.", 4000)
+        return True
+
+    def reload_icons(self) -> None:
+        """Index the icon folders again and hand the result to everything drawing.
+
+        Immediate rather than "restart to apply": someone who has just exported four
+        hundred files with FModel wants to know now whether they landed in the right
+        place, and being told to restart is being told to find out later.
+        """
+        self.icons = IconProvider.from_default_roots(
+            user_directory=self.preferences.effective_icon_directory
+        )
+        self.palette_widget.set_icons(self.icons)
+        self.scene.set_icons(self.icons)
+        self._refresh_catalogue_summary()
+        logger.info("%d fichier(s) d'icone indexe(s)", len(self.icons.index))
+
+    def _store_transports(self, belt: str, pipe: str) -> None:
+        self.preferences.default_belt = belt
+        self.preferences.default_pipe = pipe
+
+    def _store_filters(self, alternates: bool, events: bool) -> None:
+        self.preferences.show_alternates = alternates
+        self.preferences.show_events = events
+
+    def focus_search(self) -> None:
+        """Ctrl+F: show the palette if it was hidden, and put the caret in the box."""
+        self.palette_dock.show()
+        self.palette_widget.search.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.palette_widget.search.selectAll()
+
+    def show_help(self) -> None:
+        """The gestures, and the shortcuts as this window really binds them."""
+        HelpDialog(shortcut_rows(self.documented_actions()), self).exec()
+
+    def documented_actions(self) -> list[QAction]:
+        """Every action worth listing in the help, in menu order.
+
+        Read off the menus this window really built, rather than from a list kept
+        alongside them: a list kept alongside them is a list that stops matching.
+        """
+        actions: list[QAction] = []
+        for menu in self.menus:
+            actions.extend(action for action in menu.actions() if not action.isSeparator())
+        return actions
+
     # --------------------------------------------------------- recent files
 
     def recent_files(self) -> list[Path]:
-        """QSettings hands a one-element list back as a bare string, hence the check."""
-        stored = self.settings.value(RECENT_FILES_KEY, [])
-        if isinstance(stored, str):
-            entries: list[object] = [stored]
-        elif isinstance(stored, list):
-            entries = list(stored)
-        else:
-            entries = []
-        return [Path(str(entry)) for entry in entries if entry]
+        return self.preferences.recent_files()
 
     def remember_recent(self, path: Path) -> None:
-        """Most recent first, no duplicates, bounded."""
-        newest = path.resolve()
-        kept = [newest]
-        kept.extend(entry.resolve() for entry in self.recent_files() if entry.resolve() != newest)
-        self.settings.setValue(RECENT_FILES_KEY, [str(entry) for entry in kept[:MAX_RECENT_FILES]])
+        self.preferences.remember_recent(path)
         self.refresh_recent_menu()
 
     def refresh_recent_menu(self) -> None:
@@ -516,7 +670,7 @@ class MainWindow(QMainWindow):
         self.recent_menu.addAction("Oublier la liste", self.forget_recent)
 
     def forget_recent(self) -> None:
-        self.settings.setValue(RECENT_FILES_KEY, [])
+        self.preferences.forget_recent()
         self.refresh_recent_menu()
 
     # ----------------------------------------------------------------- misc
@@ -547,8 +701,11 @@ class MainWindow(QMainWindow):
 
     def refresh_title(self) -> None:
         marker = " •" if self.document.is_modified else ""
+        # Spelled out rather than iconic: this is the state where a reflex Ctrl+S
+        # costs somebody their nodes, so it says what it means.
+        partial = " — OUVERTURE PARTIELLE" if self.document.is_partial else ""
         self.setWindowTitle(
-            f"{self.document.display_name}{marker} — SatisPlanner {__version__} "
+            f"{self.document.display_name}{marker}{partial} — SatisPlanner {__version__} "
             f"— Satisfactory {db.GAME_VERSION}"
         )
 
@@ -586,35 +743,51 @@ class MainWindow(QMainWindow):
         A permanent widget rather than a message: the transient side belongs to the
         report, and a start-up notice must not overwrite "your factory is nominal".
         """
-        label = QLabel(
+        self.catalogue_label = QLabel(self.catalogue_summary(), self)
+        self.catalogue_label.setStyleSheet(f"color: {theme.TEXT_MUTED};")
+        self.statusBar().addPermanentWidget(self.catalogue_label)
+
+    def catalogue_summary(self) -> str:
+        return (
             f"{len(self.game_data.recipes)} recettes, {len(self.game_data.items)} items — "
-            f"{len(self.icons.index)} icone(s) indexee(s), le reste est dessine",
-            self,
+            f"{len(self.icons.index)} icone(s) indexee(s), le reste est dessine"
         )
-        label.setStyleSheet(f"color: {theme.TEXT_MUTED};")
-        self.statusBar().addPermanentWidget(label)
+
+    def _refresh_catalogue_summary(self) -> None:
+        self.catalogue_label.setText(self.catalogue_summary())
 
     def _show_about(self) -> None:
+        log_path = logging_setup.current_log_path()
+        journal = f"Journal : {log_path}<br><br>" if log_path is not None else ""
         QMessageBox.about(
             self,
             "A propos de SatisPlanner",
             f"<b>SatisPlanner {__version__}</b><br>"
-            f"Planificateur d'usines theoriques pour Satisfactory {db.GAME_VERSION}.<br><br>"
-            "L'outil raisonne en <b>debits</b>, pas en geometrie 3D : ni distances, ni "
-            "elevations, ni hauteur de refoulement des pompes.<br><br>"
+            f"Donnees de jeu : Satisfactory {db.GAME_VERSION} "
+            f"(schema de base {db.SCHEMA_VERSION}, schema de fichier "
+            f"{DOCUMENT_SCHEMA_VERSION})<br><br>"
+            "Planificateur d'usines theoriques. L'outil raisonne en <b>debits</b>, pas en "
+            "geometrie 3D : ni distances, ni elevations, ni hauteur de refoulement des "
+            f"pompes.<br><br>{journal}"
             "Satisfactory, ses donnees et ses icones sont la propriete de "
-            "Coffee Stain Studios.",
+            "Coffee Stain Studios. Aucun logo ni element de marque du jeu n'est "
+            "reproduit dans cette application.",
         )
 
 
 def _action(
     window: QMainWindow,
     text: str,
-    shortcut: QKeySequence.StandardKey | None,
+    shortcut: QKeySequence.StandardKey | str | None,
     slot: object,
 ) -> QAction:
+    """One action. Shortcuts are given as a standard key where one exists -- so that
+    Windows and any other platform each get their own convention -- and as text only
+    where the application invents the binding."""
     action = QAction(text, window)
-    if shortcut is not None:
+    if isinstance(shortcut, QKeySequence.StandardKey):
         action.setShortcut(shortcut)
+    elif shortcut is not None:
+        action.setShortcut(QKeySequence(shortcut))
     action.triggered.connect(slot)
     return action

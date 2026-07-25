@@ -16,7 +16,7 @@ from typing import Final
 from satisplanner.core.models import BuildingKind, Item, ItemForm
 from satisplanner.data import db
 from satisplanner.data.docs_parser import DocsFileError, GameDataset, load_dataset
-from satisplanner.data.icons import EMBEDDED_ICON_DIRECTORY, IconIndex
+from satisplanner.data.icons import IconIndex, embedded_icon_directory
 
 logger = logging.getLogger("satisplanner.data.build")
 
@@ -52,7 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--icons-dir",
         type=Path,
-        default=EMBEDDED_ICON_DIRECTORY,
+        default=embedded_icon_directory(),
         help="dossier d'icones a confronter aux donnees (defaut : icones embarquees)",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="trace detaillee")

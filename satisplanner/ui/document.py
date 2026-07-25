@@ -13,9 +13,18 @@ and before anything that has to read a fresh report.
 "Modified" is read off the undo stack rather than tracked by hand: undoing back to
 the point where the file was saved makes the document clean again, which is what a
 user expects and what a hand-kept boolean always gets wrong.
+
+A document also knows whether it opened **whole**. When a file refers to a recipe
+this build does not have, the offending nodes are dropped so that everything below
+can keep assuming the catalogue answers -- which means the document in memory is no
+longer the document on disk. That state is remembered here rather than being a
+message that scrolls away, because the danger is not the warning being missed: it is
+the reflex ``Ctrl+S`` a minute later, silently overwriting somebody's file with the
+version missing two nodes.
 """
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
@@ -61,6 +70,8 @@ class FactoryDocument(QObject):
         # into an object that no longer exists.
         self.undo_stack.cleanChanged.connect(self._clean_changed)
         self._path: Path | None = None
+        self._missing_classes: tuple[str, ...] = ()
+        self._removed_nodes: tuple[str, ...] = ()
         self._report: FactoryReport | None = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -87,6 +98,27 @@ class FactoryDocument(QObject):
         self.identityChanged.emit()
 
     @property
+    def is_partial(self) -> bool:
+        """True when what is on screen is less than what was in the file."""
+        return bool(self._missing_classes)
+
+    @property
+    def missing_classes(self) -> tuple[str, ...]:
+        """Classes the catalogue could not describe, in the order they were found."""
+        return self._missing_classes
+
+    @property
+    def removed_nodes(self) -> tuple[str, ...]:
+        """Identifiers of the nodes dropped because of those classes."""
+        return self._removed_nodes
+
+    def partial_description(self) -> str:
+        """The sentence naming what was lost, or an empty one when nothing was."""
+        if not self._missing_classes:
+            return ""
+        return factory_file.describe_unknown(self._missing_classes, self._removed_nodes)
+
+    @property
     def display_name(self) -> str:
         return UNTITLED if self._path is None else self._path.stem
 
@@ -95,11 +127,19 @@ class FactoryDocument(QObject):
 
     # ------------------------------------------------------------ persistence
 
-    def reset(self, graph: FactoryGraph | None = None, path: Path | None = None) -> None:
+    def reset(
+        self,
+        graph: FactoryGraph | None = None,
+        path: Path | None = None,
+        missing: Sequence[str] = (),
+        removed: Sequence[str] = (),
+    ) -> None:
         """Replace the whole factory. Clears the history: there is nothing to undo
         back into, and offering it would restore half of the previous document."""
         self.graph = graph if graph is not None else FactoryGraph()
         self._path = path
+        self._missing_classes = tuple(missing)
+        self._removed_nodes = tuple(removed)
         self.undo_stack.clear()
         self.undo_stack.setClean()
         self.graphChanged.emit()
@@ -121,17 +161,22 @@ class FactoryDocument(QObject):
         """Take on a factory from anywhere, dropping what the catalogue cannot describe.
 
         A document that comes in is never "modified": it is exactly what was received
-        until the user changes something.
+        until the user changes something. If something was dropped, it *is* partial,
+        and stays so until it has been written somewhere under that knowledge.
         """
         missing, removed = factory_file.prune_unknown(graph, self.game_data)
         if missing and warnings is not None:
             warnings.append(factory_file.describe_unknown(missing, removed))
-        self.reset(graph, path)
+        self.reset(graph, path, missing, removed)
         return missing
 
     def save_as(self, path: Path, thumbnail: bytes | None = None) -> None:
         factory_file.save(path, self.graph, thumbnail)
         self._path = path
+        # Written knowingly -- the window asks before letting this happen to a partly
+        # loaded file -- so the document is now exactly what is on disk.
+        self._missing_classes = ()
+        self._removed_nodes = ()
         self.undo_stack.setClean()
         self.identityChanged.emit()
 

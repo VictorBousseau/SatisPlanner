@@ -205,6 +205,10 @@ class PaletteWidget(QWidget):
 
     entryActivated = Signal(object)
     defaultTransportsChanged = Signal(str, str)
+    # Alternates shown, event content shown. Emitted so the preferences can follow the
+    # toggles: a filter changed here and forgotten on the next run is a filter the
+    # user has to set twice.
+    filtersChanged = Signal(bool, bool)
 
     def __init__(
         self,
@@ -271,6 +275,8 @@ class PaletteWidget(QWidget):
         self.machine.currentIndexChanged.connect(self.refresh)
         self.alternates.toggled.connect(self.refresh)
         self.events.toggled.connect(self.refresh)
+        self.alternates.toggled.connect(self._announce_filters)
+        self.events.toggled.connect(self._announce_filters)
         self.list.entryActivated.connect(self.entryActivated)
         self.belt_tier.currentIndexChanged.connect(self._announce_transports)
         self.pipe_tier.currentIndexChanged.connect(self._announce_transports)
@@ -284,6 +290,44 @@ class PaletteWidget(QWidget):
     def _announce_transports(self) -> None:
         belt, pipe = self.default_transports()
         self.defaultTransportsChanged.emit(belt, pipe)
+
+    def filters(self) -> tuple[bool, bool]:
+        """``(alternates shown, event content shown)``."""
+        return self.alternates.isChecked(), self.events.isChecked()
+
+    def _announce_filters(self) -> None:
+        self.filtersChanged.emit(*self.filters())
+
+    def apply_stored(
+        self, belt: str, pipe: str, *, show_alternates: bool, show_events: bool
+    ) -> None:
+        """Adopt the settings kept from the last run, then refresh once.
+
+        Signals are blocked while the widgets are set: each one would otherwise write
+        straight back to the store it was just read from, and the list would be
+        rebuilt four times before the window is even visible.
+        """
+        for widget, value in (
+            (self.alternates, show_alternates),
+            (self.events, show_events),
+        ):
+            blocked = widget.blockSignals(True)
+            widget.setChecked(value)
+            widget.blockSignals(blocked)
+        for combo, class_name in ((self.belt_tier, belt), (self.pipe_tier, pipe)):
+            index = combo.findData(class_name) if class_name else -1
+            if index >= 0:
+                blocked = combo.blockSignals(True)
+                combo.setCurrentIndex(index)
+                combo.blockSignals(blocked)
+        self.refresh()
+        self._announce_transports()
+
+    def set_icons(self, icons: IconProvider) -> None:
+        """Swap the icon source, after the user pointed the preferences elsewhere."""
+        self.icons = icons
+        self.model.icons = icons
+        self.refresh()
 
     def visible_entries(self) -> list[PaletteEntry]:
         """Entries surviving the query and the toggles, in section order."""

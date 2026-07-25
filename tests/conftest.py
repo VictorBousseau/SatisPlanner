@@ -6,6 +6,7 @@ BOM) so that the tests exercise the same decoding path as production.
 """
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,6 +18,9 @@ from satisplanner.data.docs_parser import (
     parse_dataset,
     read_locale,
 )
+
+if TYPE_CHECKING:  # Qt is not imported by the non-interface tests.
+    from PySide6.QtCore import QSettings
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 REFERENCE_FIXTURE = FIXTURE_DIR / "docs_en-US.json"
@@ -44,6 +48,18 @@ def recipes(dataset: GameDataset) -> dict[str, Recipe]:
 def game_data(dataset: GameDataset) -> GameData:
     """The catalogue as injected into the engine."""
     return dataset.to_game_data()
+
+
+def temporary_settings(directory: Path) -> "QSettings":
+    """A settings store of its own, in an ini file under ``tmp_path``.
+
+    Without this the whole suite writes to the real registry key: the developer's
+    recent-file list ends up full of ``tmp_path`` entries that no longer exist, and a
+    test that reads a preference reads whatever the last run happened to leave.
+    """
+    from PySide6.QtCore import QSettings
+
+    return QSettings(str(directory / "settings.ini"), QSettings.Format.IniFormat)
 
 
 def load_graph(name: str) -> FactoryGraph:

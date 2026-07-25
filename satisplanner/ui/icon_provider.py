@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 from typing import Final
 
-from PySide6.QtCore import QRectF, QSize, QStandardPaths, Qt
+from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
@@ -62,16 +62,6 @@ def initials(label: str) -> str:
     return "".join(word[0] for word in words[:_MAX_INITIALS]).upper()
 
 
-def app_data_directory() -> Path | None:
-    """Where Windows lets this application keep its own files.
-
-    Only the UI layer can answer this -- ``data.icons`` deliberately knows nothing
-    about Qt -- so the path is resolved here and handed down.
-    """
-    location = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
-    return Path(location) if location else None
-
-
 class IconProvider:
     """Resolves a class to a ``QIcon``, generating one when no file was exported."""
 
@@ -82,9 +72,11 @@ class IconProvider:
         self._generated: set[str] = set()
 
     @classmethod
-    def from_default_roots(cls, size: int = ICON_SIZE) -> "IconProvider":
+    def from_default_roots(
+        cls, size: int = ICON_SIZE, user_directory: Path | None = None
+    ) -> "IconProvider":
         """The provider the application runs with: embedded icons, then the user's."""
-        provider = cls(IconIndex(default_icon_roots(app_data_directory())), size)
+        provider = cls(IconIndex(default_icon_roots(user_directory)), size)
         logger.debug("%d fichier(s) d'icone indexe(s)", len(provider.index))
         return provider
 

@@ -6,6 +6,7 @@ if the packaged database ever stops being loadable, this fails.
 """
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt
@@ -17,10 +18,11 @@ from satisplanner.ui.canvas import MAX_SCALE, MIN_SCALE
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry
 from satisplanner.ui.main_window import MainWindow
 from satisplanner.ui.palette import ENTRY_MIME_TYPE, encode_entry
+from tests.conftest import temporary_settings
 
 
 @pytest.fixture
-def window(qtbot: QtBot, game_data: GameData) -> Iterator[MainWindow]:
+def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWindow]:
     """A window this test file closes itself, in a known order.
 
     Deliberately **not** handed to ``qtbot.addWidget``: qtbot closes the widgets it
@@ -30,7 +32,7 @@ def window(qtbot: QtBot, game_data: GameData) -> Iterator[MainWindow]:
     marked clean and closed here, and the dialog itself is tested on purpose below.
     """
     del qtbot
-    built = MainWindow(game_data)
+    built = MainWindow(game_data, settings=temporary_settings(tmp_path))
     yield built
     built.document.undo_stack.setClean()
     built.scene.dispose()

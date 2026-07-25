@@ -13,7 +13,7 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Final
 
-from satisplanner import __version__
+from satisplanner import __version__, paths
 from satisplanner.core.models import (
     Attachment,
     AttachmentRole,
@@ -42,12 +42,15 @@ GAME_VERSION: Final = "1.2"
 
 DEFAULT_DATABASE_NAME: Final = f"game_{GAME_VERSION}.sqlite"
 
-RESOURCES_DIRECTORY: Final = Path(__file__).resolve().parent.parent / "resources"
-
 
 def default_database_path() -> Path:
-    """The database shipped inside the package, which is what the application uses."""
-    return RESOURCES_DIRECTORY / DEFAULT_DATABASE_NAME
+    """The database shipped inside the package, which is what the application uses.
+
+    Resolved through :mod:`satisplanner.paths` rather than from ``__file__``, so that
+    a packaged run reads the copy PyInstaller unpacked instead of a path that only
+    exists inside the archive.
+    """
+    return paths.resource_directory() / DEFAULT_DATABASE_NAME
 
 
 SCHEMA: Final = """
