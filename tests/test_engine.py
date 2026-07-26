@@ -526,6 +526,106 @@ def test_a_filling_buffer_still_counts_as_sustainable(game_data: GameData) -> No
 
 
 # --------------------------------------------------------------------------- #
+# Buffers feeding something that absorbs without limit
+#
+# The container put at the end of a line to soak up a surplus is the first thing
+# anyone building a factory reaches for, and until this fixture existed no test
+# had one: every buffer in the corpus fed a machine. A buffer whose only route
+# out absorbed without limit took material in and passed none of it on, through
+# two released versions.
+# --------------------------------------------------------------------------- #
+
+
+def test_a_buffer_passes_its_intake_on_to_an_unlimited_absorber(game_data: GameData) -> None:
+    """240 in, 240 out, split between the exit and the flare. Not 240 in and 0 out.
+
+    A route that absorbs without limit gives the buffer no figure to match, so the
+    buffer offers its own intake -- a quantity that is only known once the round's
+    flows have been allocated, which is what the convergence test used to miss.
+    """
+    report = solved("buffer_to_sink", game_data)
+    assert report.converged
+
+    (buffer,) = report.buffers
+    assert (buffer.inflow, buffer.outflow) == (240.0, 240.0)
+    assert buffer.state is BufferState.BALANCED
+    assert report.final_outputs == {"Desc_IronIngot_C": 120.0}
+    assert report.discarded_outputs == {"Desc_IronIngot_C": 120.0}
+    assert report.is_sustainable, "rien ne se vide : le tampon ne fait que laisser passer"
+
+
+def test_the_intake_of_a_buffer_is_counted_once_however_many_sinks(
+    game_data: GameData,
+) -> None:
+    """Two containers side by side share what arrives; they do not each get a copy.
+
+    The fixture has an exit and a flare on the same buffer. Summing the intake once
+    per route would offer 480 for 240 received, and the buffer would report itself
+    as draining twice as fast as it is being filled.
+    """
+    report = solved("buffer_to_sink", game_data)
+    (buffer,) = report.buffers
+    assert buffer.outflow == buffer.inflow
+    assert buffer.net == 0.0
+    assert DiagnosticCode.BUFFER_DRAINING not in codes(report)
+
+
+def test_a_buffer_serves_its_machines_first_and_the_sink_takes_the_rest(
+    game_data: GameData,
+) -> None:
+    """A consumer with an appetite is not starved by a container standing next to it."""
+    graph = FactoryGraph()
+    graph.add_node(ExternalSourceNode(id="src", item_class="Desc_IronIngot_C", rate_per_minute=240))
+    graph.add_node(StorageNode(id="buffer", storage_class="Build_StorageContainerMk2_C"))
+    graph.add_node(MachineNode(id="plates", recipe_class="Recipe_IronPlate_C", machine_count=4))
+    graph.add_node(OutputNode(id="plate_out", item_class="Desc_IronPlate_C"))
+    graph.add_node(OutputNode(id="surplus", item_class="Desc_IronIngot_C"))
+    belt = "Build_ConveyorBeltMk5_C"
+    graph.connect("src", "buffer", "Desc_IronIngot_C", belt, game_data)
+    graph.connect("buffer", "plates", "Desc_IronIngot_C", belt, game_data)
+    graph.connect("buffer", "surplus", "Desc_IronIngot_C", belt, game_data)
+    graph.connect("plates", "plate_out", "Desc_IronPlate_C", belt, game_data)
+
+    report = engine.solve(graph, game_data)
+
+    assert report.node("plates").inputs == {"Desc_IronIngot_C": 120.0}
+    assert report.node("surplus").inputs == {"Desc_IronIngot_C": 120.0}
+    (buffer,) = report.buffers
+    assert (buffer.inflow, buffer.outflow) == (240.0, 240.0)
+    assert report.is_sustainable
+
+
+def test_a_chain_of_buffers_ending_in_a_sink_passes_material_all_the_way(
+    game_data: GameData,
+) -> None:
+    """Each buffer learns its intake a round after the one before it, and must be let.
+
+    The regression guard on the convergence test itself rather than on one factory:
+    a sweep visits the buffers in identifier order, so a chain settles one link per
+    round. An iteration that stopped as soon as the ratios held still would freeze
+    this at the first link.
+    """
+    graph = FactoryGraph()
+    graph.add_node(ExternalSourceNode(id="src", item_class="Desc_IronIngot_C", rate_per_minute=240))
+    belt = "Build_ConveyorBeltMk5_C"
+    previous = "src"
+    # Named backwards on purpose, so sorting them cannot happen to match the flow.
+    for name in ("buffer_d", "buffer_c", "buffer_b", "buffer_a"):
+        graph.add_node(StorageNode(id=name, storage_class="Build_StorageContainerMk2_C"))
+        graph.connect(previous, name, "Desc_IronIngot_C", belt, game_data)
+        previous = name
+    graph.add_node(OutputNode(id="out", item_class="Desc_IronIngot_C"))
+    graph.connect(previous, "out", "Desc_IronIngot_C", belt, game_data)
+
+    report = engine.solve(graph, game_data)
+
+    assert report.converged
+    assert report.final_outputs == {"Desc_IronIngot_C": 240.0}
+    for buffer in report.buffers:
+        assert (buffer.inflow, buffer.outflow) == (240.0, 240.0), buffer.node_id
+
+
+# --------------------------------------------------------------------------- #
 # Robustness
 # --------------------------------------------------------------------------- #
 

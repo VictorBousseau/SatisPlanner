@@ -61,13 +61,66 @@ def test_an_unwritable_directory_degrades_instead_of_failing(tmp_path: Path) -> 
     logging.getLogger("satisplanner.test").info("toujours vivant")
 
 
-def test_the_report_says_where_to_look_and_shows_no_traceback(tmp_path: Path) -> None:
+def test_the_visible_part_of_the_report_stays_short(tmp_path: Path) -> None:
+    """What is on screen before anything is unfolded: the sentence, the line, the path.
+
+    Not the traceback. A wall of frames in a message box is a wall of frames, and the
+    reader has to get past it to find the two things they can act on.
+    """
     logging_setup.configure(directory=tmp_path)
     report = logging_setup.build_report(ValueError("un tampon inconnu"))
+
     assert "Traceback" not in report.full_message
-    assert "un tampon inconnu" in report.details
+    assert "ValueError : un tampon inconnu" in report.full_message, (
+        "la ligne de l'exception doit etre lisible sans deplier quoi que ce soit"
+    )
     assert str(logging_setup.current_log_path()) in report.full_message
     assert "enregistrez-la sous un autre nom" in report.message
+
+
+def test_the_details_hold_the_whole_traceback(tmp_path: Path) -> None:
+    """« Montrer les details » must show details.
+
+    The regression test for a button that promised a traceback and delivered the one
+    line already printed above it.
+    """
+    logging_setup.configure(directory=tmp_path)
+    try:
+        raise ValueError("un tampon inconnu")
+    except ValueError as exc:
+        report = logging_setup.build_report(exc)
+
+    assert "Traceback" in report.details
+    assert "test_the_details_hold_the_whole_traceback" in report.details, (
+        "la trace doit nommer la fonction ou l'erreur est nee"
+    )
+    assert "test_logging_setup.py" in report.details
+    assert "ValueError: un tampon inconnu" in report.details
+
+
+def test_what_the_copy_button_puts_on_the_clipboard(tmp_path: Path) -> None:
+    """One paste has to be enough to describe the problem to somebody else."""
+    logging_setup.configure(directory=tmp_path)
+    try:
+        raise ValueError("un tampon inconnu")
+    except ValueError as exc:
+        report = logging_setup.build_report(exc)
+
+    pasted = report.clipboard_text
+    assert "ValueError : un tampon inconnu" in pasted
+    assert "Traceback" in pasted
+    assert str(logging_setup.current_log_path()) in pasted
+
+
+def test_an_exception_with_no_traceback_still_has_details() -> None:
+    """Built by hand rather than raised: its own line is all there is, and it shows.
+
+    The degraded case has to stay a sentence rather than an empty pane, which is what
+    a naive "take the traceback" would leave behind.
+    """
+    report = logging_setup.build_report(ValueError("jamais levee"))
+
+    assert report.details == "ValueError: jamais levee"
 
 
 def test_an_uncaught_exception_is_logged_and_shown(tmp_path: Path) -> None:
@@ -86,11 +139,12 @@ def test_an_uncaught_exception_is_logged_and_shown(tmp_path: Path) -> None:
     logging.shutdown()
     written = path.read_text(encoding="utf-8")
     assert "exception non rattrapee" in written
-    # The traceback belongs in the file...
+    # The traceback belongs in the file, so that it survives the box being closed...
     assert "Traceback" in written
-    # ...and nowhere else.
+    # ...and behind the button, so that it can be read without going to look for it.
     assert len(shown) == 1
     assert "le port n'existe pas" in shown[0].details
+    assert "Traceback" in shown[0].details
     assert "Traceback" not in shown[0].full_message
 
 

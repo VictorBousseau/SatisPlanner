@@ -15,7 +15,7 @@ without Satisfactory installed runs it exactly the same way.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from enum import Enum
 from pathlib import Path
 from typing import Final
@@ -848,15 +848,27 @@ def _action(
     window: QMainWindow,
     text: str,
     shortcut: QKeySequence.StandardKey | str | None,
-    slot: object,
+    slot: Callable[[], object],
 ) -> QAction:
     """One action. Shortcuts are given as a standard key where one exists -- so that
     Windows and any other platform each get their own convention -- and as text only
-    where the application invents the binding."""
+    where the application invents the binding.
+
+    The action is invoked with **no argument**, and that is the whole point of the
+    ``lambda``. ``QAction.triggered`` carries a ``checked`` flag, which Qt hands to
+    any slot with room for a positional parameter; several methods here are gestures
+    that also accept an optional path or code, so ``Ouvrir...`` called
+    ``open_file(False)`` and died on ``False.is_file()`` -- as did importing a share
+    code and both exports. Swallowing the flag once, here, is the fix rather than
+    four call sites remembering to write ``lambda _checked=False: ...``: this is the
+    only place in the application where ``triggered`` is connected, so it is the only
+    place the trap can be sprung. A checkable action reads its own state through
+    ``isChecked()`` and needs nothing passed to it either.
+    """
     action = QAction(text, window)
     if isinstance(shortcut, QKeySequence.StandardKey):
         action.setShortcut(shortcut)
     elif shortcut is not None:
         action.setShortcut(QKeySequence(shortcut))
-    action.triggered.connect(slot)
+    action.triggered.connect(lambda _checked=False: slot())
     return action

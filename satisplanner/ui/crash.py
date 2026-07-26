@@ -1,9 +1,13 @@
 """The box shown when something went wrong that nobody caught.
 
-Deliberately small: a sentence saying what happened, the path to the log, and the
-exception's own line folded away behind "Details". The traceback is in the log --
-showing it here would tell the reader nothing they can act on, and would bury the one
-thing they can do, which is send the file whose path is right there.
+A sentence saying what happened, the exception's own line, the path to the log, and
+the **whole traceback** behind "Montrer les details" -- with a button that copies it.
+
+It used to fold away the exception's line and nothing else, on the reasoning that the
+traceback lived in the log and that was where it was useful. In practice that left the
+one person who could act on it -- the reader, about to describe the problem to somebody
+-- with a button promising details and delivering a single line they had already been
+shown. The file and the line number are the details.
 """
 
 import logging
@@ -33,10 +37,19 @@ def show_crash_report(report: CrashReport) -> None:
     box.setText(report.full_message)
     box.setDetailedText(report.details)
     box.addButton(QMessageBox.StandardButton.Close)
+
+    # First, because it is the one that matters: what somebody has to paste in
+    # order to be helped. The log path is in it too, so this button is a superset
+    # of the other and the other is kept only for the reader who wants to open the
+    # file rather than send its contents.
+    copy_details = box.addButton("Copier les details", QMessageBox.ButtonRole.ActionRole)
+    copy_details.clicked.connect(lambda: _copy(report.clipboard_text))
+    _keep_open(box, copy_details)
+
     if report.log_path is not None:
-        copy = box.addButton("Copier le chemin du journal", QMessageBox.ButtonRole.ActionRole)
-        copy.clicked.connect(lambda: _copy(str(report.log_path)))
-        _keep_open(box, copy)
+        copy_path = box.addButton("Copier le chemin du journal", QMessageBox.ButtonRole.ActionRole)
+        copy_path.clicked.connect(lambda: _copy(str(report.log_path)))
+        _keep_open(box, copy_path)
     box.exec()
 
 

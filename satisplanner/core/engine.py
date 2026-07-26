@@ -366,19 +366,51 @@ class _Solver:
             )
 
     def _step(self, *, damped: bool) -> float:
-        """One Jacobi sweep. Returns the largest ratio change of the round."""
+        """One Jacobi sweep. Returns the largest change of the round."""
         self._refresh_storage_supply()
         supplies, caps = self._offers()
         self.flows = self._allocate_all(supplies, caps)
         self._accumulate_flows()
-        return self._update_ratios(damped=damped)
+        # A buffer's offer is part of the state this iteration is solving for, so a
+        # round in which it is still moving is not a round that has settled. See
+        # :meth:`_storage_offer_drift`.
+        return max(self._update_ratios(damped=damped), self._storage_offer_drift())
+
+    def _storage_offer(self, state: _NodeState) -> dict[str, float]:
+        """What one buffer puts on the market, from what is known right now.
+
+        A buffer offers what downstream asks for, drawing on its stock if its own
+        intake is not enough. For a downstream node that absorbs without limit --
+        another buffer, an output, a flare -- there is no figure to match, so the
+        buffer passes on its own intake and nothing more. It never invents material
+        for a sink.
+
+        That last rule is what makes this quantity part of the fixed point rather
+        than a constant: it reads the intake, and the intake is only known once the
+        round's flows have been allocated. Hence :meth:`_storage_offer_drift`.
+        """
+        item = self._storage_items[state.node.id]
+        if item is None:
+            return {}
+        asked = 0.0
+        passes_through = False
+        for edge in self.out_edges[state.node.id]:
+            downstream = self.states[edge.target]
+            if downstream.absorbs_without_limit:
+                passes_through = True
+            else:
+                asked += downstream.nominal_in.get(item, 0.0) * downstream.ratio_excluding(item)
+        if passes_through:
+            # The intake counts **once**, however many sinks are hanging off this
+            # buffer: two containers side by side share what arrives, they do not
+            # each conjure up a copy of it. And it is the greater of the two figures
+            # rather than their sum, because a route that absorbs without limit takes
+            # what the real consumers left and no more.
+            asked = max(asked, state.inflow.get(item, 0.0))
+        return {item: asked}
 
     def _refresh_storage_supply(self) -> None:
-        """A buffer offers what downstream asks for; it can draw on its stock.
-
-        For a downstream node that absorbs without limit -- another buffer, an output
-        -- there is no figure to match, so the buffer passes on its own intake and
-        nothing more. It never invents material for a sink.
+        """Adopt each buffer's offer for this round.
 
         When buffers are forbidden from supplying, the buffer also becomes *required*
         to receive what it hands out -- ``nominal_in`` stops being infinite and
@@ -390,23 +422,43 @@ class _Solver:
         for state in self._sorted_states():
             if not isinstance(state.node, StorageNode):
                 continue
-            item = self._storage_items[state.node.id]
-            if item is None:
-                state.nominal_out = {}
+            offer = self._storage_offer(state)
+            state.nominal_out = offer
+            if not offer:
                 continue
-            asked = 0.0
-            for edge in self.out_edges[state.node.id]:
-                downstream = self.states[edge.target]
-                if downstream.absorbs_without_limit:
-                    asked += state.inflow.get(item, 0.0)
-                else:
-                    asked += downstream.nominal_in.get(item, 0.0) * downstream.ratio_excluding(item)
-            state.nominal_out = {item: asked}
+            item, asked = next(iter(offer.items()))
             state.ratio_out = {item: 1.0}
             if not self.options.buffers_supply:
                 # Absorption stays unlimited (``absorbs_without_limit`` bypasses this
                 # figure on the intake side); what it constrains is the offer.
                 state.nominal_in = {item: asked}
+
+    def _storage_offer_drift(self) -> float:
+        """How far any buffer's offer has moved away from the one it just used.
+
+        Without this the iteration could stop while a buffer was still climbing, and
+        it did. A buffer feeding only unlimited absorbers offers exactly its own
+        intake; at the first round that intake is nil, because nothing has been
+        allocated yet, so the offer is nil too. Every *ratio* in that factory is
+        already at its final value -- the supplier is sending everything it has, the
+        container is swallowing everything it is given -- so the residual read zero
+        and the answer was frozen at the one figure that had not had its turn yet: a
+        buffer taking in 240 a minute and passing on none of it.
+
+        The fix is not to iterate a few more times for luck, nor to guess a first
+        offer. It is that the offer is one of the unknowns, and a convergence test
+        that cannot see an unknown is not a convergence test. Measured without
+        mutating anything: the round is over, this only decides whether there is
+        another one.
+        """
+        drift = 0.0
+        for state in self._sorted_states():
+            if not isinstance(state.node, StorageNode):
+                continue
+            fresh = self._storage_offer(state)
+            for item, asked in fresh.items():
+                drift = max(drift, abs(asked - state.nominal_out.get(item, 0.0)))
+        return drift
 
     def _offers(self) -> tuple[dict[str, dict[str, float]], dict[str, dict[str, float]]]:
         """Per item: what each producer can send, and what each consumer can take."""

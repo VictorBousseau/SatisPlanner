@@ -23,6 +23,7 @@ import faulthandler
 import logging
 import logging.handlers
 import sys
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -118,26 +119,50 @@ def _enable_faulthandler(directory: Path) -> None:
 
 @dataclass(frozen=True)
 class CrashReport:
-    """What the user is told when something went wrong, and where the rest is."""
+    """What the user is told when something went wrong, and where the rest is.
+
+    ``summary`` is the exception's own line, short enough to be read at a glance and
+    shown without unfolding anything. ``details`` is the whole traceback, which is
+    the only part worth sending to somebody who can fix it.
+    """
 
     title: str
     message: str
+    summary: str
     details: str
     log_path: Path | None
 
     @property
     def full_message(self) -> str:
-        """The message with the log's location appended, when there is one."""
-        if self.log_path is None:
-            return self.message
-        return f"{self.message}\n\nJournal : {self.log_path}"
+        """What the box shows before anything is unfolded.
+
+        The exception's line belongs here rather than behind a button: "something
+        went wrong" alone tells a reader nothing they can repeat back.
+        """
+        parts = [self.message, self.summary]
+        if self.log_path is not None:
+            parts.append(f"Journal : {self.log_path}")
+        return "\n\n".join(parts)
+
+    @property
+    def clipboard_text(self) -> str:
+        """Everything worth pasting into a bug report, in one go."""
+        parts = [self.summary, "", self.details]
+        if self.log_path is not None:
+            parts.extend(["", f"Journal : {self.log_path}"])
+        return "\n".join(parts)
 
 
 def build_report(exception: BaseException) -> CrashReport:
     """Turn an exception into something worth showing a person.
 
-    ``details`` holds the exception's own line -- type and message -- and not the
-    traceback: the traceback is in the log, which is where it is useful.
+    ``details`` holds the **complete traceback**. It used to hold the exception's
+    one line, on the reasoning that the traceback was in the log and the log was
+    where it was useful -- which was true for whoever knew to go and read the log,
+    and false for everybody else. A button called "Montrer les details" that shows
+    ``AttributeError : 'bool' object has no attribute 'is_file'`` and nothing more
+    has no details behind it; the file, the line and the frames are the details, and
+    they are what gets pasted into a report.
     """
     name = type(exception).__name__
     text = str(exception).strip()
@@ -149,7 +174,13 @@ def build_report(exception: BaseException) -> CrashReport:
             "du travail non enregistre, enregistrez-la sous un autre nom avant de "
             "continuer."
         ),
-        details=f"{name} : {text}" if text else name,
+        summary=f"{name} : {text}" if text else name,
+        # ``format_exception`` copes with an exception that was never raised and has
+        # no traceback of its own: it falls back to the exception's line, which is
+        # then genuinely all there is to say.
+        details="".join(
+            traceback.format_exception(type(exception), exception, exception.__traceback__)
+        ).strip(),
         log_path=current_log_path(),
     )
 

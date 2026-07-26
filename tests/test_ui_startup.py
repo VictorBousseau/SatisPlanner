@@ -67,13 +67,46 @@ def test_the_crash_box_shows_a_sentence_and_a_path(
         seen: list[QMessageBox] = []
         monkeypatch.setattr(QMessageBox, "exec", capture(seen))
 
-        crash.show_crash_report(logging_setup.build_report(ValueError("port inconnu")))
+        try:
+            raise ValueError("port inconnu")
+        except ValueError as exc:
+            crash.show_crash_report(logging_setup.build_report(exc))
 
         assert len(seen) == 1
         box = seen[0]
-        assert "Traceback" not in box.text(), "jamais de trace brute devant quelqu'un"
+        assert "Traceback" not in box.text(), "jamais de trace brute avant qu'on la demande"
+        assert "ValueError : port inconnu" in box.text(), "la ligne doit se lire tout de suite"
         assert str(tmp_path) in box.text(), "le chemin du journal doit etre donne"
-        assert "port inconnu" in box.detailedText()
+        assert "Traceback" in box.detailedText(), "« Montrer les details » doit montrer la trace"
+        assert "test_ui_startup.py" in box.detailedText()
+    finally:
+        logging_setup._log_path = None
+
+
+def test_the_crash_box_can_hand_over_the_details(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The button that matters: one click, and the whole thing is ready to be pasted."""
+    del qtbot
+    logging_setup.configure(directory=tmp_path)
+    try:
+        QGuiApplication.clipboard().setText("")
+        boxes: list[QMessageBox] = []
+        monkeypatch.setattr(QMessageBox, "exec", capture(boxes))
+        try:
+            raise RuntimeError("bruit")
+        except RuntimeError as exc:
+            crash.show_crash_report(logging_setup.build_report(exc))
+
+        copy = next(
+            button for button in boxes[0].buttons() if "details" in button.text().replace("&", "")
+        )
+        copy.click()
+
+        pasted = QGuiApplication.clipboard().text()
+        assert "RuntimeError : bruit" in pasted
+        assert "Traceback" in pasted
+        assert str(logging_setup.current_log_path()) in pasted
     finally:
         logging_setup._log_path = None
 
