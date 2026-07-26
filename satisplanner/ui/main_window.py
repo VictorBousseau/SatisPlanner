@@ -313,6 +313,16 @@ class MainWindow(QMainWindow):
         self.select_all_action = _action(
             self, "Tout selectionner", QKeySequence.StandardKey.SelectAll, self.scene.select_all
         )
+        self.copy_action = _action(
+            self, "Copier", QKeySequence.StandardKey.Copy, self.scene.copy_selection
+        )
+        self.cut_action = _action(
+            self, "Couper", QKeySequence.StandardKey.Cut, self.scene.cut_selection
+        )
+        self.paste_action = _action(
+            self, "Coller", QKeySequence.StandardKey.Paste, self.scene.paste
+        )
+        self.duplicate_action = _action(self, "Dupliquer", "Ctrl+D", self.scene.duplicate_selection)
         self.adjust_action = _action(self, "Ajuster ce noeud", "Ctrl+E", self._adjust_selection)
         self.adjust_action.setToolTip(
             "Dimensionne le noeud selectionne a ce que ses intrants permettent (calcul local)"
@@ -324,6 +334,11 @@ class MainWindow(QMainWindow):
         self.menus.append(menu)
         menu.addAction(self.undo_action)
         menu.addAction(self.redo_action)
+        menu.addSeparator()
+        menu.addAction(self.cut_action)
+        menu.addAction(self.copy_action)
+        menu.addAction(self.paste_action)
+        menu.addAction(self.duplicate_action)
         menu.addSeparator()
         menu.addAction(self.select_all_action)
         menu.addAction(self.delete_action)
@@ -341,6 +356,10 @@ class MainWindow(QMainWindow):
         self.search_action = _action(
             self, "Rechercher dans la palette", "Ctrl+F", self.focus_search
         )
+        self.deployed_action = _action(
+            self, "Machines deployees", "Ctrl+M", self.toggle_deployed_rendering
+        )
+        self.deployed_action.setCheckable(True)
 
         toolbar = self.findChild(QToolBar, "toolbar_edition")
         if toolbar is not None:
@@ -359,6 +378,7 @@ class MainWindow(QMainWindow):
         menu.addAction(self.reset_zoom_action)
         menu.addAction(self.fit_action)
         menu.addSeparator()
+        menu.addAction(self.deployed_action)
         menu.addAction(self.search_action)
         # Actions reachable only by their shortcut still have to belong to a widget
         # that is visible, or Qt never delivers the key.
@@ -591,7 +611,16 @@ class MainWindow(QMainWindow):
             show_alternates=self.preferences.show_alternates,
             show_events=self.preferences.show_events,
         )
+        deployed = self.preferences.deployed_rendering
+        self.deployed_action.setChecked(deployed)
+        self.scene.set_deployed_rendering(deployed, self.preferences.deployed_ceiling)
         self.refresh_recent_menu()
+
+    def toggle_deployed_rendering(self) -> None:
+        """The Affichage menu and the preferences box set the same one setting."""
+        enabled = self.deployed_action.isChecked()
+        self.preferences.deployed_rendering = enabled
+        self.scene.set_deployed_rendering(enabled, self.preferences.deployed_ceiling)
 
     def edit_preferences(self) -> bool:
         """Open the box and, if it is accepted, act on what changed."""

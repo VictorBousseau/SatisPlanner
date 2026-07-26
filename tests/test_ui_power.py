@@ -288,3 +288,17 @@ def test_the_help_states_that_electricity_is_a_counter(window: MainWindow) -> No
     joined = " ".join(MODELLING_NOTES)
     assert "compteur, pas une contrainte" in joined
     assert "disjoncte" in joined or "reseau" in joined
+
+
+def test_the_help_owns_up_to_counting_idle_machines(window: MainWindow) -> None:
+    """A modelling choice, not a measurement, and the page has to say which.
+
+    The game files declare one power figure per building and no idle or standby
+    figure of any kind -- the only second number in the data,
+    ``mEstimatedMininumPowerConsumption``, exists on the three variable-power
+    machines this version excludes and is the low end of a *running* recipe.
+    """
+    del window
+    joined = " ".join(MODELLING_NOTES)
+    assert "dimensionnement au pire cas" in joined
+    assert "pas une mesure du jeu" in joined

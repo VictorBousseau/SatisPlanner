@@ -154,10 +154,20 @@ def _two_to_three(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _three_to_four(payload: dict[str, Any]) -> dict[str, Any]:
+    """Schema 3 to 4: the per-node deployed-rendering override appeared.
+
+    Nothing to write once more. ``None`` means "follow the global preference",
+    which is what a document written before the field existed meant.
+    """
+    return payload
+
+
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
 MIGRATIONS: Final[dict[int, Callable[[dict[str, Any]], dict[str, Any]]]] = {
     1: _one_to_two,
     2: _two_to_three,
+    3: _three_to_four,
 }
 
 

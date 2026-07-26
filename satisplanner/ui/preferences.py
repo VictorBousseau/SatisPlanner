@@ -49,9 +49,17 @@ KEY_MAX_RECENT: Final = "max_recent_files"
 KEY_SHOW_ALTERNATES: Final = "show_alternates"
 KEY_SHOW_EVENTS: Final = "show_events"
 KEY_RECENT_FILES: Final = "recent_files"
+KEY_DEPLOYED: Final = "deployed_rendering"
+KEY_DEPLOYED_CEILING: Final = "deployed_ceiling"
 
 DEFAULT_MAX_RECENT: Final = 8
 MAX_RECENT_LIMIT: Final = 30
+
+# Thumbnails drawn before the drawing gives up and writes "... xN" instead. Twelve
+# fits one row at the node's width and is about as many boxes as anyone counts at a
+# glance; beyond that a picture of forty-three smelters says less than the number.
+DEFAULT_DEPLOYED_CEILING: Final = 12
+DEPLOYED_CEILING_RANGE: Final = (1, 60)
 
 
 def application_settings() -> QSettings:
@@ -149,6 +157,30 @@ class Preferences:
     def show_events(self, shown: bool) -> None:
         self.settings.setValue(KEY_SHOW_EVENTS, shown)
 
+    @property
+    def deployed_rendering(self) -> bool:
+        """Draw one thumbnail per built machine on every node that has a count.
+
+        Off by default, and deliberately so: it is a way of *looking* at a factory,
+        not a better one. A node then carries a row of little boxes on top of --
+        never instead of -- the text that says its purity, its clock and its fuel.
+        """
+        return self._boolean(KEY_DEPLOYED, False)
+
+    @deployed_rendering.setter
+    def deployed_rendering(self, shown: bool) -> None:
+        self.settings.setValue(KEY_DEPLOYED, shown)
+
+    @property
+    def deployed_ceiling(self) -> int:
+        low, high = DEPLOYED_CEILING_RANGE
+        return max(low, min(high, self._integer(KEY_DEPLOYED_CEILING, DEFAULT_DEPLOYED_CEILING)))
+
+    @deployed_ceiling.setter
+    def deployed_ceiling(self, count: int) -> None:
+        low, high = DEPLOYED_CEILING_RANGE
+        self.settings.setValue(KEY_DEPLOYED_CEILING, max(low, min(high, count)))
+
     # ----------------------------------------------------------- recent files
 
     def recent_files(self) -> list[Path]:
@@ -214,6 +246,9 @@ class PreferencesDialog(QDialog):
 
         self.alternates = QCheckBox("Afficher les recettes alternatives", self)
         self.events = QCheckBox("Afficher les objets d'evenement (FICSMAS)", self)
+        self.deployed = QCheckBox("Dessiner les machines une par une sur les noeuds", self)
+        self.deployed_ceiling = QSpinBox(self)
+        self.deployed_ceiling.setRange(*DEPLOYED_CEILING_RANGE)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -228,6 +263,8 @@ class PreferencesDialog(QDialog):
         form.addRow("Fichiers recents conserves", self.max_recent)
         form.addRow(self.alternates)
         form.addRow(self.events)
+        form.addRow(self.deployed)
+        form.addRow("Vignettes avant « ... xN »", self.deployed_ceiling)
 
         hint = QLabel(
             f"{indexed_icons} fichier(s) d'icone indexe(s). Les classes sans fichier sont "
@@ -255,6 +292,8 @@ class PreferencesDialog(QDialog):
         self.max_recent.setValue(self.preferences.max_recent_files)
         self.alternates.setChecked(self.preferences.show_alternates)
         self.events.setChecked(self.preferences.show_events)
+        self.deployed.setChecked(self.preferences.deployed_rendering)
+        self.deployed_ceiling.setValue(self.preferences.deployed_ceiling)
 
     def _browse(self) -> None:
         chosen = QFileDialog.getExistingDirectory(
@@ -275,6 +314,8 @@ class PreferencesDialog(QDialog):
         self.preferences.max_recent_files = self.max_recent.value()
         self.preferences.show_alternates = self.alternates.isChecked()
         self.preferences.show_events = self.events.isChecked()
+        self.preferences.deployed_rendering = self.deployed.isChecked()
+        self.preferences.deployed_ceiling = self.deployed_ceiling.value()
         logger.debug("preferences enregistrees")
         super().accept()
 

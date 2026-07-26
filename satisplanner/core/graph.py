@@ -24,7 +24,9 @@ from satisplanner.core.models import GameData, ItemForm, Purity, UnknownClassErr
 # a V1 build refuse a V1.1 file with a sentence instead of a validation error.
 # 3 added the generator node. Same reasoning: an older document simply has none,
 # but a document that has one must not be opened by a build that cannot draw it.
-SCHEMA_VERSION: Final = 3
+# 4 added the per-node deployed-rendering override, which is display state but
+# belongs to the document all the same -- exactly as a position does.
+SCHEMA_VERSION: Final = 4
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -61,6 +63,13 @@ class _NodeBase(BaseModel):
     id: str
     label: str | None = None
     position: tuple[float, float] = (0.0, 0.0)
+    # Show one thumbnail per built machine on this node, overriding the global
+    # preference. ``None`` means "follow it". Purely a way of drawing the node: it
+    # changes no rate and adds nothing to the shopping list. It lives in the
+    # document rather than in the settings for the same reason a position does --
+    # it is a property of *this* node in *this* factory, and a user who deployed
+    # one bank of generators expects to find it deployed when they reopen the file.
+    show_deployed: bool | None = None
 
 
 def _clock_field() -> Any:
@@ -545,6 +554,22 @@ def storage_item(node: StorageNode, graph: FactoryGraph) -> str | None:
     if len(items) == 1:
         return next(iter(items))
     return None
+
+
+def unit_count(node: Node) -> float | None:
+    """How many buildings this node stands for, or ``None`` when it is not a bank.
+
+    A machine node counts machines, an extractor counts extractors, a generator
+    counts generators. A buffer, an import and an exit are one thing each and have
+    no such number -- and ``None`` is what says so, rather than a misleading 1.
+    """
+    match node:
+        case MachineNode():
+            return node.machine_count
+        case ResourceNode() | WaterExtractorNode() | GeneratorNode():
+            return node.count
+        case _:
+            return None
 
 
 def machine_building(node: MachineNode, game_data: GameData) -> str:

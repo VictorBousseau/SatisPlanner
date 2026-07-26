@@ -14,7 +14,6 @@ import, the initial stock of a buffer -- and the header says so.
 
 import logging
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from typing import Any, Final, TypeGuard
 
 from PySide6.QtCore import (
@@ -40,21 +39,18 @@ from PySide6.QtWidgets import (
 
 from satisplanner.core import formatting
 from satisplanner.core.graph import (
-    ExternalSourceNode,
     GeneratorNode,
     GraphError,
     MachineNode,
     Node,
-    OutputNode,
     ResourceNode,
-    StorageNode,
     WaterExtractorNode,
 )
 from satisplanner.core.results import LimitingFactor, NodeSolution
 from satisplanner.ui import edits, theme
 from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices, fuel_choices
-from satisplanner.ui.commands import SetNodeFieldCommand
 from satisplanner.ui.document import FactoryDocument
+from satisplanner.ui.edits import quantity_of
 
 logger = logging.getLogger(__name__)
 
@@ -83,33 +79,6 @@ LIMITING_COLOURS: Final[dict[LimitingFactor, str]] = {
     LimitingFactor.LINE: theme.EDGE_SATURATED,
     LimitingFactor.BLOCKED: theme.STATE_BLOCKED,
 }
-
-
-@dataclass(frozen=True)
-class Quantity:
-    """The number a given kind of node is sized by."""
-
-    field: str
-    label: str
-    minimum: float = 0.0
-
-
-def quantity_of(node: Node) -> Quantity | None:
-    """Which field the quantity column edits for this node, if any."""
-    match node:
-        case MachineNode():
-            return Quantity("machine_count", "machine(s)")
-        case ResourceNode() | WaterExtractorNode():
-            # Strictly positive in the model: zero extractors is a deleted node.
-            return Quantity("count", "extracteur(s)", minimum=1e-9)
-        case GeneratorNode():
-            return Quantity("count", "generateur(s)", minimum=1e-9)
-        case ExternalSourceNode():
-            return Quantity("rate_per_minute", "/min")
-        case StorageNode():
-            return Quantity("initial_content", "en stock")
-        case OutputNode():
-            return None
 
 
 COLUMN_NODE: Final = 0
@@ -381,26 +350,7 @@ class NodeTableModel(QAbstractTableModel):
             return self._through(edits.set_fuel(self.document, node.id, str(value)))
         if index.column() != COLUMN_QUANTITY:
             return False
-        quantity = quantity_of(node)
-        if quantity is None:
-            return False
-        try:
-            number = max(float(value), quantity.minimum)
-        except (TypeError, ValueError):
-            logger.debug("valeur non numerique refusee dans le tableau : %r", value)
-            return False
-        if number == getattr(node, quantity.field):
-            return False
-        self.document.undo_stack.push(
-            SetNodeFieldCommand(
-                self.document,
-                node.id,
-                quantity.field,
-                number,
-                f"{node.id} : {formatting.number(number)} {quantity.label}",
-            )
-        )
-        return True
+        return self._through(edits.set_quantity(self.document, node.id, _number(value)))
 
     def _through(self, problem: str | None) -> bool:
         """Report what the shared editor said. A refusal leaves the cell as it was."""

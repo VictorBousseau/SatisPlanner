@@ -45,17 +45,20 @@ from PySide6.QtWidgets import (
 
 from satisplanner.core import constants, engine, formatting
 from satisplanner.core.graph import (
+    FactoryGraph,
     GeneratorNode,
     MachineNode,
+    Node,
     ResourceNode,
     StorageNode,
     WaterExtractorNode,
     storage_item,
+    unit_count,
 )
 from satisplanner.core.models import ItemForm, Purity
 from satisplanner.core.results import FactoryReport
-from satisplanner.ui import edits, theme
-from satisplanner.ui.canvas_items import ANY_ITEM, EdgeItem, NodeItem, Port, curve
+from satisplanner.ui import clipboard, edits, theme
+from satisplanner.ui.canvas_items import ANY_ITEM, EdgeItem, Field, NodeItem, Port, curve
 from satisplanner.ui.catalogue import (
     PURITY_LABELS,
     PaletteEntry,
@@ -68,14 +71,16 @@ from satisplanner.ui.commands import (
     AddNodeCommand,
     ConnectCommand,
     MoveNodesCommand,
+    PasteCommand,
     RemoveCommand,
     SetNodeFieldCommand,
-    SetTransportCommand,
     can_connect,
 )
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.icon_provider import IconProvider
+from satisplanner.ui.inline_edit import InlineEditor
 from satisplanner.ui.palette import ENTRY_MIME_TYPE, decode_entry
+from satisplanner.ui.preferences import DEFAULT_DEPLOYED_CEILING
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +107,10 @@ class FactoryScene(QGraphicsScene):
     # An item class the user asked to read about. The scene knows which item a node
     # is about; opening a window is the main window's business.
     itemCardRequested = Signal(str)
+    # A value was double-clicked: node or edge identifier, the field, and where it is
+    # drawn in scene coordinates. The scene knows *what* was hit; putting a widget on
+    # screen is the view's business, because only the view has a viewport.
+    inlineEditRequested = Signal(str, object, QRectF)
 
     def __init__(
         self,
@@ -126,6 +135,9 @@ class FactoryScene(QGraphicsScene):
         self._drag_origin: dict[str, tuple[float, float]] = {}
         self._default_belt = transport_choices(document.game_data, ItemForm.SOLID)[0][0]
         self._default_pipe = transport_choices(document.game_data, ItemForm.LIQUID)[0][0]
+        # Deployed rendering: the global preference, which each node may override.
+        self._deployed = False
+        self._deployed_ceiling = DEFAULT_DEPLOYED_CEILING
 
         document.graphChanged.connect(self.rebuild)
         document.reportChanged.connect(self.apply_report)
@@ -150,6 +162,8 @@ class FactoryScene(QGraphicsScene):
                 item.node = node
             if isinstance(node, StorageNode):
                 item.content_item = storage_item(node, graph)
+            item.deployed = self._deployed if node.show_deployed is None else node.show_deployed
+            item.deployed_ceiling = self._deployed_ceiling
             item.relayout()
             item.setPos(QPointF(*node.position))
 
@@ -285,6 +299,41 @@ class FactoryScene(QGraphicsScene):
         super().mouseReleaseEvent(event)
         self.end_move()
 
+    def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        """Double-clicking a value on a node -- or a line -- opens an editor on it.
+
+        Only a *value* answers: double-clicking the title or a rate row does nothing,
+        which is the honest behaviour when there is nothing there to change.
+        """
+        at = event.scenePos()
+        request = self.edit_request_at(at)
+        if request is not None:
+            self.inlineEditRequested.emit(*request)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def edit_request_at(self, at: QPointF) -> tuple[str, Field, QRectF] | None:
+        """What a double-click at this point would edit, if anything.
+
+        Split out from the event so the decision can be checked directly, and so the
+        view has one place to ask "is there something here?".
+        """
+        item = self._node_under(at)
+        if item is not None:
+            field = item.field_at(item.mapFromScene(at))
+            if field is not None:
+                return item.node.id, field, item.mapRectToScene(item.field_rect(field))
+            return None
+        # A curve is a hair wide, so a click is looked for in a small square around
+        # the cursor rather than exactly on it -- the same slack the ports get.
+        probe = QRectF(at.x() - 5.0, at.y() - 5.0, 10.0, 10.0)
+        for other in (*self.items(at), *self.items(probe)):
+            if isinstance(other, EdgeItem):
+                box = QRectF(at.x() - 40.0, at.y() - 10.0, 130.0, 20.0)
+                return other.edge_id, Field.TRANSPORT, box
+        return None
+
     def begin_move(self) -> None:
         """Remember where the selection was, so the drag can become one command."""
         self._drag_origin = {item.node.id: item.node.position for item in self.selected_nodes()}
@@ -408,6 +457,19 @@ class FactoryScene(QGraphicsScene):
             return item.node.id, dragged
         return None
 
+    def set_deployed_rendering(self, enabled: bool, ceiling: int) -> None:
+        """Adopt the global preference and redraw. Nodes that override it keep theirs.
+
+        Nothing about the graph changes, so this goes nowhere near the undo stack --
+        it is the same factory, drawn differently.
+        """
+        self._deployed, self._deployed_ceiling = enabled, ceiling
+        self.rebuild()
+        self.refresh_edge_geometry()
+
+    def deployed_rendering(self) -> bool:
+        return self._deployed
+
     def set_default_transports(self, belt: str, pipe: str) -> None:
         """Tiers new lines are created with. Owned by the palette's tier chooser.
 
@@ -491,6 +553,54 @@ class FactoryScene(QGraphicsScene):
             parts.append(f"{edges} ligne(s)")
         self.selectionSummaryChanged.emit(" et ".join(parts) + " selectionne(s)")
 
+    # -------------------------------------------------------------- clipboard
+
+    def copy_selection(self) -> bool:
+        """Put the selected nodes on the clipboard. False when nothing is selected."""
+        node_ids = [item.node.id for item in self.selected_nodes()]
+        if not clipboard.write(self.document.graph, node_ids):
+            return False
+        self.selectionSummaryChanged.emit(f"{len(node_ids)} noeud(s) copie(s).")
+        return True
+
+    def cut_selection(self) -> bool:
+        """Copy, then delete. Two steps on the stack, because they are two actions."""
+        if not self.copy_selection():
+            return False
+        self.delete_selection()
+        return True
+
+    def paste(self) -> bool:
+        """Drop what is on the clipboard in, offset and selected.
+
+        A clipboard holding anything else is not an error and says nothing: someone
+        who has just copied a URL and pressed Ctrl+V by reflex has made no mistake.
+        """
+        pasted = clipboard.read()
+        if pasted is None or not pasted.nodes:
+            return False
+        return self._paste_graph(pasted)
+
+    def duplicate_selection(self) -> bool:
+        """Ctrl+D: copy then paste, without touching the clipboard.
+
+        Duplicating is a frequent gesture, and losing whatever one was carrying in
+        order to do it would be a poor trade.
+        """
+        node_ids = [item.node.id for item in self.selected_nodes()]
+        if not node_ids:
+            return False
+        return self._paste_graph(clipboard.selection_graph(self.document.graph, node_ids))
+
+    def _paste_graph(self, pasted: FactoryGraph) -> bool:
+        """One command, whatever the size of the piece, and the result selected."""
+        command = PasteCommand(self.document, pasted, clipboard.PASTE_OFFSET)
+        created = command.node_ids
+        self.document.undo_stack.push(command)
+        self.select_nodes(created)
+        self.selectionSummaryChanged.emit(f"{len(created)} noeud(s) colle(s).")
+        return True
+
     # --------------------------------------------------------------- deleting
 
     def delete_selection(self) -> None:
@@ -568,6 +678,8 @@ class FactoryScene(QGraphicsScene):
             menu.addAction(clock)
         if isinstance(item.node, StorageNode):
             menu.addMenu(self._storage_content_menu(item.node, menu))
+        if unit_count(item.node) is not None:
+            menu.addMenu(self._deployed_menu(item.node, menu))
         delete = QAction("Supprimer", menu)
         delete.triggered.connect(self.delete_selection)
         menu.addSeparator()
@@ -619,11 +731,52 @@ class FactoryScene(QGraphicsScene):
             menu.addAction(action)
         return menu
 
+    def _deployed_menu(self, node: Node, parent: QMenu) -> QMenu:
+        """Three states, not a checkbox: follow the preference, always, never.
+
+        A plain toggle would silently turn "follow the global setting" into a fixed
+        choice the first time it was clicked, and the user would have no way back.
+        """
+        menu = QMenu("Rendu deploye", parent)
+        for value, label in (
+            (None, "Suivre la preference"),
+            (True, "Afficher les machines"),
+            (False, "Masquer les machines"),
+        ):
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(node.show_deployed is value)
+            action.triggered.connect(
+                lambda _checked=False, wanted=value: self.set_deployed(node.id, wanted)
+            )
+            menu.addAction(action)
+        return menu
+
+    def set_deployed(self, node_id: str, deployed: bool | None) -> None:
+        """Override -- or stop overriding -- the global rendering for one node."""
+        node = self.document.graph.node(node_id)
+        if node.show_deployed is deployed:
+            return
+        label = {
+            None: "rendu deploye : preference",
+            True: "rendu deploye : affiche",
+            False: "rendu deploye : masque",
+        }[deployed]
+        self.document.undo_stack.push(
+            SetNodeFieldCommand(self.document, node_id, "show_deployed", deployed, label)
+        )
+
     def set_purity(self, node_id: str, purity: Purity | str) -> bool:
         return self._apply(edits.set_purity(self.document, node_id, purity))
 
     def set_fuel(self, node_id: str, fuel_class: str) -> bool:
         return self._apply(edits.set_fuel(self.document, node_id, fuel_class))
+
+    def set_quantity(self, node_id: str, value: float) -> bool:
+        return self._apply(edits.set_quantity(self.document, node_id, value))
+
+    def set_transport(self, edge_id: str, transport_class: str) -> bool:
+        return self._apply(edits.set_transport(self.document, edge_id, transport_class))
 
     def set_extractor(self, node_id: str, extractor_class: str) -> bool:
         return self._apply(edits.set_extractor(self.document, node_id, extractor_class))
@@ -707,9 +860,7 @@ class FactoryScene(QGraphicsScene):
         target = self.sufficient_tier(edge_id)
         if target is None:
             return False
-        label = self.document.game_data.building(target).display_name_fr
-        self.document.undo_stack.push(SetTransportCommand(self.document, edge_id, target, label))
-        return True
+        return self.set_transport(edge_id, target)
 
     def _edge_menu(self, item: EdgeItem, parent: QWidget) -> QMenu:
         menu = QMenu(parent)
@@ -727,9 +878,7 @@ class FactoryScene(QGraphicsScene):
             action.setCheckable(True)
             action.setChecked(class_name == edge.transport_class)
             action.triggered.connect(
-                lambda _checked=False, cls=class_name, name=label: self.document.undo_stack.push(
-                    SetTransportCommand(self.document, edge.id, cls, name)
-                )
+                lambda _checked=False, cls=class_name: self.set_transport(edge.id, cls)
             )
             menu.addAction(action)
         menu.addSeparator()
@@ -760,15 +909,7 @@ class FactoryScene(QGraphicsScene):
         if abs(suggestion - node.machine_count) < 1e-9:
             self.selectionSummaryChanged.emit("Ce noeud est deja a la bonne taille.")
             return
-        self.document.undo_stack.push(
-            SetNodeFieldCommand(
-                self.document,
-                node_id,
-                "machine_count",
-                suggestion,
-                f"ajustement a {suggestion:g} machine(s)",
-            )
-        )
+        self.set_quantity(node_id, suggestion)
 
     def set_clock_speed(self, node_id: str, clock_speed: float) -> bool:
         """Change one node's clock, through the door the table also uses."""
@@ -807,16 +948,8 @@ class FactoryScene(QGraphicsScene):
             10_000.0,
             2,
         )
-        if accepted and value != node.machine_count:
-            self.document.undo_stack.push(
-                SetNodeFieldCommand(
-                    self.document,
-                    node_id,
-                    "machine_count",
-                    value,
-                    f"passage a {value:g} machine(s)",
-                )
-            )
+        if accepted:
+            self.set_quantity(node_id, value)
 
 
 def _id_prefix(entry: PaletteEntry) -> str:
@@ -847,6 +980,17 @@ class FactoryView(QGraphicsView):
         self.setMouseTracking(True)
         self._panning = False
         self._pan_from = QPointF()
+        # The editor floats over the viewport rather than living in the scene: a
+        # widget in a scene is scaled by the zoom, and a line edit at 30 % is not an
+        # editor. The scene decides what was hit, the view decides where to put it.
+        self.inline = InlineEditor(scene.document, scene.selectionSummaryChanged.emit)
+        scene.inlineEditRequested.connect(self.open_inline_editor)
+        scene.document.graphChanged.connect(self.inline.close)
+
+    def open_inline_editor(self, target: str, field: Field, scene_rect: QRectF) -> bool:
+        """Put an editor over the value that was double-clicked."""
+        rect = self.mapFromScene(scene_rect).boundingRect()
+        return self.inline.open(self.viewport(), target, field, rect)
 
     @property
     def factory_scene(self) -> FactoryScene:
@@ -873,10 +1017,16 @@ class FactoryView(QGraphicsView):
         self.zoom_by(1 / ZOOM_STEP)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        # An editor pinned to a place on screen while the view moves under it would
+        # be an editor pointing at the wrong node.
+        self.inline.close()
         self.zoom_by(ZOOM_STEP if event.angleDelta().y() > 0 else 1 / ZOOM_STEP)
         event.accept()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        # A click anywhere on the canvas abandons an open edit. Clicks that land on
+        # the editor itself never reach the viewport, so it survives being used.
+        self.inline.close()
         if event.button() is Qt.MouseButton.MiddleButton:
             self._panning = True
             self._pan_from = event.position()

@@ -1,36 +1,129 @@
 """The edits a node accepts, each with exactly one implementation.
 
-Every one of these can be reached from two places -- a context menu on the canvas and
-a cell in the table -- and the specification asks that both produce the same command.
-When the clock was added, "the same" was two functions written to agree and a test to
-prove they still did; three fields later that is a promise waiting to be broken. So
-the rule is now structural: the menu and the table both call the function below, and
-there is nothing left to keep in step.
+Every one of these can now be reached from **three** places -- a context menu on the
+canvas, a cell in the table, and a double-click on the value where it is drawn -- and
+the specification asks that all three produce the same command. When the clock was
+added, "the same" was two functions written to agree and a test to prove they still
+did; at three fields that was a promise waiting to be broken, and at three doors it
+would already be broken. So the rule is structural: every door calls the function
+below, and there is nothing left to keep in step.
 
 Each returns ``None`` when the node now holds the requested value, or a French
 sentence saying why it cannot. That is the same shape as ``commands.can_connect``,
-and it lets the canvas show the reason in the status bar while the table simply
-refuses the edit and leaves the cell alone.
+and it lets the canvas show the reason in the status bar, the table refuse the edit
+and leave the cell alone, and the inline editor stay open with what was typed still
+in it.
 """
 
 import logging
+import math
+from dataclasses import dataclass
 
 from satisplanner.core import constants, formatting
 from satisplanner.core.graph import (
+    ExternalSourceNode,
     GeneratorNode,
     MachineNode,
+    Node,
+    OutputNode,
     ResourceNode,
+    StorageNode,
     WaterExtractorNode,
 )
-from satisplanner.core.models import Purity
+from satisplanner.core.models import Purity, UnknownClassError
 from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices, fuel_choices
-from satisplanner.ui.commands import SetNodeFieldCommand
+from satisplanner.ui.commands import SetNodeFieldCommand, SetTransportCommand
 from satisplanner.ui.document import FactoryDocument
 
 logger = logging.getLogger(__name__)
 
 # Below this two values are the same number written twice.
 EPSILON = 1e-9
+
+
+@dataclass(frozen=True)
+class Quantity:
+    """The number a given kind of node is sized by, and what to call it.
+
+    The table has one "Quantite" column rather than a machine-count column that is
+    blank on two rows out of three, the canvas has one number on the face of the
+    node, and both mean whatever this says.
+    """
+
+    field: str
+    label: str
+    minimum: float = 0.0
+
+
+def quantity_of(node: Node) -> Quantity | None:
+    """Which field the quantity of this node is, if it has one."""
+    match node:
+        case MachineNode():
+            return Quantity("machine_count", "machine(s)")
+        case ResourceNode() | WaterExtractorNode():
+            # Strictly positive in the model: zero extractors is a deleted node.
+            return Quantity("count", "extracteur(s)", minimum=1e-9)
+        case GeneratorNode():
+            return Quantity("count", "generateur(s)", minimum=1e-9)
+        case ExternalSourceNode():
+            return Quantity("rate_per_minute", "/min")
+        case StorageNode():
+            return Quantity("initial_content", "en stock")
+        case OutputNode():
+            return None
+
+
+def set_quantity(document: FactoryDocument, node_id: str, value: float) -> str | None:
+    """Set however many of a thing a node stands for: machines, extractors, m3 in a tank.
+
+    Refused rather than clamped when it is out of domain, for the same reason as the
+    clock: a negative machine count silently turned into zero teaches the field
+    accepts anything.
+    """
+    node = document.graph.node(node_id)
+    quantity = quantity_of(node)
+    if quantity is None:
+        return "Ce noeud n'a pas de quantite."
+    if math.isnan(value):  # what was typed was not a number at all
+        return "Ce n'est pas un nombre."
+    if value < quantity.minimum:
+        floor = formatting.number(quantity.minimum)
+        return f"Valeur hors domaine : {floor} au minimum."
+    if abs(getattr(node, quantity.field) - value) < EPSILON:
+        return None
+    document.undo_stack.push(
+        SetNodeFieldCommand(
+            document,
+            node_id,
+            quantity.field,
+            value,
+            f"{node_id} : {formatting.number(value)} {quantity.label}",
+        )
+    )
+    return None
+
+
+def set_transport(document: FactoryDocument, edge_id: str, transport_class: str) -> str | None:
+    """Change a line's tier, the last field that had a command of its own.
+
+    Belongs here with the rest for exactly the same reason: the context menu on a
+    line and a double-click on it must push one command, not two that agree.
+    """
+    edge = document.graph.edge(edge_id)
+    game_data = document.game_data
+    try:
+        item = game_data.item(edge.item_class)
+        matches = game_data.transport_form_matches(transport_class, item.form)
+    except UnknownClassError as exc:
+        return str(exc)
+    if not matches:
+        needed = "une tuyauterie" if item.form.is_fluid else "un convoyeur"
+        return f"{item.display_name_fr} demande {needed}."
+    if edge.transport_class == transport_class:
+        return None
+    label = game_data.buildings[transport_class].display_name_fr
+    document.undo_stack.push(SetTransportCommand(document, edge_id, transport_class, label))
+    return None
 
 
 def set_clock_speed(document: FactoryDocument, node_id: str, clock_speed: float) -> str | None:

@@ -21,7 +21,7 @@ from typing import Final
 
 from PySide6.QtGui import QUndoCommand
 
-from satisplanner.core.graph import Edge, GraphError, Node, check_edge
+from satisplanner.core.graph import Edge, FactoryGraph, GraphError, Node, check_edge
 from satisplanner.ui.document import FactoryDocument
 
 # Merge identifier for consecutive moves, so nudging a node with the arrow keys ten
@@ -101,6 +101,93 @@ class ConnectCommand(_DocumentCommand):
     def undo(self) -> None:
         self.document.graph.remove_edge(self.edge.id)
         self._done()
+
+
+class PasteCommand(_DocumentCommand):
+    """Drop a copied piece of factory in, as **one** undo step.
+
+    The identifiers are renumbered against the document as it stands when the command
+    is built, and the result is kept: undoing and redoing a paste must put back the
+    very same nodes, or every command pushed after it would be pointing at names that
+    no longer exist.
+    """
+
+    def __init__(self, document: FactoryDocument, pasted: FactoryGraph, offset: float) -> None:
+        count = len(pasted.nodes)
+        plural = "s" if count > 1 else ""
+        super().__init__(document, f"collage de {count} noeud{plural}")
+        self.nodes, self.edges = _renumbered(document, pasted, offset)
+
+    @property
+    def node_ids(self) -> list[str]:
+        """What the paste created, so the canvas can select it."""
+        return [node.id for node in self.nodes]
+
+    def redo(self) -> None:
+        graph = self.document.graph
+        graph.nodes.extend(self.nodes)
+        graph.edges.extend(self.edges)
+        self._done()
+
+    def undo(self) -> None:
+        graph = self.document.graph
+        added = {node.id for node in self.nodes}
+        graph.nodes = [node for node in graph.nodes if node.id not in added]
+        edge_ids = {edge.id for edge in self.edges}
+        graph.edges = [edge for edge in graph.edges if edge.id not in edge_ids]
+        self._done()
+
+
+def _renumbered(
+    document: FactoryDocument, pasted: FactoryGraph, offset: float
+) -> tuple[list[Node], list[Edge]]:
+    """Fresh identifiers and an offset position, keeping every other field.
+
+    The prefix of the original name is reused when it has one -- ``machine3`` pasted
+    into a document that already has three machines becomes ``machine4`` -- so the
+    identifiers a user sees in the table stay readable rather than turning into
+    hashes.
+    """
+    taken = {node.id for node in document.graph.nodes}
+    renamed: dict[str, str] = {}
+    nodes: list[Node] = []
+    for original in pasted.sorted_nodes():
+        fresh = _free_id(_prefix_of(original.id), taken)
+        taken.add(fresh)
+        renamed[original.id] = fresh
+        moved = (original.position[0] + offset, original.position[1] + offset)
+        # ``show_deployed`` and every other field ride along untouched: a copy of an
+        # overclocked pure deposit is an overclocked pure deposit.
+        nodes.append(original.model_copy(update={"id": fresh, "position": moved}))
+
+    used_edges = {edge.id for edge in document.graph.edges}
+    edges: list[Edge] = []
+    for original_edge in pasted.sorted_edges():
+        fresh_edge = _free_id("e", used_edges)
+        used_edges.add(fresh_edge)
+        edges.append(
+            original_edge.model_copy(
+                update={
+                    "id": fresh_edge,
+                    "source": renamed[original_edge.source],
+                    "target": renamed[original_edge.target],
+                }
+            )
+        )
+    return nodes, edges
+
+
+def _prefix_of(node_id: str) -> str:
+    """``machine12`` -> ``machine``. Anything with no trailing digits keeps its name."""
+    stripped = node_id.rstrip("0123456789")
+    return stripped or node_id
+
+
+def _free_id(prefix: str, taken: set[str]) -> str:
+    index = 1
+    while f"{prefix}{index}" in taken:
+        index += 1
+    return f"{prefix}{index}"
 
 
 class RemoveCommand(_DocumentCommand):

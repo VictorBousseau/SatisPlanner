@@ -105,6 +105,20 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
   raccorde par tuyauterie et subit les mêmes contraintes de capacité et de contre-pression que
   n'importe quelle autre. Les débits sont déduits de la puissance produite et de la valeur
   énergétique de l'item, jamais codés en dur.
+- **Édition en place** : **double-clic sur une valeur affichée sur un nœud** — nombre de machines,
+  cadence, pureté, extracteur, carburant, débit d'un apport externe, stock d'un tampon — ou sur une
+  ligne pour son tier. Entrée valide, Échap annule, une valeur hors domaine est refusée **sans être
+  effacée**, avec la raison dans la barre d'état. Les champs à valeurs discrètes ouvrent la même
+  liste déroulante que le tableau, jamais une saisie libre.
+- **Copier-coller** : `Ctrl+C` / `Ctrl+X` / `Ctrl+V`, plus `Ctrl+D` pour dupliquer sans toucher au
+  presse-papiers. Les lignes internes à la sélection suivent, celles qui en sortaient non — elles
+  n'auraient plus rien à quoi s'accrocher. Un collage est **une seule annulation**. La sélection
+  voyage dans le presse-papiers système au format code de partage, donc **entre deux fenêtres**. Un
+  presse-papiers qui contient autre chose est ignoré en silence.
+- **Machines déployées** (`Ctrl+M`, désactivé par défaut) : une vignette par machine bâtie, en
+  grille, avec une vignette partielle pour un compte fractionnaire et « … ×N » au-delà du plafond.
+  Clic droit sur un nœud pour y déroger — afficher, masquer, ou suivre la préférence. **Purement
+  visuel** : aucun chiffre ne change, aucun nœud ni ligne de liste de courses en plus.
 - **Canvas** : une connexion se tire d'un port de sortie vers un port d'entrée. **Une liaison
   impossible est refusée pendant le tirage** — le trait devient rouge avec la raison en infobulle
   — et non signalée après coup. Clic droit sur un nœud pour l'ajuster à ses intrants ou fixer son
@@ -353,18 +367,28 @@ rien. C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
     ce qui n'est pas un hasard. Le nombre d'éclats se déduit de `mExtraPotential` ; seul le nombre
     d'emplacements (trois) n'est pas exporté et vit dans `core/constants.py`, avec un test qui
     vérifie que la borne de 250 % reste égale à ce que trois éclats achètent réellement.
-12. **Chaque champ modifiable n'a qu'une implémentation, pas deux qui s'accordent.**
-    `ui/edits.py` porte la validation et la commande ; le menu contextuel et la cellule du
-    tableau l'appellent tous les deux. La première version en avait deux, écrites pour donner
-    le même résultat et vérifiées par un test — ce qui tient à trois champs et se casse au
-    quatrième.
-13. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
+12. **Chaque champ modifiable n'a qu'une implémentation, pas trois qui s'accordent.**
+    `ui/edits.py` porte la validation et la commande ; le menu contextuel, la cellule du tableau
+    et le double-clic sur le nœud l'appellent tous les trois. La première version en avait deux,
+    écrites pour donner le même résultat et vérifiées par un test — ce qui tient à trois champs
+    et se casse au quatrième. Le test correspondant ne compare pas des résultats mais **les
+    libellés des commandes empilées par les trois chemins** : c'est la seule chose qui puisse
+    prouver qu'il n'y a bien qu'une porte.
+13. **La consommation compte les machines à l'arrêt, la production ne compte que ce qui brûle.**
+    L'asymétrie est volontaire. Côté consommation c'est un **dimensionnement au pire cas et non
+    une mesure du jeu** : les fichiers ne déclarent qu'une consommation nominale par bâtiment et
+    aucune consommation de veille — le seul second chiffre du jeu,
+    `mEstimatedMininumPowerConsumption`, n'existe que sur les trois machines à puissance variable
+    hors périmètre et désigne le bas de la plage d'une recette *en marche*. Inventer une valeur
+    réduite serait pire que compter au maximum. Côté production, en revanche, la donnée est sans
+    ambiguïté : un générateur sans carburant ne brûle rien et ne produit rien.
+14. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
     diagnostic d'erreur ne se traduit pas par un taux réduit, et c'est délibéré : en jeu, un
     déficit ne ralentit pas l'usine, il déclenche une coupure générale jusqu'à intervention
     manuelle. Afficher « tout à zéro » n'apprendrait rien et un bridage partiel serait une
     invention. Le test qui compte n'est pas que les chiffres soient justes, c'est que la même
     usine résolue avec et sans assez de générateurs donne exactement les mêmes débits.
-14. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
+15. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
     coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
     écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
     affichant la même image coûte seize millisecondes.

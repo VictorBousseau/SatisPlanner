@@ -67,6 +67,26 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "pose l'entree surlignee au centre de la vue",
     ),
     (
+        "Double-clic sur une valeur d'un noeud",
+        "l'edite sur place : nombre de machines, cadence, purete, extracteur, "
+        "carburant, debit d'un apport, stock d'un tampon. Entree valide, Echap "
+        "annule, une valeur hors domaine est refusee sans etre effacee",
+    ),
+    (
+        "Double-clic sur une ligne",
+        "change son tier, dans la meme liste que le menu contextuel",
+    ),
+    (
+        "Copier une selection",
+        "emporte les noeuds et les lignes qui les relient entre eux ; une ligne qui "
+        "sortait de la selection n'a plus de quoi s'accrocher et n'est pas copiee",
+    ),
+    (
+        "Affichage ▸ Machines deployees",
+        "dessine une vignette par machine batie sur chaque noeud. Clic droit sur un "
+        "noeud pour y deroger. Purement visuel : aucun chiffre ne change",
+    ),
+    (
         "Clic droit sur une ligne",
         "changer de tier, passer au tier suffisant quand elle sature, supprimer",
     ),
@@ -104,6 +124,12 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "rien et un bridage partiel serait une invention. Les generateurs, eux, "
     "tournent a 100 % : leur surcadencage suit un exposant different de celui des "
     "machines et fera l'objet d'un travail a part.",
+    "La consommation compte les machines <b>a l'arret</b> : elles sont construites et "
+    "branchees. C'est un dimensionnement au pire cas, pas une mesure du jeu — les "
+    "fichiers ne declarent aucune consommation de veille, seulement une consommation "
+    "nominale, et inventer une valeur reduite serait pire que compter au maximum. La "
+    "production, elle, ne compte que ce qui brule reellement : un generateur sans "
+    "carburant ne produit rien.",
 )
 
 

@@ -11,6 +11,7 @@ keeping a parallel tree of child items in step with the recipe.
 
 import logging
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Final
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -41,6 +42,8 @@ from satisplanner.core.graph import (
     ResourceNode,
     StorageNode,
     WaterExtractorNode,
+    machine_building,
+    unit_count,
 )
 from satisplanner.core.models import GameData, ItemForm
 from satisplanner.core.results import EdgeSolution, LimitingFactor, NodeSolution
@@ -60,6 +63,22 @@ BOTTOM_PADDING: Final = 8.0
 CORNER_RADIUS: Final = 6.0
 BORDER_WIDTH: Final = 2.0
 ICON_SIDE: Final = 22.0
+
+# Deployed rendering: one thumbnail per built machine, in a band under the subtitle.
+# The side is chosen so that the default ceiling of twelve fits on a single row of a
+# 260 px node with room left for the "... xN" that follows a truncated bank.
+DEPLOYED_SIDE: Final = 16.0
+DEPLOYED_GAP: Final = 3.0
+DEPLOYED_ROW_HEIGHT: Final = DEPLOYED_SIDE + DEPLOYED_GAP
+DEPLOYED_BAND_PADDING: Final = 6.0
+# Thumbnails per row, from the node's own width. A grid rather than a single row: the
+# ceiling is the user's setting, and one that does not fit across the box has to wrap
+# rather than run off the edge -- which is also where the "... xN" ends up when the
+# last row is already full.
+DEPLOYED_PER_ROW: Final = int((NODE_WIDTH - 2 * ROW_MARGIN + DEPLOYED_GAP) / DEPLOYED_ROW_HEIGHT)
+# Under this fraction of a machine, nothing is drawn: a sliver two pixels wide reads
+# as a rendering glitch rather than as "a third of an assembler".
+DEPLOYED_MIN_FRACTION: Final = 0.05
 PORT_RADIUS: Final = 5.0
 # Extra slack around a port so it can be grabbed without pixel-hunting.
 PORT_GRAB_SLACK: Final = 4.0
@@ -81,6 +100,91 @@ class Port:
     item_class: str
     is_output: bool
     centre: QPointF  # local to the node item
+
+
+class Field(StrEnum):
+    """A value shown on a node that a double-click can edit.
+
+    Deliberately coarse. ``QUANTITY`` is "however many of a thing this node stands
+    for" -- machines, extractors, generators, cubic metres in a tank, items a minute
+    coming in from outside -- exactly as the table's one Quantite column is, and for
+    the same reason: the node shows one number, not five differently-named ones.
+    """
+
+    QUANTITY = "quantity"
+    CLOCK = "clock"
+    PURITY = "purity"
+    EXTRACTOR = "extractor"
+    FUEL = "fuel"
+    # A line's tier. Not on a node at all: a double-click on the line itself.
+    TRANSPORT = "transport"
+
+
+@dataclass(frozen=True)
+class Segment:
+    """One run of the subtitle, and the field it stands for if it is a value.
+
+    Separators are segments too, with no field. Keeping them in the list rather than
+    joining around them is what lets :meth:`NodeItem.subtitle` stay the exact string
+    it always was while the hit-testing knows where each value begins and ends.
+    """
+
+    text: str
+    field: "Field | None" = None
+
+
+@dataclass(frozen=True)
+class DeployedLayout:
+    """How a bank of ``total`` machines is drawn as thumbnails.
+
+    Pure arithmetic, kept out of the painting so it can be checked without a window.
+    """
+
+    total: float
+    full: int  # whole thumbnails
+    fraction: float  # width of a trailing partial one, 0 when there is none
+    truncated: bool  # more machines than the ceiling: the count is written instead
+    per_row: int = DEPLOYED_PER_ROW
+
+    @property
+    def drawn(self) -> int:
+        return self.full + (1 if self.fraction > 0 else 0)
+
+    @property
+    def rows(self) -> int:
+        """Rows of thumbnails, plus one for the count when the last row is full.
+
+        A "... x43" with two pixels left to write it in is a "..." and nothing else,
+        which is how the first version of this read on a bank of forty-three.
+        """
+        used = max(1, -(-self.drawn // self.per_row))
+        if self.truncated and self.drawn % self.per_row == 0:
+            used += 1
+        return used
+
+    def cell(self, index: int) -> tuple[int, int]:
+        """``(column, row)`` of the ``index``-th thumbnail."""
+        return index % self.per_row, index // self.per_row
+
+
+def deployed_layout(total: float, ceiling: int, per_row: int = DEPLOYED_PER_ROW) -> DeployedLayout:
+    """Whole thumbnails, a partial one, and whether the bank was cut short.
+
+    A fractional machine is drawn as a fraction of a thumbnail rather than rounded
+    up: 4.33 assemblers are four and a third, and that third is the whole reason
+    decimals are allowed in the first place. Past the ceiling the picture stops
+    saying anything a number would not say better, so the number is written.
+    """
+    whole = int(total)
+    if whole >= ceiling:
+        return DeployedLayout(
+            total=total, full=ceiling, fraction=0.0, truncated=True, per_row=per_row
+        )
+    remainder = total - whole
+    fraction = remainder if remainder >= DEPLOYED_MIN_FRACTION else 0.0
+    return DeployedLayout(
+        total=total, full=whole, fraction=fraction, truncated=False, per_row=per_row
+    )
 
 
 def state_colour(solution: NodeSolution | None) -> QColor:
@@ -123,6 +227,10 @@ class NodeItem(QGraphicsItem):
         # What a buffer holds, once the graph can tell. Set by the scene, which is the
         # only place that knows the other lines.
         self.content_item: str | None = None
+        # Deployed rendering, as resolved by the scene: the global preference unless
+        # this node overrides it. Purely a way of drawing; nothing reads it back.
+        self.deployed = False
+        self.deployed_ceiling = 12
         self._inputs: tuple[str, ...] = ()
         self._outputs: tuple[str, ...] = ()
         self._height = HEADER_HEIGHT
@@ -135,7 +243,36 @@ class NodeItem(QGraphicsItem):
         self._inputs, self._outputs = self._port_items()
         rows = max(len(self._inputs), len(self._outputs))
         self.prepareGeometryChange()
-        self._height = HEADER_HEIGHT + DETAIL_HEIGHT + rows * ROW_HEIGHT + BOTTOM_PADDING
+        self._height = (
+            HEADER_HEIGHT
+            + self._subtitle_height()
+            + self._deployed_band()
+            + rows * ROW_HEIGHT
+            + BOTTOM_PADDING
+        )
+
+    def deployed_units(self) -> float | None:
+        """The bank this node stands for, when it is being drawn machine by machine."""
+        if not self.deployed:
+            return None
+        count = unit_count(self.node)
+        return count if count is not None and count > 0 else None
+
+    def deployed_plan(self) -> DeployedLayout | None:
+        count = self.deployed_units()
+        if count is None:
+            return None
+        return deployed_layout(count, self.deployed_ceiling)
+
+    def _deployed_band(self) -> float:
+        plan = self.deployed_plan()
+        if plan is None:
+            return 0.0
+        return plan.rows * DEPLOYED_ROW_HEIGHT + DEPLOYED_BAND_PADDING
+
+    def _rows_top(self) -> float:
+        """Where the item rows start, thumbnails included when they are drawn."""
+        return HEADER_HEIGHT + self._subtitle_height() + self._deployed_band()
 
     def _port_items(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         """Inputs and outputs, in the recipe's own slot order rather than alphabetical.
@@ -178,7 +315,7 @@ class NodeItem(QGraphicsItem):
 
     def ports(self) -> list[Port]:
         """Every port, inputs first, in the order they are drawn."""
-        top = HEADER_HEIGHT + DETAIL_HEIGHT + ROW_HEIGHT / 2
+        top = self._rows_top() + ROW_HEIGHT / 2
         found = [
             Port(item_class, False, QPointF(0.0, top + index * ROW_HEIGHT))
             for index, item_class in enumerate(self._inputs)
@@ -233,61 +370,178 @@ class NodeItem(QGraphicsItem):
                 return self.game_data.building(storage.storage_class).display_name_fr
 
     def subtitle(self) -> str:
-        """The line under the title: which building, or what the endpoint does."""
+        """The line under the title, as one string. Assembled from the segments."""
+        return "".join(segment.text for segment in self.subtitle_segments())
+
+    def subtitle_segments(self) -> list[Segment]:
+        """The subtitle cut into runs, each knowing whether it is an editable value.
+
+        The line has always read as one sentence -- "1 Foreuse Mk.3 — gisement pur —
+        cadence 250 %" -- and it still does, because :meth:`subtitle` simply joins
+        these. What the cut adds is the ability to say *which* value the cursor is
+        over, which is what turns a double-click into an edit of that field rather
+        than of some field the node happens to have.
+        """
         match self.node:
             case MachineNode() as machine:
                 recipe = self.game_data.recipe(machine.recipe_class)
                 building = self.game_data.building(recipe.building_class).display_name_fr
                 count = formatting.number(machine.machine_count)
-                return f"{building} — {count} machine(s){_clock_suffix(machine.clock_speed)}"
+                return [
+                    Segment(building),
+                    Segment(" — "),
+                    Segment(f"{count} machine(s)", Field.QUANTITY),
+                    *_clock_segments(machine.clock_speed),
+                ]
             case ResourceNode() as deposit:
                 extractor = self.game_data.building(deposit.extractor_class).display_name_fr
                 # The purity is on the face of the node because nothing else shows it
                 # and everything depends on it: the same miner pulls 120, 240 or 480.
-                purity = PURITY_LABELS[deposit.purity].lower()
-                count = formatting.number(deposit.count)
-                clock = _clock_suffix(deposit.clock_speed)
-                return f"{count} {extractor} — gisement {purity}{clock}"
+                return [
+                    Segment(formatting.number(deposit.count), Field.QUANTITY),
+                    Segment(" "),
+                    Segment(extractor, Field.EXTRACTOR),
+                    Segment(" — gisement "),
+                    Segment(PURITY_LABELS[deposit.purity].lower(), Field.PURITY),
+                    *_clock_segments(deposit.clock_speed),
+                ]
             case WaterExtractorNode() as pump:
-                count = formatting.number(pump.count)
-                return f"{count} unite(s) — debit fixe{_clock_suffix(pump.clock_speed)}"
+                return [
+                    Segment(f"{formatting.number(pump.count)} unite(s)", Field.QUANTITY),
+                    Segment(" — debit fixe"),
+                    *_clock_segments(pump.clock_speed),
+                ]
             case GeneratorNode() as generator:
                 # The fuel is on the face of the node for the same reason the purity
                 # of a deposit is: it changes every number, starting with how much
                 # of it the thing swallows.
-                fuel = self.game_data.item(generator.fuel_class).display_name_fr
                 power = self.game_data.generators[generator.generator_class].power_mw
-                count = formatting.number(generator.count)
                 total = formatting.number(power * generator.count)
-                return f"{count} unite(s) — {fuel} — {total} MW produits"
+                return [
+                    Segment(f"{formatting.number(generator.count)} unite(s)", Field.QUANTITY),
+                    Segment(" — "),
+                    Segment(self.game_data.item(generator.fuel_class).display_name_fr, Field.FUEL),
+                    Segment(f" — {total} MW produits"),
+                ]
             case ExternalSourceNode() as source:
                 item = self.game_data.item(source.item_class)
-                return f"apport externe {formatting.rate(source.rate_per_minute, item)}"
+                return [
+                    Segment("apport externe "),
+                    Segment(formatting.rate(source.rate_per_minute, item), Field.QUANTITY),
+                ]
             case StorageNode() as storage:
-                return self._storage_subtitle(storage)
+                return self._storage_segments(storage)
             case OutputNode() as output:
-                return "rejet assume" if output.is_sink else "sortie de l'usine"
+                return [Segment("rejet assume" if output.is_sink else "sortie de l'usine")]
+
+    def subtitle_lines(self) -> list[list[Segment]]:
+        """The subtitle broken into lines that fit across the node.
+
+        A deposit at 250 % reads "1 Foreuse Mk.3 — gisement normal — cadence 250 %",
+        which is wider than the box; so is a buffer holding heavy oil residue. Those
+        used to be silently clipped, taking the last value off the node with them.
+        Wrapping keeps every value on screen -- and therefore reachable, since a
+        value nobody can see is a value nobody can double-click.
+
+        Segments are never split: a line break falls between two runs, so a value is
+        never cut in half across two lines.
+        """
+        metrics = QFontMetricsF(self._detail_font())
+        available = NODE_WIDTH - 16
+        lines: list[list[Segment]] = [[]]
+        used = 0.0
+        for segment in self.subtitle_segments():
+            width = metrics.horizontalAdvance(segment.text)
+            if lines[-1] and used + width > available:
+                lines.append([])
+                used = 0.0
+                # A separator at the head of a wrapped line reads as a stray dash.
+                segment = _lstripped(segment)
+                width = metrics.horizontalAdvance(segment.text)
+            lines[-1].append(segment)
+            used += width
+        return lines
+
+    def field_at(self, local: QPointF) -> Field | None:
+        """The editable value under a point, or ``None`` when there is none there.
+
+        Only the subtitle band is live. A separator counts as part of the value it
+        follows, so " machine(s)" and the space after a count are targets too --
+        otherwise the quantity of a deposit would be a single digit to aim at.
+        """
+        band = self._subtitle_rect()
+        if not band.contains(local):
+            return None
+        metrics = QFontMetricsF(self._detail_font())
+        row = int((local.y() - band.top()) / DETAIL_HEIGHT)
+        lines = self.subtitle_lines()
+        if not 0 <= row < len(lines):
+            return None
+        cursor = band.left()
+        found: Field | None = None
+        for segment in lines[row]:
+            width = metrics.horizontalAdvance(segment.text)
+            if segment.field is not None:
+                found = segment.field
+            if local.x() <= cursor + width:
+                return found
+            cursor += width
+        return None
+
+    def field_rect(self, field: Field) -> QRectF:
+        """Exactly where a field's text is drawn, so an editor can sit over it.
+
+        The true width and not a comfortable one: an editor needs a minimum size to
+        type into, but that is the editor's business. Widening the rectangle here
+        would make ``field_at`` disagree with itself -- the centre of a padded "1"
+        lands on the extractor name beside it.
+        """
+        metrics = QFontMetricsF(self._detail_font())
+        band = self._subtitle_rect()
+        for row, line in enumerate(self.subtitle_lines()):
+            cursor = band.left()
+            for segment in line:
+                width = metrics.horizontalAdvance(segment.text)
+                if segment.field is field:
+                    return QRectF(cursor, band.top() + row * DETAIL_HEIGHT, width, DETAIL_HEIGHT)
+                cursor += width
+        return band
+
+    def _subtitle_height(self) -> float:
+        return len(self.subtitle_lines()) * DETAIL_HEIGHT
+
+    def _subtitle_rect(self) -> QRectF:
+        return QRectF(8, HEADER_HEIGHT - 16, NODE_WIDTH - 16, self._subtitle_height())
+
+    def _detail_font(self) -> QFont:
+        """The font the subtitle is painted with, so hit-testing measures the truth."""
+        font = QFont()
+        font.setPointSizeF(max(font.pointSizeF() - 1.0, 6.0))
+        return font
 
     def clock_badge(self) -> str:
         """The clock, or an empty string at 100 %. Exposed so a test can read it."""
         clock = getattr(self.node, "clock_speed", 1.0)
         return "" if clock == 1.0 else formatting.percent(clock)
 
-    def _storage_subtitle(self, storage: StorageNode) -> str:
+    def _storage_segments(self, storage: StorageNode) -> list[Segment]:
         """What the buffer holds, and whether that was decided or deduced.
 
         A buffer that silently keeps a content decided by a line the user has since
         removed would refuse the next line for no visible reason, so the state is
         spelled out: "(fixe)" means it was chosen and will not follow the lines.
+
+        The stock is written even when it is zero. It used to be hidden then, which
+        made it the one editable value with no place on the node to double-click.
         """
         if self.content_item is None:
-            return "tampon — contenu indetermine"
+            return [Segment("tampon — contenu indetermine")]
         name = self.game_data.item(self.content_item).display_name_fr
         origin = "fixe" if storage.item_class else "deduit des lignes"
-        stock = ""
-        if storage.initial_content > 0:
-            stock = f", stock initial {formatting.number(storage.initial_content)}"
-        return f"tampon — {name} ({origin}){stock}"
+        return [
+            Segment(f"tampon — {name} ({origin}), stock initial "),
+            Segment(formatting.number(storage.initial_content), Field.QUANTITY),
+        ]
 
     def icon(self) -> QIcon:
         match self.node:
@@ -324,6 +578,7 @@ class NodeItem(QGraphicsItem):
         painter.drawRoundedRect(body, CORNER_RADIUS, CORNER_RADIUS)
 
         self._paint_header(painter)
+        self._paint_deployed(painter)
         self._paint_rows(painter)
         self._paint_ports(painter)
 
@@ -349,16 +604,90 @@ class NodeItem(QGraphicsItem):
                 formatting.percent(self.solution.ratio),
             )
 
-        detail_font = QFont(painter.font())
-        detail_font.setBold(False)
-        detail_font.setPointSizeF(max(detail_font.pointSizeF() - 1.0, 6.0))
-        painter.setFont(detail_font)
+        # The very font ``field_at`` measures with, so what is hit is what is seen.
+        painter.setFont(self._detail_font())
         painter.setPen(QColor(theme.TEXT_MUTED))
-        painter.drawText(
-            QRectF(8, HEADER_HEIGHT - 16, NODE_WIDTH - 16, DETAIL_HEIGHT),
-            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-            self.subtitle(),
-        )
+        band = self._subtitle_rect()
+        for row, line in enumerate(self.subtitle_lines()):
+            painter.drawText(
+                QRectF(band.left(), band.top() + row * DETAIL_HEIGHT, band.width(), DETAIL_HEIGHT),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                "".join(segment.text for segment in line),
+            )
+
+    def _paint_deployed(self, painter: QPainter) -> None:
+        """One thumbnail per built machine, in a row under the subtitle.
+
+        Nothing here changes a rate. It answers a question the numbers answer badly
+        -- "how much of this am I actually putting down?" -- and it is drawn *in
+        addition to* the subtitle, never instead of it: the purity, the clock and
+        the fuel stay where they were.
+        """
+        plan = self.deployed_plan()
+        if plan is None:
+            return
+        icon = self.building_icon()
+        top = HEADER_HEIGHT + self._subtitle_height()
+        step = DEPLOYED_SIDE + DEPLOYED_GAP
+
+        def box(index: int) -> QRectF:
+            column, row = plan.cell(index)
+            return QRectF(
+                ROW_MARGIN + column * step,
+                top + row * DEPLOYED_ROW_HEIGHT,
+                DEPLOYED_SIDE,
+                DEPLOYED_SIDE,
+            )
+
+        for index in range(plan.full):
+            icon.paint(painter, box(index).toRect())
+
+        if plan.fraction > 0:
+            # Clipped rather than scaled: a third of a machine is a third of a
+            # machine's width, not a smaller machine.
+            cell = box(plan.full)
+            painter.save()
+            painter.setClipRect(
+                QRectF(cell.left(), cell.top(), DEPLOYED_SIDE * plan.fraction, DEPLOYED_SIDE)
+            )
+            icon.paint(painter, cell.toRect())
+            painter.restore()
+
+        if plan.truncated:
+            cell = box(plan.drawn)
+            font = QFont(painter.font())
+            font.setPointSizeF(max(font.pointSizeF() - 1.0, 6.0))
+            painter.setFont(font)
+            painter.setPen(QColor(theme.TEXT_MUTED))
+            painter.drawText(
+                QRectF(
+                    cell.left(),
+                    cell.top(),
+                    NODE_WIDTH - cell.left() - ROW_MARGIN,
+                    DEPLOYED_SIDE,
+                ),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                f"... x{formatting.number(plan.total)}",
+            )
+
+    def building_icon(self) -> QIcon:
+        """The building this node is a bank of, for the deployed thumbnails.
+
+        Not :meth:`icon`, which shows what a node *makes*: four smelters drawn as
+        four iron ingots would be exactly the wrong picture.
+        """
+        match self.node:
+            case MachineNode() as machine:
+                building = machine_building(machine, self.game_data)
+            case ResourceNode() | WaterExtractorNode() as extractor:
+                building = extractor.extractor_class
+            case GeneratorNode() as generator:
+                building = generator.generator_class
+            case _:
+                return self.icon()
+        if building not in self.game_data.buildings:
+            return self.icon()
+        return self.icons.for_building(self.game_data.buildings[building])
 
     def _paint_rows(self, painter: QPainter) -> None:
         """One line per item, inputs down the left, outputs down the right.
@@ -370,7 +699,7 @@ class NodeItem(QGraphicsItem):
         font = QFont(painter.font())
         font.setPointSizeF(max(font.pointSizeF() - 0.5, 6.0))
         painter.setFont(font)
-        top = HEADER_HEIGHT + DETAIL_HEIGHT
+        top = self._rows_top()
         rows = max(len(self._inputs), len(self._outputs))
         for index in range(rows):
             shared = index < len(self._inputs) and index < len(self._outputs)
@@ -580,16 +909,24 @@ class EdgeItem(QGraphicsPathItem):
         )
 
 
-def _clock_suffix(clock_speed: float) -> str:
+def _lstripped(segment: Segment) -> Segment:
+    """The same segment without its leading spaces, for the head of a wrapped line."""
+    return Segment(segment.text.lstrip(), segment.field)
+
+
+def _clock_segments(clock_speed: float) -> list[Segment]:
     """The clock, spelled out on the node whenever it is not 100 %.
 
     Never hidden and never abbreviated to an icon: a node running at 250 % produces
     two and a half times what its recipe says and costs three and a third times the
     power, and a reader who has to hover to find that out will not find it out.
+
+    At 100 % there is nothing to show and therefore nothing to double-click, which
+    is consistent rather than a gap: the context menu and the table still reach it.
     """
     if clock_speed == 1.0:
-        return ""
-    return f" — cadence {formatting.percent(clock_speed)}"
+        return []
+    return [Segment(" — cadence "), Segment(formatting.percent(clock_speed), Field.CLOCK)]
 
 
 def curve(start: QPointF, end: QPointF) -> QPainterPath:

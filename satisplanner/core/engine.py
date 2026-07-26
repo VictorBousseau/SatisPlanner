@@ -65,6 +65,7 @@ from satisplanner.core.graph import (
     generator_input_rates,
     machine_building,
     storage_item,
+    unit_count,
 )
 from satisplanner.core.models import AttachmentRole, GameData
 from satisplanner.core.results import (
@@ -504,9 +505,7 @@ class _Solver:
         node = state.node
         spare = self._spare_upstream(node.id)
         ratio = state.ratio()
-        machine_count = getattr(node, "machine_count", None)
-        if machine_count is None:
-            machine_count = getattr(node, "count", None)
+        machine_count = unit_count(node)
         clock = getattr(node, "clock_speed", 1.0)
         building = self._building_of(node)
         power = 0.0

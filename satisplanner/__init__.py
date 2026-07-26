@@ -8,4 +8,4 @@ Layering rule, enforced by ``tests/test_architecture.py``:
 game database. Data reaches it by injection.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.1.0"
