@@ -11,6 +11,7 @@ Design points that matter downstream:
   in different orders produce identical results.
 """
 
+from collections.abc import Callable
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal, Self
 
@@ -199,6 +200,54 @@ PRODUCER_KINDS: Final = frozenset(
 )
 
 
+# Keys the identifier indexes live under, in the graph's own instance dictionary.
+_NODE_INDEX: Final = "_node_index"
+_EDGE_INDEX: Final = "_edge_index"
+_IN_INDEX: Final = "_incoming_index"
+_OUT_INDEX: Final = "_outgoing_index"
+
+
+def _indexed[T](
+    graph: "FactoryGraph",
+    key: str,
+    entries: list[T],
+    identifier: Callable[[T], str],
+) -> dict[str, T]:
+    """An identifier map for ``entries``, rebuilt only when it has gone stale.
+
+    A graph is read back one identifier at a time -- once per node item on the
+    canvas, once per cell the table paints, once per undo command -- and walking
+    the list each time is what made a five-hundred node factory painful. Unlike a
+    report, though, a graph is edited in place, so the map cannot simply be
+    computed once. It is kept beside two things that say whether it still holds:
+
+    * **the list object itself**, held rather than merely identified, so that it
+      cannot be freed and have its address handed to a different list;
+    * **the length it had** when the map was made.
+
+    Between them they catch every way this project changes a graph. Assigning a
+    filtered list -- ``remove_node``, ``RemoveCommand`` -- changes the object;
+    appending or extending -- ``add_node``, ``connect``, ``PasteCommand`` --
+    changes the length. Setting a field on a node changes neither, and neither
+    does it change what the map says, because an identifier is never reassigned:
+    pasting renames its copies before they are ever added.
+
+    The cache lives in the instance dictionary, which is where
+    ``functools.cached_property`` puts its own, and deliberately **not** in a
+    pydantic private attribute: ``__pydantic_private__`` takes part in equality,
+    so two identical graphs would compare unequal purely for having been read
+    from in a different order. The instance dictionary does not, because pydantic
+    falls back to comparing declared fields when the raw dictionaries differ.
+    """
+    cached = graph.__dict__.get(key)
+    if cached is not None and cached[0] is entries and cached[1] == len(entries):
+        found: dict[str, T] = cached[2]
+        return found
+    fresh = {identifier(entry): entry for entry in entries}
+    graph.__dict__[key] = (entries, len(entries), fresh)
+    return fresh
+
+
 class Edge(BaseModel):
     """A conveyor or a pipe carrying one item between two nodes."""
 
@@ -248,27 +297,53 @@ class FactoryGraph(BaseModel):
     # ---------------------------------------------------------------- lookups
 
     def node_map(self) -> dict[str, Node]:
-        return {node.id: node for node in self.nodes}
+        """Every node by identifier. A copy: callers are free to keep it."""
+        return dict(self._nodes_by_id())
+
+    def _nodes_by_id(self) -> dict[str, Node]:
+        return _indexed(self, _NODE_INDEX, self.nodes, lambda node: node.id)
+
+    def _edges_by_id(self) -> dict[str, Edge]:
+        return _indexed(self, _EDGE_INDEX, self.edges, lambda edge: edge.id)
 
     def node(self, node_id: str) -> Node:
-        for node in self.nodes:
-            if node.id == node_id:
-                return node
-        msg = f"noeud inconnu : {node_id}"
-        raise GraphError(msg)
+        found = self._nodes_by_id().get(node_id)
+        if found is None:
+            msg = f"noeud inconnu : {node_id}"
+            raise GraphError(msg)
+        return found
 
     def edge(self, edge_id: str) -> Edge:
-        for edge in self.edges:
-            if edge.id == edge_id:
-                return edge
-        msg = f"arete inconnue : {edge_id}"
-        raise GraphError(msg)
+        found = self._edges_by_id().get(edge_id)
+        if found is None:
+            msg = f"arete inconnue : {edge_id}"
+            raise GraphError(msg)
+        return found
 
     def outgoing(self, node_id: str) -> list[Edge]:
-        return [edge for edge in self.edges if edge.source == node_id]
+        """Lines leaving this node, in the graph's own order. A fresh list."""
+        return list(self._incidence(_OUT_INDEX, lambda edge: edge.source).get(node_id, ()))
 
     def incoming(self, node_id: str) -> list[Edge]:
-        return [edge for edge in self.edges if edge.target == node_id]
+        """Lines arriving at this node, in the graph's own order. A fresh list."""
+        return list(self._incidence(_IN_INDEX, lambda edge: edge.target).get(node_id, ()))
+
+    def _incidence(self, key: str, endpoint: Callable[[Edge], str]) -> dict[str, list[Edge]]:
+        """Lines grouped by one of their ends, cached like the identifier maps.
+
+        Asking "what reaches this node?" used to walk every line in the factory,
+        and the diagnostics ask it several times per node. Guarded exactly as
+        :func:`_indexed` is, and for the same reasons.
+        """
+        cached = self.__dict__.get(key)
+        if cached is not None and cached[0] is self.edges and cached[1] == len(self.edges):
+            grouped: dict[str, list[Edge]] = cached[2]
+            return grouped
+        fresh: dict[str, list[Edge]] = {}
+        for edge in self.edges:
+            fresh.setdefault(endpoint(edge), []).append(edge)
+        self.__dict__[key] = (self.edges, len(self.edges), fresh)
+        return fresh
 
     def sorted_nodes(self) -> list[Node]:
         return sorted(self.nodes, key=lambda node: node.id)
@@ -279,7 +354,7 @@ class FactoryGraph(BaseModel):
     # ---------------------------------------------------------------- editing
 
     def add_node(self, node: Node) -> Node:
-        if any(existing.id == node.id for existing in self.nodes):
+        if node.id in self._nodes_by_id():
             msg = f"identifiant de noeud en doublon : {node.id}"
             raise GraphError(msg)
         self.nodes.append(node)
@@ -308,7 +383,7 @@ class FactoryGraph(BaseModel):
             transport_class=transport_class,
         )
         check_edge(self, edge, game_data)
-        if any(existing.id == edge.id for existing in self.edges):
+        if edge.id in self._edges_by_id():
             msg = f"identifiant d'arete en doublon : {edge.id}"
             raise GraphError(msg)
         self.edges.append(edge)

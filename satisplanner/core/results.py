@@ -10,7 +10,8 @@ graph was assembled in.
 
 import math
 from enum import StrEnum
-from typing import Final
+from functools import cached_property
+from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -279,19 +280,51 @@ class FactoryReport(_Result):
     shopping_list: ShoppingList = ShoppingList()
     diagnostics: tuple[Diagnostic, ...] = ()
 
+    # ---------------------------------------------------------------- lookups
+    #
+    # A report is read back one identifier at a time, once per node item on the
+    # canvas and once per cell the table paints, which is a great many times for
+    # something that used to walk the whole tuple each call. The two maps below
+    # are built on first use and live for as long as the report does -- a frozen
+    # object cannot change what they index, which is exactly what makes caching
+    # them safe. Copies are the one exception, and :meth:`_copied` handles it.
+
+    @cached_property
+    def _by_node(self) -> dict[str, NodeSolution]:
+        return {solution.node_id: solution for solution in self.nodes}
+
+    @cached_property
+    def _by_edge(self) -> dict[str, EdgeSolution]:
+        return {solution.edge_id: solution for solution in self.edges}
+
     def node(self, node_id: str) -> NodeSolution:
-        for solution in self.nodes:
-            if solution.node_id == node_id:
-                return solution
-        msg = f"aucun resultat pour le noeud {node_id}"
-        raise KeyError(msg)
+        try:
+            return self._by_node[node_id]
+        except KeyError:
+            msg = f"aucun resultat pour le noeud {node_id}"
+            raise KeyError(msg) from None
 
     def edge(self, edge_id: str) -> EdgeSolution:
-        for solution in self.edges:
-            if solution.edge_id == edge_id:
-                return solution
-        msg = f"aucun resultat pour l'arete {edge_id}"
-        raise KeyError(msg)
+        try:
+            return self._by_edge[edge_id]
+        except KeyError:
+            msg = f"aucun resultat pour l'arete {edge_id}"
+            raise KeyError(msg) from None
+
+    def _copied(self, **update: Any) -> "FactoryReport":
+        """A copy with some fields replaced, and **never** a stale index.
+
+        ``model_copy`` carries the whole instance dictionary across, cached
+        properties included, so a copy that replaces ``nodes`` would otherwise
+        keep an index of the solutions it has just thrown away. Rather than
+        remember which copies are safe -- most of them are -- every copy drops
+        both maps and lets them be built again on demand. The rule with no
+        exceptions is the one that cannot be got wrong.
+        """
+        fresh = self.model_copy(update=update)
+        fresh.__dict__.pop("_by_node", None)
+        fresh.__dict__.pop("_by_edge", None)
+        return fresh
 
     def has_errors(self) -> bool:
         return any(item.severity is Severity.ERROR for item in self.diagnostics)
@@ -344,7 +377,17 @@ class FactoryReport(_Result):
         return min(times) if times else None
 
     def with_diagnostics(self, diagnostics: tuple[Diagnostic, ...]) -> "FactoryReport":
-        return self.model_copy(update={"diagnostics": diagnostics})
+        return self._copied(diagnostics=diagnostics)
 
     def with_sustained(self, sustained: "FactoryReport") -> "FactoryReport":
-        return self.model_copy(update={"sustained": sustained})
+        return self._copied(sustained=sustained)
+
+    def with_flows(
+        self, nodes: tuple[NodeSolution, ...], edges: tuple[EdgeSolution, ...]
+    ) -> "FactoryReport":
+        """The same report with its solved figures replaced.
+
+        Used to fold the uncapped companion run in, which is the one copy that
+        really does change what the lookups point at.
+        """
+        return self._copied(nodes=nodes, edges=edges)

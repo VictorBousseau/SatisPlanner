@@ -226,7 +226,13 @@ class RemoveCommand(_DocumentCommand):
 
 
 class MoveNodesCommand(_DocumentCommand):
-    """Move a selection. Positions are part of the document, so moving is undoable."""
+    """Move a selection. Positions are part of the document, so moving is undoable.
+
+    The one command that does **not** call :meth:`_done`. Every other edit changes
+    what the factory produces and has to be answered by a redraw and a resolution;
+    this one changes where a box is drawn. It therefore announces itself on the
+    document's other signal, which moves the items concerned and stops there.
+    """
 
     def __init__(
         self,
@@ -252,7 +258,7 @@ class MoveNodesCommand(_DocumentCommand):
     def _apply(self, positions: dict[str, tuple[float, float]]) -> None:
         for node_id, position in positions.items():
             self.document.graph.node(node_id).position = position
-        self._done()
+        self.document.moved(list(positions))
 
     def redo(self) -> None:
         self._apply(self.after)

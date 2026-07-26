@@ -134,6 +134,65 @@ class Segment:
 
 
 @dataclass(frozen=True)
+class SubtitleLayout:
+    """The subtitle, measured once: where every run sits and how tall the block is.
+
+    Measuring text is the single most expensive thing a node item does, and it
+    used to happen on every layout **and** every paint -- for every node on the
+    canvas, at every change anywhere in the factory. Nothing about it varies
+    between two calls unless the text or the width does, which is exactly what
+    :attr:`segments` and :attr:`width` are kept for: they are the cache key, and
+    they are compared rather than trusted, so a node whose value changed without
+    anybody remembering to say so still measures itself again.
+    """
+
+    segments: tuple[Segment, ...]
+    width: float
+    lines: tuple[tuple[Segment, ...], ...]
+    # Advance of each segment, line by line, in the same shape as ``lines``.
+    advances: tuple[tuple[float, ...], ...]
+
+    @property
+    def height(self) -> float:
+        return len(self.lines) * DETAIL_HEIGHT
+
+
+def measure_subtitle(
+    segments: tuple[Segment, ...], available: float, metrics: QFontMetricsF
+) -> SubtitleLayout:
+    """Break the subtitle into lines that fit, never splitting a run.
+
+    A deposit at 250 % reads "1 Foreuse Mk.3 — gisement normal — cadence 250 %",
+    which is wider than the box; so is a buffer holding heavy oil residue. Those
+    used to be silently clipped, taking the last value off the node with them.
+    Wrapping keeps every value on screen -- and therefore reachable, since a value
+    nobody can see is a value nobody can double-click.
+    """
+    lines: list[list[Segment]] = [[]]
+    advances: list[list[float]] = [[]]
+    used = 0.0
+    for original in segments:
+        segment = original
+        width = metrics.horizontalAdvance(segment.text)
+        if lines[-1] and used + width > available:
+            lines.append([])
+            advances.append([])
+            used = 0.0
+            # A separator at the head of a wrapped line reads as a stray dash.
+            segment = _lstripped(segment)
+            width = metrics.horizontalAdvance(segment.text)
+        lines[-1].append(segment)
+        advances[-1].append(width)
+        used += width
+    return SubtitleLayout(
+        segments=segments,
+        width=available,
+        lines=tuple(tuple(line) for line in lines),
+        advances=tuple(tuple(line) for line in advances),
+    )
+
+
+@dataclass(frozen=True)
 class DeployedLayout:
     """How a bank of ``total`` machines is drawn as thumbnails.
 
@@ -223,6 +282,11 @@ class NodeItem(QGraphicsItem):
         )
         self.setAcceptHoverEvents(True)
         self.setZValue(1.0)
+        # The box is redrawn far more often than it changes: a selection anywhere
+        # on the canvas, a scrollbar, a line moving over it. Kept as a pixmap it
+        # costs a blit instead of a full repaint, and ``update()`` is already
+        # called wherever something really did change.
+        self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
         self.setPos(QPointF(*node.position))
         # What a buffer holds, once the graph can tell. Set by the scene, which is the
         # only place that knows the other lines.
@@ -234,6 +298,11 @@ class NodeItem(QGraphicsItem):
         self._inputs: tuple[str, ...] = ()
         self._outputs: tuple[str, ...] = ()
         self._height = HEADER_HEIGHT
+        # Measured once and re-used until the text or the width changes.
+        self._layout: SubtitleLayout | None = None
+        # Port circles, rebuilt when the rows they sit beside move.
+        self._ports: list[Port] = []
+        self._ports_top: float | None = None
         self.relayout()
 
     # ---------------------------------------------------------------- geometry
@@ -250,6 +319,8 @@ class NodeItem(QGraphicsItem):
             + rows * ROW_HEIGHT
             + BOTTOM_PADDING
         )
+        # The ports belong to the rows, and the rows have just moved.
+        self._ports_top = None
 
     def deployed_units(self) -> float | None:
         """The bank this node stands for, when it is being drawn machine by machine."""
@@ -314,8 +385,16 @@ class NodeItem(QGraphicsItem):
         return QRectF(-margin, -margin, NODE_WIDTH + 2 * margin, self._height + 2 * margin)
 
     def ports(self) -> list[Port]:
-        """Every port, inputs first, in the order they are drawn."""
+        """Every port, inputs first, in the order they are drawn.
+
+        Asked for twice per line on every redraw of the canvas, which is why the
+        list is kept rather than built again each time. It is rebuilt when the
+        rows have moved -- and :meth:`relayout` clears it outright, because a
+        recipe can change the ports without changing where the first one sits.
+        """
         top = self._rows_top() + ROW_HEIGHT / 2
+        if self._ports_top == top:
+            return self._ports
         found = [
             Port(item_class, False, QPointF(0.0, top + index * ROW_HEIGHT))
             for index, item_class in enumerate(self._inputs)
@@ -324,6 +403,7 @@ class NodeItem(QGraphicsItem):
             Port(item_class, True, QPointF(NODE_WIDTH, top + index * ROW_HEIGHT))
             for index, item_class in enumerate(self._outputs)
         )
+        self._ports, self._ports_top = found, top
         return found
 
     def port_at(self, local: QPointF) -> Port | None:
@@ -434,33 +514,30 @@ class NodeItem(QGraphicsItem):
             case OutputNode() as output:
                 return [Segment("rejet assume" if output.is_sink else "sortie de l'usine")]
 
+    def subtitle_layout(self) -> SubtitleLayout:
+        """The measured subtitle, from the cache when the text has not changed.
+
+        The key is the segments themselves, not a flag somebody has to remember to
+        clear: building them is a handful of catalogue lookups, and paying that to
+        be certain the measurement still describes what is written is a far better
+        trade than a cache that can quietly go stale.
+        """
+        segments = tuple(self.subtitle_segments())
+        available = NODE_WIDTH - 16
+        cached = self._layout
+        if cached is not None and cached.width == available and cached.segments == segments:
+            return cached
+        fresh = measure_subtitle(segments, available, QFontMetricsF(self._detail_font()))
+        self._layout = fresh
+        return fresh
+
     def subtitle_lines(self) -> list[list[Segment]]:
         """The subtitle broken into lines that fit across the node.
-
-        A deposit at 250 % reads "1 Foreuse Mk.3 — gisement normal — cadence 250 %",
-        which is wider than the box; so is a buffer holding heavy oil residue. Those
-        used to be silently clipped, taking the last value off the node with them.
-        Wrapping keeps every value on screen -- and therefore reachable, since a
-        value nobody can see is a value nobody can double-click.
 
         Segments are never split: a line break falls between two runs, so a value is
         never cut in half across two lines.
         """
-        metrics = QFontMetricsF(self._detail_font())
-        available = NODE_WIDTH - 16
-        lines: list[list[Segment]] = [[]]
-        used = 0.0
-        for segment in self.subtitle_segments():
-            width = metrics.horizontalAdvance(segment.text)
-            if lines[-1] and used + width > available:
-                lines.append([])
-                used = 0.0
-                # A separator at the head of a wrapped line reads as a stray dash.
-                segment = _lstripped(segment)
-                width = metrics.horizontalAdvance(segment.text)
-            lines[-1].append(segment)
-            used += width
-        return lines
+        return [list(line) for line in self.subtitle_layout().lines]
 
     def field_at(self, local: QPointF) -> Field | None:
         """The editable value under a point, or ``None`` when there is none there.
@@ -472,15 +549,13 @@ class NodeItem(QGraphicsItem):
         band = self._subtitle_rect()
         if not band.contains(local):
             return None
-        metrics = QFontMetricsF(self._detail_font())
+        layout = self.subtitle_layout()
         row = int((local.y() - band.top()) / DETAIL_HEIGHT)
-        lines = self.subtitle_lines()
-        if not 0 <= row < len(lines):
+        if not 0 <= row < len(layout.lines):
             return None
         cursor = band.left()
         found: Field | None = None
-        for segment in lines[row]:
-            width = metrics.horizontalAdvance(segment.text)
+        for segment, width in zip(layout.lines[row], layout.advances[row], strict=True):
             if segment.field is not None:
                 found = segment.field
             if local.x() <= cursor + width:
@@ -496,19 +571,18 @@ class NodeItem(QGraphicsItem):
         would make ``field_at`` disagree with itself -- the centre of a padded "1"
         lands on the extractor name beside it.
         """
-        metrics = QFontMetricsF(self._detail_font())
+        layout = self.subtitle_layout()
         band = self._subtitle_rect()
-        for row, line in enumerate(self.subtitle_lines()):
+        for row, line in enumerate(layout.lines):
             cursor = band.left()
-            for segment in line:
-                width = metrics.horizontalAdvance(segment.text)
+            for segment, width in zip(line, layout.advances[row], strict=True):
                 if segment.field is field:
                     return QRectF(cursor, band.top() + row * DETAIL_HEIGHT, width, DETAIL_HEIGHT)
                 cursor += width
         return band
 
     def _subtitle_height(self) -> float:
-        return len(self.subtitle_lines()) * DETAIL_HEIGHT
+        return self.subtitle_layout().height
 
     def _subtitle_rect(self) -> QRectF:
         return QRectF(8, HEADER_HEIGHT - 16, NODE_WIDTH - 16, self._subtitle_height())
@@ -608,7 +682,7 @@ class NodeItem(QGraphicsItem):
         painter.setFont(self._detail_font())
         painter.setPen(QColor(theme.TEXT_MUTED))
         band = self._subtitle_rect()
-        for row, line in enumerate(self.subtitle_lines()):
+        for row, line in enumerate(self.subtitle_layout().lines):
             painter.drawText(
                 QRectF(band.left(), band.top() + row * DETAIL_HEIGHT, band.width(), DETAIL_HEIGHT),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -826,6 +900,8 @@ class EdgeItem(QGraphicsPathItem):
             | QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges
         )
         self.setAcceptHoverEvents(True)
+        self._start = QPointF()
+        self._end = QPointF()
         self._restyle()
 
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value: object) -> object:
@@ -839,6 +915,15 @@ class EdgeItem(QGraphicsPathItem):
         return super().itemChange(change, value)
 
     def set_ends(self, start: QPointF, end: QPointF) -> None:
+        """Re-anchor the curve, unless it is already anchored exactly there.
+
+        Every redraw of the canvas re-anchors every line, and on a factory where
+        one node changed that is several hundred identical curves rebuilt and
+        several hundred regions marked for repainting. Comparing two points first
+        is cheaper than either.
+        """
+        if self._start == start and self._end == end:
+            return
         self._start, self._end = start, end
         self.setPath(curve(start, end))
 

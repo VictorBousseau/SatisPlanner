@@ -18,6 +18,8 @@ from typing import Any, Final, TypeGuard
 
 from PySide6.QtCore import (
     QAbstractTableModel,
+    QItemSelection,
+    QItemSelectionModel,
     QModelIndex,
     QObject,
     QPersistentModelIndex,
@@ -147,6 +149,9 @@ class NodeTableModel(QAbstractTableModel):
         super().__init__(parent)
         self.document = document
         self._rows: list[str] = []
+        self._row_of: dict[str, int] = {}
+        # Deliberately **not** connected to ``nodesMoved``: this table shows no
+        # position and has nothing to say about one.
         document.graphChanged.connect(self.refresh)
         document.reportChanged.connect(lambda _report: self.refresh())
         self.refresh()
@@ -154,9 +159,26 @@ class NodeTableModel(QAbstractTableModel):
     # -------------------------------------------------------------- structure
 
     def refresh(self) -> None:
-        """Rebuild the row list. A factory has hundreds of nodes at most."""
+        """Say what changed, in the cheapest way that is still true.
+
+        Almost every refresh follows a fresh report on the same factory: the
+        figures in the cells are different and the rows are exactly the same ones,
+        in the same order. ``beginResetModel`` announces something far stronger --
+        "forget everything you knew" -- and makes the proxy re-filter and re-sort
+        the whole table, the view drop its selection, and the scroll position jump.
+        ``dataChanged`` says what actually happened.
+
+        A reset is still the right answer when a node really has appeared or gone,
+        because then the rows the view holds no longer mean what they meant.
+        """
+        rows = [node.id for node in self.document.graph.sorted_nodes()]
+        if rows == self._rows:
+            if rows:
+                self.dataChanged.emit(self.index(0, 0), self.index(len(rows) - 1, len(HEADERS) - 1))
+            return
         self.beginResetModel()
-        self._rows = [node.id for node in self.document.graph.sorted_nodes()]
+        self._rows = rows
+        self._row_of = {node_id: row for row, node_id in enumerate(rows)}
         self.endResetModel()
 
     def rowCount(self, parent: Index = QModelIndex()) -> int:  # noqa: B008
@@ -179,10 +201,7 @@ class NodeTableModel(QAbstractTableModel):
         return self._rows[row] if 0 <= row < len(self._rows) else None
 
     def row_of(self, node_id: str) -> int | None:
-        try:
-            return self._rows.index(node_id)
-        except ValueError:
-            return None
+        return self._row_of.get(node_id)
 
     # ------------------------------------------------------------------ data
 
@@ -490,18 +509,33 @@ class NodeTablePanel(QWidget):
         self.selectionChangedTo.emit(self.selected_node_ids())
 
     def show_selection(self, node_ids: Sequence[str]) -> None:
-        """Mirror the canvas selection, without echoing it straight back."""
+        """Mirror the canvas selection, without echoing it straight back.
+
+        Asked directly of the model rather than by walking every row looking for a
+        match: clicking one node on a five-hundred node canvas used to sweep the
+        whole table twice over, once through the sort proxy and once per row.
+        """
         self._syncing = True
         try:
             selection = self.view.selectionModel()
             selection.clearSelection()
-            wanted = set(node_ids)
-            for row in range(self.proxy.rowCount()):
-                source = self.proxy.mapToSource(self.proxy.index(row, 0))
-                if self.model.node_id_at(source.row()) in wanted:
-                    self.view.selectRow(row)
-            if node_ids:
-                self.view.scrollTo(self._first_visible(node_ids[0]))
+            wanted = QItemSelection()
+            last_column = self.proxy.columnCount() - 1
+            first: QModelIndex | None = None
+            for node_id in node_ids:
+                index = self._first_visible(node_id)
+                if not index.isValid():
+                    continue  # filtered out of the table: nothing to select
+                wanted.select(index, self.proxy.index(index.row(), last_column))
+                first = first or index
+            if not wanted.isEmpty():
+                selection.select(
+                    wanted,
+                    QItemSelectionModel.SelectionFlag.Select
+                    | QItemSelectionModel.SelectionFlag.Rows,
+                )
+            if first is not None:
+                self.view.scrollTo(first)
         finally:
             self._syncing = False
 

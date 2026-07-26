@@ -140,6 +140,7 @@ class FactoryScene(QGraphicsScene):
         self._deployed_ceiling = DEFAULT_DEPLOYED_CEILING
 
         document.graphChanged.connect(self.rebuild)
+        document.nodesMoved.connect(self.apply_positions)
         document.reportChanged.connect(self.apply_report)
         self.selectionChanged.connect(self._announce_selection)
         self.rebuild()
@@ -165,7 +166,12 @@ class FactoryScene(QGraphicsScene):
             item.deployed = self._deployed if node.show_deployed is None else node.show_deployed
             item.deployed_ceiling = self._deployed_ceiling
             item.relayout()
-            item.setPos(QPointF(*node.position))
+            # Only when it really moved: ``setPos`` on an unchanged position still
+            # marks the item dirty, and a rebuild would repaint the whole canvas
+            # because one machine count changed on one node.
+            wanted = QPointF(*node.position)
+            if item.pos() != wanted:
+                item.setPos(wanted)
 
         wanted_edges = {edge.id for edge in graph.edges}
         for edge_id in set(self.edges) - wanted_edges:
@@ -180,6 +186,20 @@ class FactoryScene(QGraphicsScene):
         report = self.document.report
         if report is not None:
             self.apply_report(report)
+
+    def apply_positions(self, node_ids: Sequence[str]) -> None:
+        """Put the nodes that moved where the graph now says they are.
+
+        This is the whole of what a move costs: these items and the lines hanging
+        off them. Nothing is rebuilt, nothing is solved, and the table is not even
+        told -- it shows no position and has nothing to say about one.
+        """
+        for node_id in node_ids:
+            item = self.nodes.get(node_id)
+            if item is None:
+                continue
+            item.setPos(QPointF(*self.document.graph.node(node_id).position))
+            self.refresh_edges_of(node_id)
 
     def set_icons(self, icons: IconProvider) -> None:
         """Adopt a new icon source, after the preferences pointed somewhere else.
@@ -203,6 +223,7 @@ class FactoryScene(QGraphicsScene):
         scenes does.
         """
         self.document.graphChanged.disconnect(self.rebuild)
+        self.document.nodesMoved.disconnect(self.apply_positions)
         self.document.reportChanged.disconnect(self.apply_report)
         self._band = None
         self._band_origin = None
@@ -986,6 +1007,9 @@ class FactoryView(QGraphicsView):
         self.inline = InlineEditor(scene.document, scene.selectionSummaryChanged.emit)
         scene.inlineEditRequested.connect(self.open_inline_editor)
         scene.document.graphChanged.connect(self.inline.close)
+        # A move too: the value being edited has just slid out from under the box
+        # that was editing it.
+        scene.document.nodesMoved.connect(lambda _ids: self.inline.close())
 
     def open_inline_editor(self, target: str, field: Field, scene_rect: QRectF) -> bool:
         """Put an editor over the value that was double-clicked."""

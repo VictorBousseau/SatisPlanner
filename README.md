@@ -148,6 +148,10 @@ Une usine s'enregistre en `.sfp` : une archive ZIP contenant `factory.json`, un 
 (version de l'application, version des données de jeu, date, version de schéma) et une vignette
 `thumbnail.png`.
 
+Le format est décrit champ par champ dans [`docs/format-usine.md`](docs/format-usine.md), avec un
+exemple complet et fonctionnel — [`docs/exemple-usine.json`](docs/exemple-usine.json), couvrant les
+sept types de nœuds — que la suite de tests charge, pour qu'il ne puisse pas se périmer en silence.
+
 Le même graphe se partage en une ligne de texte, `SFP1:<base64url(zlib(json))>`, avec « copier le
 code » et « importer depuis un code ». Un code tronqué, corrompu, mal collé ou venu d'une version
 future est refusé par une phrase en français — jamais par une trace d'exécution.
@@ -315,6 +319,29 @@ Un `solve()` enchaîne en réalité plusieurs points fixes : la réponse, sa **j
 ligne** — qui donne le débit qu'une ligne *voudrait* porter, et donc le tier à installer — et,
 quand un tampon se vide, la même paire résolue une seconde fois avec les tampons ne fournissant
 rien. C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
+
+Les deux sont **conditionnels**. La jumelle n'est calculée que si un plafond de transport a
+réellement changé ce qui a été livré quelque part : un gisement surdimensionné dont l'offre est
+rognée par la courroie alors que la machine en aval reçoit malgré tout tout ce qu'elle peut avaler
+ne coûte rien de plus. Et la seconde paire n'existe que si un tampon se vide. Une usine bien
+dimensionnée n'est donc résolue qu'**une seule fois**.
+
+## Performance
+
+```bash
+.venv/Scripts/python.exe tools/benchmark.py
+.venv/Scripts/python.exe tools/benchmark.py --profile 500
+```
+
+mesure trois gestes — une résolution complète, une édition qui change les chiffres jusqu'à
+l'affichage à jour, un déplacement de nœud — sur des usines générées de 50, 200 et 500 nœuds
+(`tests/benchmark_graphs.py`, déterministe et versionné). `tests/test_performance.py` en tire des
+seuils, et surtout des règles qui ne dépendent d'aucune machine : **un déplacement ne déclenche
+jamais de résolution**, un rapport aux mêmes nœuds ne réinitialise jamais le tableau.
+
+Une position est portée par un signal distinct de celui qui annonce un changement de *forme*
+(`nodesMoved` contre `graphChanged`) : ranger son usine ne fait tourner ni le moteur, ni la
+reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement reste annulable.
 
 ## Décisions de conception
 

@@ -1,0 +1,140 @@
+{
+  "schema_version": 4,
+  "nodes": [
+    {
+      "kind": "resource",
+      "id": "gisement1",
+      "label": "Gisement de fer nord",
+      "position": [
+        -640.0,
+        -160.0
+      ],
+      "item_class": "Desc_OreIron_C",
+      "extractor_class": "Build_MinerMk2_C",
+      "purity": "pure",
+      "count": 1.0,
+      "clock_speed": 1.0
+    },
+    {
+      "kind": "water_extractor",
+      "id": "pompe1",
+      "position": [
+        -640.0,
+        240.0
+      ],
+      "extractor_class": "Build_WaterPump_C",
+      "count": 1.0,
+      "clock_speed": 0.75
+    },
+    {
+      "kind": "external_source",
+      "id": "entree1",
+      "label": "Charbon importe",
+      "position": [
+        -640.0,
+        560.0
+      ],
+      "item_class": "Desc_Coal_C",
+      "rate_per_minute": 30.0
+    },
+    {
+      "kind": "machine",
+      "id": "machine1",
+      "position": [
+        -240.0,
+        -160.0
+      ],
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 8.0,
+      "clock_speed": 1.0
+    },
+    {
+      "kind": "generator",
+      "id": "generateur1",
+      "position": [
+        -240.0,
+        400.0
+      ],
+      "generator_class": "Build_GeneratorCoal_C",
+      "fuel_class": "Desc_Coal_C",
+      "count": 2.0,
+      "show_deployed": true
+    },
+    {
+      "kind": "storage",
+      "id": "tampon1",
+      "position": [
+        160.0,
+        160.0
+      ],
+      "storage_class": "Build_StorageContainerMk2_C",
+      "item_class": "Desc_IronIngot_C",
+      "initial_content": 0.0
+    },
+    {
+      "kind": "output",
+      "id": "sortie1",
+      "position": [
+        560.0,
+        -160.0
+      ],
+      "item_class": "Desc_IronIngot_C",
+      "is_sink": false
+    },
+    {
+      "kind": "output",
+      "id": "rejet1",
+      "label": "Lingots envoyes au collecteur",
+      "position": [
+        160.0,
+        -400.0
+      ],
+      "item_class": "Desc_IronIngot_C",
+      "is_sink": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "gisement1",
+      "target": "machine1",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e2",
+      "source": "machine1",
+      "target": "sortie1",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e3",
+      "source": "machine1",
+      "target": "tampon1",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e4",
+      "source": "machine1",
+      "target": "rejet1",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e5",
+      "source": "entree1",
+      "target": "generateur1",
+      "item_class": "Desc_Coal_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e6",
+      "source": "pompe1",
+      "target": "generateur1",
+      "item_class": "Desc_Water_C",
+      "transport_class": "Build_Pipeline_C"
+    }
+  ]
+}

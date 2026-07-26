@@ -446,3 +446,22 @@ def test_the_error_message_never_leaks_a_stack_trace(looping_factory: FactoryGra
     assert "Traceback" not in message
     assert "Error" not in message
     assert message.endswith(".")
+
+
+def test_the_documented_example_is_still_a_valid_factory(game_data: GameData) -> None:
+    """``docs/exemple-usine.json`` is the format's reference, so it must load.
+
+    A hand-written example that quietly stops matching the schema is worse than no
+    example at all -- somebody will copy it. This is six lines to make sure the
+    document in ``docs/format-usine.md`` describes the application that exists.
+    """
+    from satisplanner.core import engine
+
+    path = Path(__file__).resolve().parent.parent / "docs" / "exemple-usine.json"
+    graph = FactoryGraph.model_validate_json(path.read_text(encoding="utf-8"))
+
+    assert graph.schema_version == SCHEMA_VERSION
+    assert len({node.kind for node in graph.nodes}) == 7, "les sept types doivent y etre"
+    report = engine.solve(graph, game_data)
+    assert report.converged
+    assert not report.has_errors(), "l'exemple de reference ne doit rien avoir de casse"

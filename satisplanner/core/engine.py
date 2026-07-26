@@ -197,25 +197,46 @@ class _Solver:
         self.options = options or SolveOptions()
         self.states: dict[str, _NodeState] = {}
         self.flows: dict[str, float] = {edge.id: 0.0 for edge in graph.edges}
+        # Everything below is settled before the first iteration and never changes
+        # again during this solve. Recomputing any of it per round -- sorting the
+        # edges, grouping them by item, asking the graph which lines reach a buffer
+        # -- was pure repetition: the topology cannot move while the fixed point is
+        # being found, because the fixed point is about flows and not about shape.
+        self._sorted_nodes = graph.sorted_nodes()
+        self._sorted_edges = graph.sorted_edges()
         self.out_edges: dict[str, list[Edge]] = {node.id: [] for node in graph.nodes}
         self.in_edges: dict[str, list[Edge]] = {node.id: [] for node in graph.nodes}
-        for edge in graph.sorted_edges():
+        for edge in self._sorted_edges:
             self.out_edges[edge.source].append(edge)
             self.in_edges[edge.target].append(edge)
+        self._edges_by_item: dict[str, list[Edge]] = {}
+        for edge in self._sorted_edges:
+            self._edges_by_item.setdefault(edge.item_class, []).append(edge)
+        self._items_in_order = sorted(self._edges_by_item)
+        self._storage_items: dict[str, str | None] = {
+            node.id: storage_item(node, graph)
+            for node in self._sorted_nodes
+            if isinstance(node, StorageNode)
+        }
         self.limits: dict[str, float] = {
             edge.id: self._capacity(edge) if self.options.enforce_line_capacity else math.inf
             for edge in graph.edges
         }
         self.converged = False
         self.iterations = 0
+        # True as soon as one line has refused to carry what was offered to it. It
+        # is what says whether the uncapped companion run would answer anything
+        # different from this one -- see :func:`_solve_pair`.
+        self.line_bound = False
         # Per item, what each producer still had on offer after the last allocation.
         self.leftovers: dict[str, dict[str, float]] = {}
+        self._states_in_order: list[_NodeState] = []
         self._prepare()
 
     # ------------------------------------------------------------------ setup
 
     def _prepare(self) -> None:
-        for node in self.graph.sorted_nodes():
+        for node in self._sorted_nodes:
             state = _NodeState(node=node)
             state.nominal_out = self._nominal_out(node)
             state.nominal_in = self._nominal_in(node)
@@ -225,6 +246,8 @@ class _Solver:
             state.ratio_in = dict.fromkeys(state.nominal_in, 1.0)
             state.ratio_out = dict.fromkeys(state.nominal_out, 1.0)
             self.states[node.id] = state
+        # ``_sorted_nodes`` is already in identifier order, so this list is too.
+        self._states_in_order = [self.states[node.id] for node in self._sorted_nodes]
 
     def _nominal_out(self, node: Node) -> dict[str, float]:
         """Production at full speed, per item and per minute.
@@ -258,7 +281,7 @@ class _Solver:
             case StorageNode():
                 # Filled in at every iteration: a buffer hands downstream what it
                 # asks for, drawing on its stock if its own intake is not enough.
-                item = storage_item(node, self.graph)
+                item = self._storage_items[node.id]
                 return {item: 0.0} if item else {}
             case OutputNode():
                 return {}
@@ -275,7 +298,7 @@ class _Solver:
                 return generator_input_rates(node, self.game_data)
             case StorageNode() | OutputNode():
                 item = (
-                    storage_item(node, self.graph)
+                    self._storage_items[node.id]
                     if isinstance(node, StorageNode)
                     else node.item_class
                 )
@@ -301,16 +324,35 @@ class _Solver:
 
     def run(self) -> FactoryReport:
         """Iterate to the fixed point, then assemble the report."""
-        # Computed for the diagnostics and to keep the decomposition honest even
-        # though the iteration itself is global: a cycle-free graph converges in as
-        # many rounds as it has layers.
-        components = condensation_order(self.graph)
-        logger.debug(
-            "%d noeud(s), %d composante(s) dont %d cyclique(s)",
-            len(self.graph.nodes),
-            len(components),
-            sum(1 for component in components if len(component) > 1),
-        )
+        self.iterate()
+        return self._report()
+
+    def edge_rates(self) -> dict[str, float]:
+        """What each line carries, without assembling a report around it.
+
+        The companion run is read for exactly this and nothing else -- no node
+        solutions, no shopping list, no power -- so building the rest of a report
+        for it was a third of the run spent on figures nobody would ever look at.
+        Rounded here the way :meth:`_report` rounds, so the two agree to the digit.
+        """
+        return {edge.id: round(self.flows[edge.id], 9) for edge in self._sorted_edges}
+
+    def iterate(self) -> None:
+        """Descend to the fixed point. Leaves the answer in the solver's state."""
+        # The decomposition says nothing the iteration uses -- that is global, and
+        # deliberately so -- and exists purely to describe the graph in the log. It
+        # is Tarjan over every node and every edge, four times per solve, which on a
+        # five-hundred node factory was a fifth of the whole calculation spent
+        # writing a sentence nobody was reading. It is now computed only when
+        # somebody has actually asked for debug output.
+        if logger.isEnabledFor(logging.DEBUG):
+            components = condensation_order(self.graph)
+            logger.debug(
+                "%d noeud(s), %d composante(s) dont %d cyclique(s)",
+                len(self.graph.nodes),
+                len(components),
+                sum(1 for component in components if len(component) > 1),
+            )
 
         for iteration in range(1, constants.MAX_ITERATIONS + 1):
             self.iterations = iteration
@@ -322,8 +364,6 @@ class _Solver:
             logger.warning(
                 "point fixe non convergent apres %d iterations", constants.MAX_ITERATIONS
             )
-
-        return self._report()
 
     def _step(self, *, damped: bool) -> float:
         """One Jacobi sweep. Returns the largest ratio change of the round."""
@@ -350,7 +390,7 @@ class _Solver:
         for state in self._sorted_states():
             if not isinstance(state.node, StorageNode):
                 continue
-            item = storage_item(state.node, self.graph)
+            item = self._storage_items[state.node.id]
             if item is None:
                 state.nominal_out = {}
                 continue
@@ -372,11 +412,15 @@ class _Solver:
         """Per item: what each producer can send, and what each consumer can take."""
         supplies: dict[str, dict[str, float]] = {}
         caps: dict[str, dict[str, float]] = {}
+        # The states are walked in identifier order, which is what decides the
+        # order of every producer list here. Sorting one node's own items on top
+        # of that decided nothing: the allocation walks items in its own sorted
+        # order and re-sorts producers and consumers before it adds anything up.
         for state in self._sorted_states():
             offered = state.input_ratio()
-            for item, nominal in sorted(state.nominal_out.items()):
+            for item, nominal in state.nominal_out.items():
                 supplies.setdefault(item, {})[state.node.id] = nominal * offered
-            for item, nominal in sorted(state.nominal_in.items()):
+            for item, nominal in state.nominal_in.items():
                 if state.absorbs_without_limit:
                     caps.setdefault(item, {})[state.node.id] = math.inf
                 else:
@@ -389,17 +433,15 @@ class _Solver:
         caps: Mapping[str, Mapping[str, float]],
     ) -> dict[str, float]:
         flows = {edge.id: 0.0 for edge in self.graph.edges}
-        by_item: dict[str, list[Edge]] = {}
-        for edge in self.graph.sorted_edges():
-            by_item.setdefault(edge.item_class, []).append(edge)
-
         self.leftovers = {}
-        for item in sorted(by_item):
+        for item in self._items_in_order:
+            item_edges = self._edges_by_item[item]
             item_supplies = supplies.get(item, {})
-            item_flows = allocate(item_supplies, caps.get(item, {}), by_item[item], self.limits)
+            item_flows, bound = allocate(item_supplies, caps.get(item, {}), item_edges, self.limits)
+            self.line_bound = self.line_bound or bound
             flows.update(item_flows)
             sent: dict[str, float] = {}
-            for edge in by_item[item]:
+            for edge in item_edges:
                 sent[edge.source] = sent.get(edge.source, 0.0) + item_flows[edge.id]
             self.leftovers[item] = {
                 producer: max(available - sent.get(producer, 0.0), 0.0)
@@ -429,14 +471,16 @@ class _Solver:
     def _update_ratios(self, *, damped: bool) -> float:
         """Recompute every satisfaction and absorption ratio; return the residual."""
         residual = 0.0
+        # No sort: this loop takes a maximum and writes each ratio into a slot of
+        # its own, and neither depends on the order the items come in.
         for state in self._sorted_states():
-            for item, nominal in sorted(state.nominal_in.items()):
+            for item, nominal in state.nominal_in.items():
                 if not math.isfinite(nominal) or nominal <= FLOW_EPSILON:
                     fresh = 1.0  # nothing required: no constraint
                 else:
                     fresh = min(1.0, state.inflow.get(item, 0.0) / nominal)
                 residual = max(residual, self._blend(state.ratio_in, item, fresh, damped=damped))
-            for item, nominal in sorted(state.nominal_out.items()):
+            for item, nominal in state.nominal_out.items():
                 if nominal <= FLOW_EPSILON:
                     fresh = 1.0
                 else:
@@ -452,7 +496,8 @@ class _Solver:
         return abs(updated - previous)
 
     def _sorted_states(self) -> list[_NodeState]:
-        return [self.states[node_id] for node_id in sorted(self.states)]
+        """Every state in identifier order. Settled once: no state is ever added."""
+        return self._states_in_order
 
     # ----------------------------------------------------------------- report
 
@@ -576,7 +621,7 @@ class _Solver:
     def _buffer_solution(self, state: _NodeState) -> BufferSolution:
         node = state.node
         assert isinstance(node, StorageNode)
-        item_class = storage_item(node, self.graph)
+        item_class = self._storage_items[node.id]
         inflow = sum(state.inflow.values())
         outflow = sum(state.outflow.values())
         net = inflow - outflow
@@ -766,7 +811,7 @@ def allocate(
     caps: Mapping[str, float],
     edges: Sequence[Edge],
     limits: Mapping[str, float] | None = None,
-) -> dict[str, float]:
+) -> tuple[dict[str, float], bool]:
     """Share each producer's output between the consumers it is wired to.
 
     The rule is **max-min fairness**, which is what the game's own splitter does: it
@@ -783,10 +828,15 @@ def allocate(
 
     ``limits`` caps each line by its transport tier. Deterministic: producers,
     consumers and edges are all walked in sorted order.
+
+    Returns the flows and **whether a line ever bound** -- whether a share was
+    clipped by a transport ceiling. That second value is what lets the caller skip
+    the uncapped companion run: if no ceiling was ever reached, taking the
+    ceilings away could not have changed a single figure.
     """
     flows = {edge.id: 0.0 for edge in edges}
     if not edges:
-        return flows
+        return flows, False
 
     ordered = sorted(edges, key=lambda edge: edge.id)
     remaining_supply = {node_id: max(supplies.get(node_id, 0.0), 0.0) for node_id in supplies}
@@ -796,14 +846,14 @@ def allocate(
     finite = {node: cap for node, cap in caps.items() if math.isfinite(cap)}
     unlimited = sorted(node for node, cap in caps.items() if not math.isfinite(cap))
 
-    _water_fill(flows, ordered, remaining_supply, dict(finite), remaining_line)
+    bound = _water_fill(flows, ordered, remaining_supply, dict(finite), remaining_line)
     if unlimited:
         # Second pass: the leftovers go to the unlimited absorbers.
         leftovers = {
             node_id: value for node_id, value in remaining_supply.items() if value > FLOW_EPSILON
         }
         sink_edges = [edge for edge in ordered if edge.target in set(unlimited)]
-        _water_fill(
+        bound |= _water_fill(
             flows,
             sink_edges,
             leftovers,
@@ -813,7 +863,7 @@ def allocate(
         )
         for node_id, value in leftovers.items():
             remaining_supply[node_id] = value
-    return flows
+    return flows, bound
 
 
 def _water_fill(
@@ -824,32 +874,61 @@ def _water_fill(
     remaining_line: dict[str, float],
     *,
     unlimited_caps: bool = False,
-) -> None:
-    """Move as much as possible from supplies to caps, redistributing what bounces."""
+) -> bool:
+    """Move as much as possible from supplies to caps, redistributing what bounces.
+
+    Returns whether a transport ceiling ever changed what got delivered.
+
+    That is a narrower question than "was an offer ever clipped", and the
+    difference is the ordinary case of an over-sized deposit. A Mk.3 miner on a
+    pure node at 250 % puts 3 600 ore a minute on a belt that carries 270, feeding
+    a smelter that wants 120: the offer is clipped, and the smelter still receives
+    its 120, exactly as it would down an infinite belt. Counting that as a binding
+    line would mean re-solving the whole factory to discover nothing had changed,
+    on the most common layout there is.
+
+    A clip is therefore only reported when it can have changed a figure: when the
+    line ran out of room while there was still material and somewhere to put it,
+    or when the consumer at the far end could have taken more than the clipped
+    offer -- including any consumer sharing its intake with another line, where
+    clipping one offer changes how the others are scaled.
+    """
+    bound = False
     for _ in range(MAX_ALLOCATION_ROUNDS):
-        active = [
-            edge
-            for edge in edges
-            if remaining_supply.get(edge.source, 0.0) > FLOW_EPSILON
-            and (unlimited_caps or remaining_cap.get(edge.target, 0.0) > FLOW_EPSILON)
-            and remaining_line[edge.id] > FLOW_EPSILON
-        ]
+        active = []
+        for edge in edges:
+            if remaining_supply.get(edge.source, 0.0) <= FLOW_EPSILON or (
+                not unlimited_caps and remaining_cap.get(edge.target, 0.0) <= FLOW_EPSILON
+            ):
+                continue
+            if remaining_line[edge.id] <= FLOW_EPSILON:
+                # There is material and room for it, and the line is full: that is
+                # the ceiling binding, in its most visible form.
+                bound = True
+                continue
+            active.append(edge)
         if not active:
-            return
+            return bound
 
         # Step 1: each producer offers an equal share per line, never more than the
         # line can still carry. What a share does not use comes back next round.
         offers: dict[str, float] = {}
+        clipped: set[str] = set()
         by_source: dict[str, list[Edge]] = {}
         for edge in active:
             by_source.setdefault(edge.source, []).append(edge)
         for source, group in sorted(by_source.items()):
             share = remaining_supply[source] / len(group)
             for edge in group:
-                offers[edge.id] = min(share, remaining_line[edge.id])
+                ceiling = remaining_line[edge.id]
+                if ceiling < share - FLOW_EPSILON:
+                    clipped.add(edge.id)
+                offers[edge.id] = min(share, ceiling)
 
         # Step 2: each consumer accepts what it can, scaling every offer alike.
         moved = 0.0
+        # Clips that provably delivered the same as an infinite line would have.
+        harmless: set[str] = set()
         by_target: dict[str, list[Edge]] = {}
         for edge in active:
             if offers.get(edge.id, 0.0) > FLOW_EPSILON:
@@ -860,6 +939,14 @@ def _water_fill(
                 continue
             capacity = remaining_cap.get(target, 0.0)
             factor = 1.0 if unlimited_caps else min(1.0, capacity / offered)
+            if (
+                len(group) == 1
+                and not unlimited_caps
+                and capacity <= offers[group[0].id] + FLOW_EPSILON
+            ):
+                # One line into this consumer, and it is the consumer's appetite
+                # that runs out first: it takes all it can hold either way.
+                harmless.add(group[0].id)
             for edge in group:
                 accepted = offers[edge.id] * factor
                 if accepted <= 0:
@@ -870,8 +957,12 @@ def _water_fill(
                 if not unlimited_caps:
                     remaining_cap[target] -= accepted
                 moved += accepted
+        # Anything clipped and not shown harmless -- including an offer too small
+        # to have reached step 2 at all -- has to be assumed to have mattered.
+        bound = bound or bool(clipped - harmless)
         if moved <= FLOW_EPSILON:
-            return
+            return bound
+    return bound
 
 
 def _clean(values: Mapping[str, float]) -> dict[str, float]:
@@ -898,16 +989,32 @@ def solve(graph: FactoryGraph, game_data: GameData) -> FactoryReport:
 
 
 def _solve_pair(graph: FactoryGraph, game_data: GameData, *, buffers_supply: bool) -> FactoryReport:
-    """One diagnosed answer, plus the uncapped companion its line findings need."""
-    uncapped = _Solver(
-        graph,
-        game_data,
-        SolveOptions(enforce_line_capacity=False, buffers_supply=buffers_supply),
-    ).run()
-    report = _with_desired_rates(
-        _Solver(graph, game_data, SolveOptions(buffers_supply=buffers_supply)).run(),
-        {solution.edge_id: solution.rate_per_minute for solution in uncapped.edges},
-    )
+    """One diagnosed answer, plus the uncapped companion its line findings need.
+
+    The companion answers "what would this line carry if it were big enough?", and
+    on a factory where no line is too small the answer is "exactly what it already
+    carries". That is not a guess: the solver reports whether a transport ceiling
+    ever got in the way of an allocation, and if none ever did, the two runs would
+    have executed identically instruction for instruction -- the ceilings are the
+    only thing that differs between them. So the capped run goes first now, and the
+    companion is paid for only when the answer can actually differ.
+
+    Every figure is the same either way. What changes is that a well-sized factory
+    stops paying for a second fixed point to be told what it already knew.
+    """
+    solver = _Solver(graph, game_data, SolveOptions(buffers_supply=buffers_supply))
+    capped = solver.run()
+    if solver.line_bound:
+        companion = _Solver(
+            graph,
+            game_data,
+            SolveOptions(enforce_line_capacity=False, buffers_supply=buffers_supply),
+        )
+        companion.iterate()
+        desired = companion.edge_rates()
+    else:
+        desired = {solution.edge_id: solution.rate_per_minute for solution in capped.edges}
+    report = _with_desired_rates(capped, desired)
     return report.with_diagnostics(tuple(validation.diagnose(graph, game_data, report)))
 
 
@@ -935,7 +1042,7 @@ def _with_desired_rates(report: FactoryReport, desired: Mapping[str, float]) -> 
         _with_line_limits(solution, sorted(starving.get(solution.node_id, set())))
         for solution in report.nodes
     )
-    return report.model_copy(update={"edges": edges, "nodes": nodes})
+    return report.with_flows(nodes, edges)
 
 
 def _with_line_limits(solution: NodeSolution, saturated: Sequence[str]) -> NodeSolution:

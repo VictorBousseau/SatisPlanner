@@ -53,7 +53,14 @@ UNTITLED: Final = "Usine sans titre"
 class FactoryDocument(QObject):
     """One factory being edited."""
 
+    # The graph changed **shape**: a node or a line was added, removed or given a
+    # different value. Everything has to be looked at again, the engine included.
     graphChanged = Signal()
+    # The graph changed **place** and nothing else, carrying the identifiers that
+    # moved. A position is part of the document and a move is undoable like any
+    # other edit, but it changes no rate whatsoever, so it must not be allowed to
+    # cost a resolution: the items concerned move, and that is the entire job.
+    nodesMoved = Signal(list)
     reportChanged = Signal(FactoryReport)
     # Emitted whenever the window title should change: a new file, or the first edit
     # after a save.
@@ -192,6 +199,17 @@ class FactoryDocument(QObject):
         """
         self.graphChanged.emit()
         self._timer.start()
+
+    def moved(self, node_ids: Sequence[str]) -> None:
+        """Declare that nodes changed place, and only that.
+
+        The counterpart to :meth:`touch` for the one edit that cannot change a
+        number. No timer is started, because there is nothing to recompute: a
+        factory does not produce differently for having been tidied up. The
+        document still becomes modified, but that is read off the undo stack and
+        needs no signal of its own.
+        """
+        self.nodesMoved.emit(list(node_ids))
 
     def solve_now(self) -> FactoryReport:
         """Run the engine immediately and return the report."""
