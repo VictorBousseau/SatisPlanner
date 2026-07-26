@@ -133,6 +133,10 @@ KEEP: Final[frozenset[str]] = frozenset(
         "Build_PipelineJunction_Cross_C",
         "Build_ConveyorAttachmentSplitterSmart_C",
         "Build_ConveyorAttachmentMergerPriority_C",
+        # -- overclocking: the shard that raises a clock ceiling, and the Somersloop
+        # kept alongside it to prove the production-boost kind stays out of scope
+        "Desc_CrystalShard_C",
+        "Desc_WAT1_C",
         # -- storage
         "Build_StorageContainerMk1_C",
         "Build_StorageContainerMk2_C",

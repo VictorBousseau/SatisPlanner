@@ -35,6 +35,7 @@ from satisplanner.core.models import (
     Item,
     ItemForm,
     Pipe,
+    PowerShard,
     Recipe,
     RecipeSlot,
     Storage,
@@ -276,6 +277,11 @@ ATTACHMENT_NATIVE_CLASSES: Final[tuple[str, ...]] = (
     "FGBuildablePipelineJunction",
 )
 
+# `mPowerShardType` of the shard that raises a clock ceiling. The other value the
+# game uses on that field, PST_ProductionBoost, is the Somersloop: a different
+# formula and V2 work, so it is filtered out here rather than in the engine.
+OVERCLOCK_SHARD_TYPE: Final = "PST_Overclock"
+
 _BELT_TIER_RE: Final = re.compile(r"ConveyorBeltMk(\d)_C$")
 _PIPE_TIER_RE: Final = re.compile(r"Build_Pipeline(?:MK(\d))?_C$", re.IGNORECASE)
 
@@ -307,6 +313,7 @@ class GameDataset(BaseModel):
     pipes: tuple[Pipe, ...]
     storages: tuple[Storage, ...]
     attachments: tuple[Attachment, ...]
+    power_shards: tuple[PowerShard, ...] = ()
     warnings: tuple[str, ...]
 
     def to_game_data(self) -> GameData:
@@ -320,6 +327,7 @@ class GameDataset(BaseModel):
             pipes=self.pipes,
             storages=self.storages,
             attachments=self.attachments,
+            power_shards=self.power_shards,
         )
 
 
@@ -499,8 +507,31 @@ def _building(
         display_name_fr=_label(class_name, display_name, labels),
         kind=kind,
         power_mw=parse_float(cls.get("mPowerConsumption")),
+        # Defaults to 1 -- strictly proportional -- when the field is absent, which
+        # is the only assumption that cannot overstate a power bill.
+        power_exponent=parse_float(cls.get("mPowerConsumptionExponent"), 1.0),
         icon_file=_building_icon(class_name, descriptors),
     )
+
+
+def parse_power_shards(
+    grouped: dict[str, list[dict[str, str]]],
+) -> list[PowerShard]:
+    """The consumable that raises a building's clock ceiling.
+
+    Only the overclocking kind is kept. The game declares a second type on the same
+    native class -- ``PST_ProductionBoost``, the Somersloop -- which multiplies output
+    instead of speed, follows its own formula and is V2 work.
+    """
+    shards: list[PowerShard] = []
+    for cls in grouped.get("FGPowerShardDescriptor", []):
+        if cls.get("mPowerShardType") != OVERCLOCK_SHARD_TYPE:
+            continue
+        extra = parse_float(cls.get("mExtraPotential"))
+        if extra <= 0:
+            continue
+        shards.append(PowerShard(class_name=cls["ClassName"], extra_potential=extra))
+    return shards
 
 
 def parse_buildings(
@@ -692,6 +723,7 @@ def parse_dataset(
         pipes=tuple(pipes),
         storages=tuple(storages),
         attachments=tuple(attachments),
+        power_shards=tuple(parse_power_shards(reference)),
         warnings=tuple(warnings),
     )
 

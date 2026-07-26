@@ -23,8 +23,8 @@ Autant le dire avant d'ouvrir la fenêtre.
 - **Régime permanent uniquement.** Les tampons sont des puits et des sources infinis, jamais des
   réservoirs simulés dans le temps. L'application dit si les débits sont tenables et en combien de
   temps un stock se vide, mais ne joue pas le film.
-- **Ni surcadençage ni sous-cadençage, ni Somersloop.** Une machine tourne à 100 % ou à la
-  fraction que ses intrants lui permettent. (V2)
+- **Pas de Somersloop ni d'amplification de production.** Le surcadençage, lui, est modélisé :
+  de 1 % à 250 %, débits proportionnels et électricité en loi de puissance. (Somersloop en V2)
 - **Pas de génération d'électricité.** Seule la consommation est calculée. (V2)
 - **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Ils sont comptés dans la liste
   de courses, jamais dessinés et jamais un goulot — un répartiteur passe 2000 items/min quand le
@@ -75,13 +75,17 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
   « Alternative : plaque de fer moulée »), filtre par machine, bascules pour les recettes
   alternatives et les objets d'événement, et le tier par défaut des nouvelles lignes.
   Glisser-déposer vers le canvas, ou double-clic pour poser au centre de la vue.
+- **Cadence** : chaque extracteur et chaque machine se règle de 1 % à 250 % (clic droit ▸
+  « Cadence… », ou la colonne du tableau). Un nœud dont la cadence n'est pas 100 % l'affiche en
+  toutes lettres. Le débit suit la cadence exactement ; l'électricité suit une loi de puissance,
+  et les éclats de charge nécessaires apparaissent dans la liste de courses.
 - **Canvas** : une connexion se tire d'un port de sortie vers un port d'entrée. **Une liaison
   impossible est refusée pendant le tirage** — le trait devient rouge avec la raison en infobulle
   — et non signalée après coup. Clic droit sur un nœud pour l'ajuster à ses intrants ou fixer son
   nombre de machines ; clic droit sur une ligne pour changer de tier ou passer au tier suffisant.
 - **Tableau** : un nœud par ligne, tri, filtre, sélection synchronisée dans les deux sens avec le
   canvas, colonne « Quantité » éditable — machines, extracteurs, débit d'un apport externe ou
-  stock initial d'un tampon selon le type de nœud.
+  stock initial d'un tampon selon le type de nœud — et colonne « Cadence », éditable elle aussi.
 - **Totaux** : matières brutes, fluides et sous-produits, électricité, liste de courses. Quand
   l'usine vit sur un stock, un bandeau rouge et deux colonnes de chiffres — « avec les stocks » et
   « régime établi » — remplacent le silence qui laisserait croire à une réussite.
@@ -114,9 +118,11 @@ d'origine sans une confirmation explicite rappelant ce qui a été retiré. C'es
 l'application où un geste machinal pourrait détruire le travail de quelqu'un d'autre.
 
 `satisplanner/data/factory_file.py` porte le **point d'entrée unique de migration** :
-`migrate(payload, schema_version)` fait remonter un document une version à la fois. Il n'a rien à
-faire aujourd'hui ; il existe pour que le jour où il aura quelque chose à faire, il n'y ait qu'un
-endroit où l'écrire et qu'un endroit où le tester.
+`migrate(payload, schema_version)` fait remonter un document une version à la fois. Il a servi pour
+la première fois avec la cadence : un fichier de schéma 1 s'ouvre tel quel, la cadence prenant sa
+valeur par défaut de 100 %, et le document est noté comme converti. Le numéro de schéma a été
+incrémenté malgré l'absence de conversion à faire, pour qu'une V1 refuse un fichier V1.1 par une
+phrase plutôt que par une erreur de validation.
 
 Exports : PNG du canvas, PDF avec le canvas en première page et, au choix, les totaux et les
 diagnostics en seconde.
@@ -313,14 +319,21 @@ rien. C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
 10. **La palette est un modèle, pas une liste d'objets.** Construire l'icône de chaque entrée à
     l'ouverture coûtait neuf millisecondes fois sept cents, soit une fenêtre figée neuf secondes.
     Qt ne demande au modèle que les lignes qu'il s'apprête à peindre.
-11. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
+11. **Le surcadençage est proportionnel sur le débit et exponentiel sur l'électricité.**
+    L'exposant est **lu dans les données** (`mPowerConsumptionExponent`), jamais codé en dur : le
+    jeu utilise 1,321929 pour tout ce qui produit et 1,6 ailleurs. À 250 %, une machine consomme
+    donc environ 3,36 fois son nominal, et exactement 2,5 fois à 200 % — l'exposant vaut log₂(2,5),
+    ce qui n'est pas un hasard. Le nombre d'éclats se déduit de `mExtraPotential` ; seul le nombre
+    d'emplacements (trois) n'est pas exporté et vit dans `core/constants.py`, avec un test qui
+    vérifie que la borne de 250 % reste égale à ce que trois éclats achètent réellement.
+12. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
     coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
     écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
     affichant la même image coûte seize millisecondes.
 
 ## Backlog V2
 
-- Surcadençage, sous-cadençage et Somersloop.
+- Somersloop et amplification de production : autre formule, autre travail.
 - Génération d'électricité, et paliers supérieurs (Mélangeur, Convertisseur, Encodeur quantique,
   Accélérateur de particules, nucléaire).
 - **Mode objectif descendant** : « je veux tant d'Ordinateurs par minute », résolu par un solveur

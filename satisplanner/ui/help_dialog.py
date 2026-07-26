@@ -47,7 +47,7 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     ("Molette", "zoom avant et arriere autour du curseur"),
     (
         "Clic droit sur un noeud",
-        "ajuster aux intrants, nombre de machines, contenu du tampon, supprimer",
+        "ajuster aux intrants, nombre de machines, cadence, contenu du tampon, supprimer",
     ),
     (
         "Clic droit sur une ligne",

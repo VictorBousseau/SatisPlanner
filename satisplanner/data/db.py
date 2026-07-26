@@ -25,6 +25,7 @@ from satisplanner.core.models import (
     Item,
     ItemForm,
     Pipe,
+    PowerShard,
     Recipe,
     RecipeSlot,
     Storage,
@@ -34,7 +35,10 @@ from satisplanner.data.docs_parser import GameDataset
 logger = logging.getLogger(__name__)
 
 # 2 added the `attachments` table: splitters, mergers and pipe junctions.
-SCHEMA_VERSION: Final = 2
+# 3 added `buildings.power_exponent` and the `power_shards` table, both needed
+# to price overclocking: the draw follows a power law whose exponent is per
+# building, and the shard says how much clock one of them buys.
+SCHEMA_VERSION: Final = 3
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -78,6 +82,8 @@ CREATE TABLE buildings (
     display_name_fr TEXT NOT NULL,
     kind            TEXT NOT NULL,
     power_mw        REAL NOT NULL,
+    -- mPowerConsumptionExponent: overclocking raises the draw to this power.
+    power_exponent  REAL NOT NULL,
     icon_file       TEXT
 );
 
@@ -147,6 +153,13 @@ CREATE TABLE attachments (
     branches   INTEGER NOT NULL
 );
 
+-- Consumables that raise a building's clock ceiling. Only the overclocking kind
+-- is stored; the Somersloop amplifies production instead and is out of V1 scope.
+CREATE TABLE power_shards (
+    class_name      TEXT PRIMARY KEY REFERENCES items (class_name),
+    extra_potential REAL NOT NULL
+);
+
 CREATE INDEX idx_recipes_building ON recipes (building_class);
 CREATE INDEX idx_ingredients_item ON recipe_ingredients (item_class);
 CREATE INDEX idx_products_item    ON recipe_products (item_class);
@@ -185,6 +198,7 @@ def build_database(dataset: GameDataset, path: Path) -> None:
         _insert_pipes(connection, dataset.pipes)
         _insert_storages(connection, dataset.storages)
         _insert_attachments(connection, dataset.attachments)
+        _insert_power_shards(connection, dataset.power_shards)
         connection.commit()
         # Fails loudly if a reference does not resolve, rather than shipping a
         # database whose recipes point at nothing.
@@ -233,7 +247,7 @@ def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> No
 def _insert_buildings(connection: sqlite3.Connection, buildings: tuple[Building, ...]) -> None:
     connection.executemany(
         "INSERT INTO buildings (class_name, display_name, display_name_fr, kind, power_mw,"
-        " icon_file) VALUES (?, ?, ?, ?, ?, ?)",
+        " power_exponent, icon_file) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 building.class_name,
@@ -241,6 +255,7 @@ def _insert_buildings(connection: sqlite3.Connection, buildings: tuple[Building,
                 building.display_name_fr,
                 building.kind.value,
                 building.power_mw,
+                building.power_exponent,
                 building.icon_file,
             )
             for building in buildings
@@ -347,6 +362,13 @@ def _insert_attachments(
     )
 
 
+def _insert_power_shards(connection: sqlite3.Connection, shards: tuple[PowerShard, ...]) -> None:
+    connection.executemany(
+        "INSERT INTO power_shards (class_name, extra_potential) VALUES (?, ?)",
+        [(shard.class_name, shard.extra_potential) for shard in shards],
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Reading
 # --------------------------------------------------------------------------- #
@@ -381,6 +403,7 @@ def read_buildings(connection: sqlite3.Connection) -> list[Building]:
             display_name_fr=row["display_name_fr"],
             kind=BuildingKind(row["kind"]),
             power_mw=row["power_mw"],
+            power_exponent=row["power_exponent"],
             icon_file=row["icon_file"],
         )
         for row in connection.execute("SELECT * FROM buildings ORDER BY class_name")
@@ -483,6 +506,13 @@ def read_attachments(connection: sqlite3.Connection) -> list[Attachment]:
     ]
 
 
+def read_power_shards(connection: sqlite3.Connection) -> list[PowerShard]:
+    return [
+        PowerShard(class_name=row["class_name"], extra_potential=row["extra_potential"])
+        for row in connection.execute("SELECT * FROM power_shards ORDER BY class_name")
+    ]
+
+
 def load_game_data(connection: sqlite3.Connection) -> GameData:
     """Read the whole catalogue in the form the engine expects.
 
@@ -498,6 +528,7 @@ def load_game_data(connection: sqlite3.Connection) -> GameData:
         pipes=read_pipes(connection),
         storages=read_storages(connection),
         attachments=read_attachments(connection),
+        power_shards=read_power_shards(connection),
     )
 
 

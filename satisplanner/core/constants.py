@@ -23,3 +23,23 @@ INDUSTRIAL_STORAGE_CONTAINER_SLOTS: Final = 48
 # Fixed-point solver for cyclic components (see specification 8.2).
 CONVERGENCE_TOLERANCE: Final = 1e-9
 MAX_ITERATIONS: Final = 1000
+
+# --------------------------------------------------------------------- clock
+
+# Lowest clock speed a building accepts, 1 %. This one *is* in the game files --
+# `mMinPotential`, and it reads 0.01 on all sixty-two buildables -- but the graph
+# validates its field without a catalogue in hand, so the bound is repeated here.
+# `tests/test_conversions.py` checks the two against each other.
+MIN_CLOCK_SPEED: Final = 0.01
+
+# How many power shards a building takes. **Not in Docs.json**: every buildable
+# declares `mPotentialShardSlots = 0` with `mOverridePotentialShardSlots = False`,
+# which means "use the engine's default", and the default itself is not exported.
+# Three is the value the game uses.
+POWER_SHARD_SLOTS: Final = 3
+
+# Highest clock speed, 250 %. Derived: 100 % plus three shards at the
+# `mExtraPotential` the game declares for the power shard. Stated as a number
+# because the graph's field bound cannot reach the catalogue, and checked against
+# the data by `tests/test_conversions.py` so it cannot drift from it.
+MAX_CLOCK_SPEED: Final = 2.5

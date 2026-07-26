@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from satisplanner.core import constants
 from satisplanner.core.models import AttachmentRole, ItemForm, Recipe
 from satisplanner.data.docs_parser import (
     DocsFileError,
@@ -429,6 +430,54 @@ def test_alternate_recipes_the_game_encodes_inconsistently(
 
 def test_the_fixture_parses_without_warnings(dataset: GameDataset) -> None:
     assert dataset.warnings == ()
+
+
+# --------------------------------------------------------------------------- #
+# Overclocking
+# --------------------------------------------------------------------------- #
+
+
+def test_the_power_exponent_is_read_and_not_assumed(dataset: GameDataset) -> None:
+    """Every producing building shares one exponent, and it is not 1."""
+    buildings = {building.class_name: building for building in dataset.buildings}
+    smelter = buildings["Build_SmelterMk1_C"]
+    assert smelter.power_exponent == pytest.approx(1.321929)
+    assert buildings["Build_MinerMk3_C"].power_exponent == smelter.power_exponent
+    assert all(building.power_exponent > 0 for building in dataset.buildings)
+
+
+def test_only_the_overclocking_shard_is_kept(dataset: GameDataset) -> None:
+    """The Somersloop shares the native class and amplifies production instead."""
+    shards = {shard.class_name for shard in dataset.power_shards}
+    assert shards == {"Desc_CrystalShard_C"}
+    assert "Desc_WAT1_C" not in shards, "le Somersloop releve de la V2"
+
+    (shard,) = dataset.power_shards
+    assert shard.extra_potential == pytest.approx(0.5)
+
+
+def test_the_shard_is_also_an_ordinary_item(dataset: GameDataset) -> None:
+    """Which is what lets the shopping list show its French name and its icon."""
+    items = {item.class_name: item for item in dataset.items}
+    assert "Desc_CrystalShard_C" in items
+    assert items["Desc_CrystalShard_C"].display_name_fr
+
+
+def test_the_minimum_clock_matches_what_the_game_declares() -> None:
+    """``constants.MIN_CLOCK_SPEED`` repeats ``mMinPotential``; they must agree.
+
+    The graph validates its field without a catalogue in hand, so the bound is
+    written down twice. This is the check that stops the two from drifting.
+    """
+    grouped = read_locale(REFERENCE_FIXTURE)
+    declared = {
+        cls["mMinPotential"]
+        for classes in grouped.values()
+        for cls in classes
+        if "mMinPotential" in cls
+    }
+    assert declared, "la fixture doit contenir des batiments cadencables"
+    assert {float(value) for value in declared} == {constants.MIN_CLOCK_SPEED}
 
 
 def test_event_content_is_marked_from_the_asset_path(dataset: GameDataset) -> None:

@@ -131,9 +131,20 @@ class LoadedFactory:
 # Schema migration
 # --------------------------------------------------------------------------- #
 
+
+def _one_to_two(payload: dict[str, Any]) -> dict[str, Any]:
+    """Schema 1 to 2: clock speed added to extractors and machines.
+
+    Nothing to write. The field defaults to 100 %, which is exactly what a document
+    from before it existed meant. The step is here because the walk must not have a
+    hole in it -- and because a version that migrates by doing nothing is a fact
+    worth stating once rather than rediscovering.
+    """
+    return payload
+
+
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
-# Empty today, and that is the point: the door exists before it is needed.
-MIGRATIONS: Final[dict[int, Callable[[dict[str, Any]], dict[str, Any]]]] = {}
+MIGRATIONS: Final[dict[int, Callable[[dict[str, Any]], dict[str, Any]]]] = {1: _one_to_two}
 
 
 def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any], list[str]]:

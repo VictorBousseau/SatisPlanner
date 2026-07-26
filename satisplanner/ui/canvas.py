@@ -43,8 +43,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from satisplanner.core import engine
-from satisplanner.core.graph import MachineNode, StorageNode, storage_item
+from satisplanner.core import constants, engine, formatting
+from satisplanner.core.graph import (
+    MachineNode,
+    ResourceNode,
+    StorageNode,
+    WaterExtractorNode,
+    storage_item,
+)
 from satisplanner.core.models import ItemForm
 from satisplanner.core.results import FactoryReport
 from satisplanner.ui import theme
@@ -511,6 +517,10 @@ class FactoryScene(QGraphicsScene):
             count = QAction("Nombre de machines...", menu)
             count.triggered.connect(lambda: self.ask_machine_count(item.node.id, parent))
             menu.addAction(count)
+        if isinstance(item.node, MachineNode | ResourceNode | WaterExtractorNode):
+            clock = QAction("Cadence...", menu)
+            clock.triggered.connect(lambda: self.ask_clock_speed(item.node.id, parent))
+            menu.addAction(clock)
         if isinstance(item.node, StorageNode):
             menu.addMenu(self._storage_content_menu(item.node, menu))
         delete = QAction("Supprimer", menu)
@@ -653,6 +663,55 @@ class FactoryScene(QGraphicsScene):
                 f"ajustement a {suggestion:g} machine(s)",
             )
         )
+
+    def set_clock_speed(self, node_id: str, clock_speed: float) -> bool:
+        """Change one node's clock. The single door, shared with the table.
+
+        Refuses a value outside the game's own range rather than clamping it: a
+        silently corrected 400 % teaches the user nothing.
+        """
+        node = self.document.graph.node(node_id)
+        if not isinstance(node, MachineNode | ResourceNode | WaterExtractorNode):
+            return False
+        if not constants.MIN_CLOCK_SPEED <= clock_speed <= constants.MAX_CLOCK_SPEED:
+            self.selectionSummaryChanged.emit(
+                f"Cadence hors domaine : {formatting.percent(constants.MIN_CLOCK_SPEED)} a "
+                f"{formatting.percent(constants.MAX_CLOCK_SPEED)}."
+            )
+            return False
+        if abs(node.clock_speed - clock_speed) < 1e-9:
+            return False
+        self.document.undo_stack.push(
+            SetNodeFieldCommand(
+                self.document,
+                node_id,
+                "clock_speed",
+                clock_speed,
+                f"cadence a {formatting.percent(clock_speed)}",
+            )
+        )
+        return True
+
+    def ask_clock_speed(self, node_id: str, parent: QWidget) -> None:
+        node = self.document.graph.node(node_id)
+        assert isinstance(node, MachineNode | ResourceNode | WaterExtractorNode)
+        shard = self.document.game_data.overclock_shard()
+        hint = ""
+        if shard is not None:
+            name = self.document.game_data.item(shard.class_name).display_name_fr
+            hint = f"\nAu-dela de 100 %, chaque machine consomme des {name}."
+        value, accepted = QInputDialog.getDouble(
+            parent,
+            "Cadence",
+            f"Cadence en pourcentage ({formatting.percent(constants.MIN_CLOCK_SPEED)} a "
+            f"{formatting.percent(constants.MAX_CLOCK_SPEED)}) :{hint}",
+            node.clock_speed * 100.0,
+            constants.MIN_CLOCK_SPEED * 100.0,
+            constants.MAX_CLOCK_SPEED * 100.0,
+            2,
+        )
+        if accepted:
+            self.set_clock_speed(node_id, value / 100.0)
 
     def ask_machine_count(self, node_id: str, parent: QWidget) -> None:
         node = self.document.graph.node(node_id)

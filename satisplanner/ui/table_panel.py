@@ -15,7 +15,7 @@ import, the initial stock of a buffer -- and the header says so.
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, Final, TypeGuard
 
 from PySide6.QtCore import (
     QAbstractTableModel,
@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from satisplanner.core import formatting
+from satisplanner.core import constants, formatting
 from satisplanner.core.graph import (
     ExternalSourceNode,
     GraphError,
@@ -109,16 +109,18 @@ COLUMN_NODE: Final = 0
 COLUMN_KIND: Final = 1
 COLUMN_LABEL: Final = 2
 COLUMN_QUANTITY: Final = 3
-COLUMN_INPUTS: Final = 4
-COLUMN_OUTPUTS: Final = 5
-COLUMN_LIMITING: Final = 6
-COLUMN_RATIO: Final = 7
+COLUMN_CLOCK: Final = 4
+COLUMN_INPUTS: Final = 5
+COLUMN_OUTPUTS: Final = 6
+COLUMN_LIMITING: Final = 7
+COLUMN_RATIO: Final = 8
 
 HEADERS: Final[tuple[str, ...]] = (
     "Noeud",
     "Type",
     "Recette / contenu",
     "Quantite",
+    "Cadence",
     "Entrees /min",
     "Sorties /min",
     "Facteur limitant",
@@ -129,11 +131,21 @@ COLUMN_WIDTHS: Final[dict[int, int]] = {
     COLUMN_NODE: 95,
     COLUMN_KIND: 75,
     COLUMN_QUANTITY: 105,
+    COLUMN_CLOCK: 80,
     COLUMN_INPUTS: 170,
     COLUMN_OUTPUTS: 170,
     COLUMN_LIMITING: 135,
     COLUMN_RATIO: 65,
 }
+
+# Node kinds that have a clock speed at all: a buffer or an exit has no throttle.
+ClockedNode = MachineNode | ResourceNode | WaterExtractorNode
+
+
+def has_clock(node: Node) -> TypeGuard[ClockedNode]:
+    """True for the nodes that can be over- or underclocked, and narrows the type."""
+    return isinstance(node, MachineNode | ResourceNode | WaterExtractorNode)
+
 
 _ROLE_NODE_ID: Final = int(Qt.ItemDataRole.UserRole)
 
@@ -188,12 +200,14 @@ class NodeTableModel(QAbstractTableModel):
 
     def flags(self, index: Index) -> Qt.ItemFlag:
         base = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-        if index.column() != COLUMN_QUANTITY:
-            return base
         node = self._node(index)
-        if node is None or quantity_of(node) is None:
+        if node is None:
             return base
-        return base | Qt.ItemFlag.ItemIsEditable
+        if index.column() == COLUMN_QUANTITY and quantity_of(node) is not None:
+            return base | Qt.ItemFlag.ItemIsEditable
+        if index.column() == COLUMN_CLOCK and has_clock(node):
+            return base | Qt.ItemFlag.ItemIsEditable
+        return base
 
     def data(self, index: Index, role: int = int(Qt.ItemDataRole.DisplayRole)) -> Any:
         node = self._node(index)
@@ -205,6 +219,9 @@ class NodeTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.EditRole and column == COLUMN_QUANTITY:
             quantity = quantity_of(node)
             return None if quantity is None else getattr(node, quantity.field)
+        if role == Qt.ItemDataRole.EditRole and column == COLUMN_CLOCK:
+            # Edited in percent, stored as a fraction: nobody types 2.5 for 250 %.
+            return node.clock_speed * 100.0 if has_clock(node) else None
         if role == _ROLE_NODE_ID:
             return node.id
         if role == Qt.ItemDataRole.ForegroundRole:
@@ -227,6 +244,8 @@ class NodeTableModel(QAbstractTableModel):
                 return node.label or (solution.label if solution else "")
             case _ if column == COLUMN_QUANTITY:
                 return self._quantity_text(node)
+            case _ if column == COLUMN_CLOCK:
+                return formatting.percent(node.clock_speed) if has_clock(node) else "—"
             case _ if column == COLUMN_INPUTS:
                 return self._flows(solution.inputs if solution else {})
             case _ if column == COLUMN_OUTPUTS:
@@ -270,6 +289,11 @@ class NodeTableModel(QAbstractTableModel):
                 f"{formatting.number(solution.machine_count)}, "
                 f"{solution.integer_machine_count} a batir"
             )
+        if solution.clock_speed != 1.0:
+            lines.append(
+                f"cadence {formatting.percent(solution.clock_speed)}"
+                + (f", {solution.power_shards} eclat(s)" if solution.power_shards else "")
+            )
         for prefix, items in (
             ("manque", solution.starved_items),
             ("bloque par", solution.blocked_products),
@@ -281,10 +305,14 @@ class NodeTableModel(QAbstractTableModel):
     # --------------------------------------------------------------- editing
 
     def setData(self, index: Index, value: Any, role: int = int(Qt.ItemDataRole.EditRole)) -> bool:
-        if role != Qt.ItemDataRole.EditRole or index.column() != COLUMN_QUANTITY:
+        if role != Qt.ItemDataRole.EditRole:
             return False
         node = self._node(index)
         if node is None:
+            return False
+        if index.column() == COLUMN_CLOCK:
+            return self._set_clock(node, value)
+        if index.column() != COLUMN_QUANTITY:
             return False
         quantity = quantity_of(node)
         if quantity is None:
@@ -303,6 +331,35 @@ class NodeTableModel(QAbstractTableModel):
                 quantity.field,
                 number,
                 f"{node.id} : {formatting.number(number)} {quantity.label}",
+            )
+        )
+        return True
+
+    def _set_clock(self, node: Node, value: Any) -> bool:
+        """Clock speed, typed in percent. Out of range is refused, never clamped.
+
+        Refusing leaves the stored value alone, which is what the specification asks
+        for: a typo must not silently become 250 % or wipe what was there.
+        """
+        if not has_clock(node):
+            return False
+        try:
+            clock = float(value) / 100.0
+        except (TypeError, ValueError):
+            logger.debug("cadence non numerique refusee : %r", value)
+            return False
+        if not constants.MIN_CLOCK_SPEED <= clock <= constants.MAX_CLOCK_SPEED:
+            logger.debug("cadence hors domaine refusee : %r", value)
+            return False
+        if abs(clock - node.clock_speed) < 1e-9:
+            return False
+        self.document.undo_stack.push(
+            SetNodeFieldCommand(
+                self.document,
+                node.id,
+                "clock_speed",
+                clock,
+                f"{node.id} : cadence {formatting.percent(clock)}",
             )
         )
         return True

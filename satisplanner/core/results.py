@@ -96,7 +96,20 @@ class NodeSolution(_Result):
     building_class: str | None = None
     machine_count: float | None = None  # what the user set
     useful_machine_count: float | None = None  # what the inputs actually feed
+    # 1.0 is 100 %. Throughput follows it exactly; power follows it raised to the
+    # building's exponent, which is why the two are reported separately.
+    clock_speed: float = 1.0
+    # Shards this node needs, for the whole buildings it is made of.
+    power_shards: int = 0
     power_mw: float = 0.0
+
+    @property
+    def is_overclocked(self) -> bool:
+        return self.clock_speed > 1.0
+
+    @property
+    def is_underclocked(self) -> bool:
+        return self.clock_speed < 1.0
 
     @property
     def idle_machine_count(self) -> float:
@@ -210,6 +223,10 @@ class ShoppingList(_Result):
     # Splitters, mergers and pipe junctions, deduced from the lines that share a
     # node rather than placed by hand: they are never nodes on the canvas.
     attachments: dict[str, int] = Field(default_factory=dict)
+    # Power shards, by item class, implied by the overclocked nodes. Consumables
+    # rather than buildings, hence their own entry: they are not built, they are
+    # produced and slotted in, and they do not belong in a building count.
+    power_shards: dict[str, int] = Field(default_factory=dict)
 
     @property
     def total_buildings(self) -> int:

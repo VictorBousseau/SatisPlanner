@@ -38,6 +38,7 @@ def test_every_table_of_the_specification_exists(database: Path) -> None:
         "pipes",
         "storages",
         "attachments",
+        "power_shards",
     }
     with db.connect(database) as connection:
         tables = {
@@ -90,6 +91,24 @@ def test_an_attachment_that_does_both_jobs_keeps_both_roles(
     assert junction.roles == (AttachmentRole.SPLIT, AttachmentRole.MERGE)
     assert junction.form is ItemForm.LIQUID
     assert dataset.attachments
+
+
+def test_the_power_exponent_survives_the_round_trip(database: Path, dataset: GameDataset) -> None:
+    """Without it the whole overclocking bill is wrong, and silently so."""
+    expected = {b.class_name: b.power_exponent for b in dataset.buildings}
+    with db.connect(database) as connection:
+        stored = {b.class_name: b.power_exponent for b in db.read_buildings(connection)}
+    assert stored == expected
+    assert stored["Build_SmelterMk1_C"] > 1.0
+
+
+def test_the_power_shard_survives_the_round_trip(database: Path, dataset: GameDataset) -> None:
+    with db.connect(database) as connection:
+        shards = db.read_power_shards(connection)
+        catalogue = db.load_game_data(connection)
+    assert [s.class_name for s in shards] == [s.class_name for s in dataset.power_shards]
+    assert catalogue.overclock_shard() is not None
+    assert catalogue.overclock_shard().extra_potential == pytest.approx(0.5)  # type: ignore[union-attr]
 
 
 def test_fluid_rates_are_stored_in_cubic_metres(database: Path) -> None:

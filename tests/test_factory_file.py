@@ -208,10 +208,49 @@ def test_an_unreadable_schema_version_is_refused(tmp_path: Path) -> None:
         factory_file.load(path)
 
 
+def test_a_document_from_before_the_clock_existed_still_opens(tmp_path: Path) -> None:
+    """The real schema 1 to 2 step: a V1 file, opened by this build.
+
+    Nothing has to be written -- the field defaults to 100 %, which is what a file
+    from before it existed meant -- but the walk must go through and the note must
+    say what happened.
+    """
+    graph = FactoryGraph()
+    graph.add_node(MachineNode(id="m1", recipe_class="Recipe_IngotIron_C"))
+    payload = json.loads(graph.model_dump_json())
+    del payload["nodes"][0]["clock_speed"]
+    payload["schema_version"] = 1
+
+    path = tmp_path / "ancienne.sfp"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(factory_file.GRAPH_MEMBER, json.dumps(payload))
+        archive.writestr(
+            factory_file.MANIFEST_MEMBER,
+            json.dumps({**Manifest.current().as_dict(), "schema_version": 1}),
+        )
+
+    loaded = factory_file.load(path)
+    node = loaded.graph.node("m1")
+    assert isinstance(node, MachineNode)
+    assert node.clock_speed == 1.0
+    assert any("schema 1 au schema 2" in warning for warning in loaded.warnings)
+
+
+def test_a_clock_survives_the_round_trip(tmp_path: Path) -> None:
+    graph = FactoryGraph()
+    graph.add_node(MachineNode(id="m1", recipe_class="Recipe_IngotIron_C", clock_speed=2.5))
+    path = tmp_path / "surcadencee.sfp"
+    factory_file.save(path, graph)
+
+    node = factory_file.load(path).graph.node("m1")
+    assert isinstance(node, MachineNode)
+    assert node.clock_speed == 2.5
+
+
 def test_migration_is_a_single_door_that_already_works(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """There is nothing to migrate yet; the mechanism is tested with a planted step."""
+    """The mechanism itself, with two planted steps rather than the real one."""
     monkeypatch.setattr(factory_file, "SCHEMA_VERSION", SCHEMA_VERSION + 2)
     monkeypatch.setattr(
         factory_file,

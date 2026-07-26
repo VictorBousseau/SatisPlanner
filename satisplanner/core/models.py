@@ -7,6 +7,7 @@ over; the engine only ever receives them by injection and never reads a database
 Every quantity is already normalised: items/min for solids, m3/min for fluids.
 """
 
+import math
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Self
@@ -131,6 +132,39 @@ class Building(_Row):
     kind: BuildingKind
     power_mw: float
     icon_file: str | None
+    # `mPowerConsumptionExponent`. Overclocking costs power as a **power law**, not
+    # in proportion: at 250 % a machine draws 2.5 ** 1.321929, about 3.36 times its
+    # nominal figure. The exponent is per building and is read, never assumed --
+    # the game uses 1.321929 for everything that produces and 1.6 elsewhere.
+    power_exponent: float = 1.0
+
+    def power_at(self, clock_speed: float) -> float:
+        """Draw of one such building running at ``clock_speed`` (1.0 = 100 %)."""
+        if clock_speed <= 0:
+            return 0.0
+        return float(self.power_mw * clock_speed**self.power_exponent)
+
+
+class PowerShard(_Row):
+    """A consumable that raises a building's maximum clock speed.
+
+    Only the overclocking kind is kept. The game declares a second shard type for
+    production amplification -- the Somersloop -- which follows a different formula
+    and belongs to V2.
+    """
+
+    class_name: str
+    # `mExtraPotential`: 0.5, so one shard buys 50 % more clock.
+    extra_potential: float
+
+    def shards_for(self, clock_speed: float) -> int:
+        """Shards one building needs to run at ``clock_speed``."""
+        if clock_speed <= 1.0 or self.extra_potential <= 0:
+            return 0
+        needed = (clock_speed - 1.0) / self.extra_potential
+        # Rounded up, but not by float noise: 200 % is exactly two shards, and
+        # (2.0 - 1.0) / 0.5 lands a hair above 2 often enough to matter.
+        return int(-(-round(needed, 9) // 1))
 
 
 class Extractor(_Row):
@@ -213,6 +247,7 @@ class GameData(BaseModel):
     pipes: dict[str, Pipe] = Field(default_factory=dict)
     storages: dict[str, Storage] = Field(default_factory=dict)
     attachments: dict[str, Attachment] = Field(default_factory=dict)
+    power_shards: dict[str, PowerShard] = Field(default_factory=dict)
 
     @classmethod
     def from_rows(
@@ -226,6 +261,7 @@ class GameData(BaseModel):
         pipes: Iterable[Pipe] = (),
         storages: Iterable[Storage] = (),
         attachments: Iterable[Attachment] = (),
+        power_shards: Iterable[PowerShard] = (),
     ) -> Self:
         return cls(
             items={row.class_name: row for row in items},
@@ -236,6 +272,7 @@ class GameData(BaseModel):
             pipes={row.class_name: row for row in pipes},
             storages={row.class_name: row for row in storages},
             attachments={row.class_name: row for row in attachments},
+            power_shards={row.class_name: row for row in power_shards},
         )
 
     def item(self, class_name: str) -> Item:
@@ -283,6 +320,28 @@ class GameData(BaseModel):
             if self.transport_capacity(transport.class_name) >= rate:
                 return transport
         return None
+
+    def overclock_shard(self) -> PowerShard | None:
+        """The shard used to overclock, or ``None`` on a catalogue without one.
+
+        There is exactly one in the game, but the lookup is by content rather than
+        by class name so that nothing here hard-codes a game identifier.
+        """
+        shards = sorted(self.power_shards.values(), key=lambda shard: shard.class_name)
+        return shards[0] if shards else None
+
+    def shards_for(self, clock_speed: float, buildings: float) -> dict[str, int]:
+        """Shards needed to run ``buildings`` machines at ``clock_speed``.
+
+        Counted per whole building, as they are placed: half a machine at 250 % is
+        still a machine with three shards in it.
+        """
+        shard = self.overclock_shard()
+        if shard is None:
+            return {}
+        each = shard.shards_for(clock_speed)
+        total = each * math.ceil(buildings) if each else 0
+        return {shard.class_name: total} if total else {}
 
     def attachment_for(self, form: ItemForm, role: AttachmentRole) -> Attachment | None:
         """The splitter, merger or junction this form uses for that role.

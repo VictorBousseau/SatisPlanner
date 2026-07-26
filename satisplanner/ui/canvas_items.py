@@ -223,16 +223,19 @@ class NodeItem(QGraphicsItem):
             case MachineNode() as machine:
                 recipe = self.game_data.recipe(machine.recipe_class)
                 building = self.game_data.building(recipe.building_class).display_name_fr
-                return f"{building} — {formatting.number(machine.machine_count)} machine(s)"
+                count = formatting.number(machine.machine_count)
+                return f"{building} — {count} machine(s){_clock_suffix(machine.clock_speed)}"
             case ResourceNode() as deposit:
                 extractor = self.game_data.building(deposit.extractor_class).display_name_fr
                 purity = {"impure": "impur", "normal": "normal", "pure": "pur"}[
                     deposit.purity.value
                 ]
                 count = formatting.number(deposit.count)
-                return f"{count} {extractor} — gisement {purity}"
+                clock = _clock_suffix(deposit.clock_speed)
+                return f"{count} {extractor} — gisement {purity}{clock}"
             case WaterExtractorNode() as pump:
-                return f"{formatting.number(pump.count)} unite(s) — debit fixe"
+                count = formatting.number(pump.count)
+                return f"{count} unite(s) — debit fixe{_clock_suffix(pump.clock_speed)}"
             case ExternalSourceNode() as source:
                 item = self.game_data.item(source.item_class)
                 return f"apport externe {formatting.rate(source.rate_per_minute, item)}"
@@ -240,6 +243,11 @@ class NodeItem(QGraphicsItem):
                 return self._storage_subtitle(storage)
             case OutputNode() as output:
                 return "rejet assume" if output.is_sink else "sortie de l'usine"
+
+    def clock_badge(self) -> str:
+        """The clock, or an empty string at 100 %. Exposed so a test can read it."""
+        clock = getattr(self.node, "clock_speed", 1.0)
+        return "" if clock == 1.0 else formatting.percent(clock)
 
     def _storage_subtitle(self, storage: StorageNode) -> str:
         """What the buffer holds, and whether that was decided or deduced.
@@ -542,6 +550,18 @@ class EdgeItem(QGraphicsPathItem):
             Qt.AlignmentFlag.AlignCenter,
             formatting.rate(self.solution.rate_per_minute, item),
         )
+
+
+def _clock_suffix(clock_speed: float) -> str:
+    """The clock, spelled out on the node whenever it is not 100 %.
+
+    Never hidden and never abbreviated to an icon: a node running at 250 % produces
+    two and a half times what its recipe says and costs three and a third times the
+    power, and a reader who has to hover to find that out will not find it out.
+    """
+    if clock_speed == 1.0:
+        return ""
+    return f" — cadence {formatting.percent(clock_speed)}"
 
 
 def curve(start: QPointF, end: QPointF) -> QPainterPath:

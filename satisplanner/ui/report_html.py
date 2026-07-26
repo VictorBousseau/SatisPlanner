@@ -212,10 +212,21 @@ def _shopping_list(report: FactoryReport, game_data: GameData) -> str:
         f"<td class='value'>{count}</td></tr>"
         for class_name, count in sorted(shopping.attachments.items())
     )
-    return (
-        f"<h2>Liste de courses</h2><table>{''.join(rows)}</table>"
+    # Consumables rather than buildings, so they are listed apart from the count.
+    shard_rows = [
+        f"<tr><td>{escape(_item_name(class_name, game_data))}</td>"
+        f"<td class='value'>{count}</td></tr>"
+        for class_name, count in sorted(shopping.power_shards.items())
+    ]
+    note = (
         f"<p class='muted'>{shopping.total_buildings} batiment(s) au total. Les repartiteurs et "
-        f"groupeurs sont deduits des lignes qui partagent un noeud.</p>"
+        f"groupeurs sont deduits des lignes qui partagent un noeud."
+    )
+    if shard_rows:
+        note += " Les eclats ne se construisent pas : ils se fabriquent et se glissent dans"
+        note += " les machines surcadencees."
+    return (
+        f"<h2>Liste de courses</h2><table>{''.join(rows) + ''.join(shard_rows)}</table>{note}</p>"
     )
 
 

@@ -224,20 +224,29 @@ class _Solver:
             self.states[node.id] = state
 
     def _nominal_out(self, node: Node) -> dict[str, float]:
-        """Production at full speed, per item and per minute."""
+        """Production at full speed, per item and per minute.
+
+        "Full speed" means the node's own clock: throughput is strictly proportional
+        to it, so a Mk.3 miner on a pure node at 250 % puts out 480 x 2.5 = 1200 a
+        minute. Only the power bill departs from proportionality, and that is handled
+        where power is computed.
+        """
         match node:
             case ResourceNode():
                 extractor = self.game_data.extractor(node.extractor_class)
-                return {node.item_class: extractor.rate(node.purity) * node.count}
+                rate = extractor.rate(node.purity) * node.count * node.clock_speed
+                return {node.item_class: rate}
             case WaterExtractorNode():
                 extractor = self.game_data.extractor(node.extractor_class)
                 item = extractor.item_class
-                return {item: extractor.rate_per_minute * node.count} if item else {}
+                rate = extractor.rate_per_minute * node.count * node.clock_speed
+                return {item: rate} if item else {}
             case ExternalSourceNode():
                 return {node.item_class: node.rate_per_minute}
             case MachineNode():
                 rates = self.game_data.recipe(node.recipe_class).product_rates()
-                return {item: rate * node.machine_count for item, rate in sorted(rates.items())}
+                scale = node.machine_count * node.clock_speed
+                return {item: rate * scale for item, rate in sorted(rates.items())}
             case StorageNode():
                 # Filled in at every iteration: a buffer hands downstream what it
                 # asks for, drawing on its stock if its own intake is not enough.
@@ -251,7 +260,8 @@ class _Solver:
         match node:
             case MachineNode():
                 rates = self.game_data.recipe(node.recipe_class).ingredient_rates()
-                return {item: rate * node.machine_count for item, rate in sorted(rates.items())}
+                scale = node.machine_count * node.clock_speed
+                return {item: rate * scale for item, rate in sorted(rates.items())}
             case StorageNode() | OutputNode():
                 item = (
                     storage_item(node, self.graph)
@@ -485,10 +495,16 @@ class _Solver:
         machine_count = getattr(node, "machine_count", None)
         if machine_count is None:
             machine_count = getattr(node, "count", None)
+        clock = getattr(node, "clock_speed", 1.0)
         building = self._building_of(node)
         power = 0.0
         if building is not None and machine_count is not None:
-            power = self.game_data.building(building).power_mw * machine_count
+            # Not proportional: the game raises the draw to the building's own
+            # exponent, which is why 250 % costs about 3.36 times and not 2.5.
+            power = self.game_data.building(building).power_at(clock) * machine_count
+        shards = 0
+        if machine_count is not None and clock > 1.0:
+            shards = sum(self.game_data.shards_for(clock, machine_count).values())
         return NodeSolution(
             node_id=node.id,
             kind=node.kind,
@@ -502,7 +518,9 @@ class _Solver:
             building_class=building,
             machine_count=machine_count,
             useful_machine_count=None if machine_count is None else machine_count * ratio,
-            power_mw=power,
+            clock_speed=clock,
+            power_shards=shards,
+            power_mw=round(power, 9),
         )
 
     def _building_of(self, node: Node) -> str | None:
@@ -651,11 +669,17 @@ class _Solver:
 
     def _shopping_list(self, nodes: Iterable[NodeSolution]) -> ShoppingList:
         buildings: dict[str, int] = {}
+        shards: dict[str, int] = {}
         for solution in nodes:
             if solution.building_class is None:
                 continue
             count = math.ceil(solution.machine_count or 1.0)
             buildings[solution.building_class] = buildings.get(solution.building_class, 0) + count
+            if solution.clock_speed > 1.0 and solution.machine_count is not None:
+                for item, needed in self.game_data.shards_for(
+                    solution.clock_speed, solution.machine_count
+                ).items():
+                    shards[item] = shards.get(item, 0) + needed
 
         belts: dict[int, int] = {}
         pipes: dict[int, int] = {}
@@ -671,6 +695,7 @@ class _Solver:
             belts_by_tier=dict(sorted(belts.items())),
             pipes_by_tier=dict(sorted(pipes.items())),
             attachments=self._attachments(),
+            power_shards=dict(sorted(shards.items())),
         )
 
     def _attachments(self) -> dict[str, int]:
@@ -917,6 +942,11 @@ def suggest_machine_count(graph: FactoryGraph, game_data: GameData, node_id: str
     probed.machine_count = max(node.machine_count, 1.0) * PROBE_FACTOR
 
     solution = solve(probe, game_data).node(node_id)
+    # Divided by what one machine consumes **at this node's clock**: the answer is a
+    # number of machines, and an overclocked machine eats more of everything.
+    clock = node.clock_speed
     return min(
-        solution.inputs.get(item, 0.0) / rate for item, rate in sorted(rates.items()) if rate > 0
+        solution.inputs.get(item, 0.0) / (rate * clock)
+        for item, rate in sorted(rates.items())
+        if rate > 0
     )

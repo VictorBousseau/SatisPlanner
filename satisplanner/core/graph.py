@@ -12,13 +12,17 @@ Design points that matter downstream:
 """
 
 from enum import StrEnum
-from typing import Annotated, Final, Literal, Self
+from typing import Annotated, Any, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from satisplanner.core import constants
 from satisplanner.core.models import GameData, ItemForm, Purity, UnknownClassError
 
-SCHEMA_VERSION: Final = 1
+# 2 added a clock speed to extractors and machines. Reading a version 1 document
+# needs no conversion -- the field defaults to 100 % -- but the bump is what makes
+# a V1 build refuse a V1.1 file with a sentence instead of a validation error.
+SCHEMA_VERSION: Final = 2
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -45,11 +49,25 @@ class NodeKind(StrEnum):
 
 
 class _NodeBase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Assignment is validated, not just construction. Every edit in the application
+    # goes through a command that sets an attribute by name, so without this a clock
+    # of 400 % would be refused when a file declares it and accepted when a widget
+    # writes it. The bounds belong to the field, so this is where they are enforced.
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     id: str
     label: str | None = None
     position: tuple[float, float] = (0.0, 0.0)
+
+
+def _clock_field() -> Any:
+    """Clock speed, as a fraction: 1.0 is 100 %, the game's own range 1 % to 250 %.
+
+    Declared here rather than validated against the catalogue because a graph is
+    plain data and never holds one. A function rather than a shared ``Field``
+    object, so that three models never end up sharing one descriptor.
+    """
+    return Field(default=1.0, ge=constants.MIN_CLOCK_SPEED, le=constants.MAX_CLOCK_SPEED)
 
 
 class ResourceNode(_NodeBase):
@@ -60,6 +78,7 @@ class ResourceNode(_NodeBase):
     extractor_class: str
     purity: Purity = Purity.NORMAL
     count: float = Field(default=1.0, gt=0)
+    clock_speed: float = _clock_field()
 
 
 class WaterExtractorNode(_NodeBase):
@@ -72,6 +91,7 @@ class WaterExtractorNode(_NodeBase):
     kind: Literal[NodeKind.WATER_EXTRACTOR] = NodeKind.WATER_EXTRACTOR
     extractor_class: str
     count: float = Field(default=1.0, gt=0)
+    clock_speed: float = _clock_field()
 
 
 class ExternalSourceNode(_NodeBase):
@@ -95,6 +115,7 @@ class MachineNode(_NodeBase):
     recipe_class: str
     machine_count: float = Field(default=1.0, ge=0)
     building_class: str | None = None
+    clock_speed: float = _clock_field()
 
 
 class StorageNode(_NodeBase):
