@@ -83,6 +83,9 @@ class Item(_Row):
     class_name: str
     display_name: str
     display_name_fr: str
+    # The game's own blurb, French when the locale has one. Empty when the data has
+    # none: an item card shows nothing rather than something written here.
+    description_fr: str = ""
     form: ItemForm
     stack_size: float
     icon_file: str | None

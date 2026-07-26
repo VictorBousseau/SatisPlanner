@@ -46,11 +46,12 @@ from satisplanner.data import db, factory_file
 from satisplanner.data.factory_file import FILE_FILTER, FILE_SUFFIX, FactoryFileError
 from satisplanner.ui import exporters, theme
 from satisplanner.ui.canvas import MAX_SCALE, FactoryScene, FactoryView
-from satisplanner.ui.catalogue import PaletteEntry, build_entries
+from satisplanner.ui.catalogue import EntryKind, PaletteEntry, build_entries
 from satisplanner.ui.diagnostics_panel import DiagnosticsPanel
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.help_dialog import HelpDialog, shortcut_rows
 from satisplanner.ui.icon_provider import IconProvider
+from satisplanner.ui.item_card import ItemCard
 from satisplanner.ui.localisation import install_french_translations
 from satisplanner.ui.palette import PaletteWidget
 from satisplanner.ui.preferences import Preferences, PreferencesDialog
@@ -186,6 +187,8 @@ class MainWindow(QMainWindow):
         )
         self.entries: list[PaletteEntry] = build_entries(self.game_data)
         self.document = FactoryDocument(self.game_data, self)
+        # Built on first use and kept: see show_item_card.
+        self.item_card: ItemCard | None = None
         self._syncing_selection = False
         # In creation order, which is menu order, which is the order the help lists.
         self.menus: list[QMenu] = []
@@ -373,6 +376,8 @@ class MainWindow(QMainWindow):
 
     def _connect(self) -> None:
         self.palette_widget.entryActivated.connect(self._add_at_view_centre)
+        self.palette_widget.entryOpened.connect(self.show_entry_card)
+        self.scene.itemCardRequested.connect(self.show_item_card)
         self.palette_widget.defaultTransportsChanged.connect(self.scene.set_default_transports)
         self.palette_widget.defaultTransportsChanged.connect(self._store_transports)
         self.palette_widget.filtersChanged.connect(self._store_filters)
@@ -678,6 +683,41 @@ class MainWindow(QMainWindow):
     def _add_at_view_centre(self, entry: PaletteEntry) -> None:
         """Double-click in the palette drops the node in the middle of the view."""
         self.scene.add_entry(entry, self.view.mapToScene(self.view.viewport().rect().center()))
+
+    # -------------------------------------------------------------- item card
+
+    def show_item_card(self, item_class: str) -> None:
+        """Open the card for one item, reusing the one window.
+
+        One instance, hidden rather than destroyed when closed: the reader's trail
+        through the catalogue survives dismissing it, which is the whole point of
+        having a back button.
+        """
+        if self.item_card is None:
+            self.item_card = ItemCard(self.game_data, self.icons, self)
+            self.item_card.placeRequested.connect(self.place_recipe)
+        self.item_card.show_item(item_class)
+        self.item_card.show()
+        self.item_card.raise_()
+        self.item_card.activateWindow()
+
+    def show_entry_card(self, entry: PaletteEntry) -> None:
+        """The card for whatever a palette entry is about, when it is about an item."""
+        subject = entry.subject_item(self.game_data)
+        if subject is None:
+            self.statusBar().showMessage(f"Aucune fiche pour « {entry.label} ».", 4000)
+            return
+        self.show_item_card(subject)
+
+    def place_recipe(self, recipe_class: str) -> bool:
+        """The card's "place on the canvas" button, resolved against the palette."""
+        for entry in self.entries:
+            if entry.kind is EntryKind.RECIPE and entry.class_name == recipe_class:
+                self._add_at_view_centre(entry)
+                self.statusBar().showMessage(f"{entry.label} pose au centre de la vue.", 4000)
+                return True
+        logger.debug("recette absente de la palette : %s", recipe_class)
+        return False
 
     def _adjust_selection(self) -> None:
         for item in self.scene.selected_nodes():

@@ -74,7 +74,15 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
 - **Palette** : recherche insensible aux accents et par mots indépendants (« alt plaque » trouve
   « Alternative : plaque de fer moulée »), filtre par machine, bascules pour les recettes
   alternatives et les objets d'événement, et le tier par défaut des nouvelles lignes.
-  Glisser-déposer vers le canvas, ou double-clic pour poser au centre de la vue.
+  Glisser-déposer vers le canvas ; **double-clic pour ouvrir la fiche** de l'objet.
+- **Fiche d'objet** : double-clic dans la palette, ou clic droit ▸ « Fiche de… » sur un nœud.
+  Description du jeu, forme, taille de pile, points au collecteur AWESOME, puis toutes les recettes
+  qui le fabriquent — machine, durée de cycle, quantités par cycle et débits par minute,
+  sous-produits, électricité — puis celles qui le consomment, puis le coût en ressources brutes.
+  Chaque ingrédient est un lien vers sa propre fiche, avec précédent et suivant : on suit une
+  chaîne de fabrication comme on suit un wiki. Chaque recette porte un bouton « poser sur le
+  canvas ». Le coût en minerai est **indicatif et le dit** : il ne suit que les recettes standard
+  et ne crédite pas les sous-produits.
 - **Cadence** : chaque extracteur et chaque machine se règle de 1 % à 250 % (clic droit ▸
   « Cadence… », ou la colonne du tableau). Un nœud dont la cadence n'est pas 100 % l'affiche en
   toutes lettres. Le débit suit la cadence exactement ; l'électricité suit une loi de puissance,

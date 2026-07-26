@@ -142,6 +142,21 @@ def french_labels(grouped: dict[str, list[dict[str, str]]]) -> dict[str, str]:
     }
 
 
+def french_descriptions(grouped: dict[str, list[dict[str, str]]]) -> dict[str, str]:
+    """Flatten a locale into ``class name -> description``.
+
+    Separate from :func:`french_labels` because most classes have a label and only
+    some have a blurb, and an item card must be able to tell "no description in the
+    data" from "description not loaded".
+    """
+    return {
+        cls["ClassName"]: cls["mDescription"]
+        for classes in grouped.values()
+        for cls in classes
+        if cls.get("ClassName") and cls.get("mDescription")
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Composite property parsing
 # --------------------------------------------------------------------------- #
@@ -359,7 +374,11 @@ def is_event_class(cls: dict[str, str]) -> bool:
     )
 
 
-def parse_items(grouped: dict[str, list[dict[str, str]]], labels: dict[str, str]) -> list[Item]:
+def parse_items(
+    grouped: dict[str, list[dict[str, str]]],
+    labels: dict[str, str],
+    descriptions: dict[str, str] | None = None,
+) -> list[Item]:
     """Every descriptor that has a real resource form is an item.
 
     Buildings are descriptors too, but carry ``RF_INVALID``, which excludes them
@@ -383,6 +402,7 @@ def parse_items(grouped: dict[str, list[dict[str, str]]], labels: dict[str, str]
                 class_name=class_name,
                 display_name=display_name,
                 display_name_fr=_label(class_name, display_name, labels),
+                description_fr=_label(class_name, cls.get("mDescription", ""), descriptions or {}),
                 form=form,
                 stack_size=conversions.stack_size(parse_float(cls.get("mCachedStackSize")), form),
                 icon_file=parse_icon_filename(
@@ -692,6 +712,7 @@ def parse_buildings(
 def parse_dataset(
     reference: dict[str, list[dict[str, str]]],
     labels: dict[str, str],
+    descriptions: dict[str, str] | None = None,
     *,
     source_file: str,
     french_file: str | None,
@@ -699,7 +720,7 @@ def parse_dataset(
 ) -> GameDataset:
     """Turn two loaded locales into the full, normalised dataset."""
     warnings: list[str] = []
-    items = parse_items(reference, labels)
+    items = parse_items(reference, labels, descriptions)
     forms = {item.class_name: item.form for item in items}
     recipes = parse_recipes(reference, labels, forms, warnings)
     buildings, extractors, belts, pipes, storages, attachments = parse_buildings(
@@ -736,14 +757,18 @@ def load_dataset(game_dir: Path) -> GameDataset:
 
     french_path = docs_dir / FRENCH_FILENAME
     labels: dict[str, str] = {}
+    descriptions: dict[str, str] = {}
     if french_path.is_file():
-        labels = french_labels(read_locale(french_path))
+        french = read_locale(french_path)
+        labels = french_labels(french)
+        descriptions = french_descriptions(french)
     else:
         logger.warning("%s absent : les libelles resteront en anglais", FRENCH_FILENAME)
 
     return parse_dataset(
         reference,
         labels,
+        descriptions,
         source_file=reference_path.name,
         french_file=french_path.name if labels else None,
         reference_was_preferred=preferred,

@@ -9,6 +9,12 @@ Three toggles sit above the list. Alternate recipes and event content are *displ
 filters, never write filters -- the database holds everything, exactly as decided in
 phase 2. The third is not a filter at all: it is the tier that new lines are created
 with, which is what makes capacity being a constraint bearable to work with.
+
+**A double-click opens the item's card, it does not place the node.** It used to do
+the latter, and the change is deliberate: a palette is a catalogue before it is a
+stock of parts, and "tell me about this" is the more common question. Placing is
+still a drag onto the canvas, and every recipe on the card carries a button that
+places it in the middle of the view.
 """
 
 import logging
@@ -158,7 +164,7 @@ class PaletteList(QListView):
     """The list itself, split out so it can start a drag."""
 
     # A PaletteEntry is a plain dataclass, so it travels as an opaque Python object.
-    entryActivated = Signal(object)
+    entryOpened = Signal(object)
 
     def __init__(self, model: PaletteModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -174,7 +180,7 @@ class PaletteList(QListView):
     def _activate(self, index: QModelIndex) -> None:
         entry = self.palette_model.entry_at(index)
         if entry is not None:
-            self.entryActivated.emit(entry)
+            self.entryOpened.emit(entry)
 
     def current_entry(self) -> PaletteEntry | None:
         return self.palette_model.entry_at(self.currentIndex())
@@ -203,7 +209,11 @@ def _alternate_marker(entry: PaletteEntry) -> str:
 class PaletteWidget(QWidget):
     """Search box, filters, and the list of everything that can be placed."""
 
+    # "Put this on the canvas". Emitted by the item card's own button, and by the
+    # tests; a double-click no longer means this -- it opens the card instead.
     entryActivated = Signal(object)
+    # "Tell me about this". A double-click, the way a catalogue behaves.
+    entryOpened = Signal(object)
     defaultTransportsChanged = Signal(str, str)
     # Alternates shown, event content shown. Emitted so the preferences can follow the
     # toggles: a filter changed here and forgotten on the next run is a filter the
@@ -277,7 +287,7 @@ class PaletteWidget(QWidget):
         self.events.toggled.connect(self.refresh)
         self.alternates.toggled.connect(self._announce_filters)
         self.events.toggled.connect(self._announce_filters)
-        self.list.entryActivated.connect(self.entryActivated)
+        self.list.entryOpened.connect(self.entryOpened)
         self.belt_tier.currentIndexChanged.connect(self._announce_transports)
         self.pipe_tier.currentIndexChanged.connect(self._announce_transports)
 

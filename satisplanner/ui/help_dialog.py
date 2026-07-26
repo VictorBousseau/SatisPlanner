@@ -31,7 +31,18 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "Glisser une entree de la palette sur le canvas",
         "pose le noeud a l'endroit lache, aligne sur la grille",
     ),
-    ("Double-clic dans la palette", "pose le noeud au centre de la vue"),
+    (
+        "Double-clic dans la palette",
+        "ouvre la fiche de l'objet : recettes, machines, debits, cout en minerai",
+    ),
+    (
+        "Dans une fiche, clic sur un ingredient",
+        "ouvre sa fiche. Alt+Gauche et Alt+Droite reviennent en arriere et en avant",
+    ),
+    (
+        "Dans une fiche, [poser sur le canvas]",
+        "pose cette recette au centre de la vue",
+    ),
     (
         "Glisser d'un port de sortie vers un port d'entree",
         "tire une ligne. Le trait est vert si elle peut exister, rouge sinon, "
@@ -47,7 +58,8 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     ("Molette", "zoom avant et arriere autour du curseur"),
     (
         "Clic droit sur un noeud",
-        "ajuster aux intrants, nombre de machines, cadence, contenu du tampon, supprimer",
+        "fiche de l'objet, ajuster aux intrants, nombre de machines, cadence, "
+        "contenu du tampon, supprimer",
     ),
     (
         "Clic droit sur une ligne",

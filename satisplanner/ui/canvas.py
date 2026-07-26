@@ -91,6 +91,9 @@ class FactoryScene(QGraphicsScene):
     """Mirror of the document's graph, plus the link-dragging interaction."""
 
     selectionSummaryChanged = Signal(str)
+    # An item class the user asked to read about. The scene knows which item a node
+    # is about; opening a window is the main window's business.
+    itemCardRequested = Signal(str)
 
     def __init__(
         self,
@@ -508,8 +511,35 @@ class FactoryScene(QGraphicsScene):
                 return self._edge_menu(item, parent)
         return None
 
+    def headline_item(self, node_id: str) -> str | None:
+        """The item a node is *about*, for the card: its product, or what it carries.
+
+        A machine is about what it makes -- its first product, the recipe's headline
+        -- and everything else is about the item it already names.
+        """
+        node = self.document.graph.node(node_id)
+        match node:
+            case MachineNode():
+                recipe = self.document.game_data.recipe(node.recipe_class)
+                return recipe.products[0].item_class if recipe.products else None
+            case WaterExtractorNode():
+                return self.document.game_data.extractor(node.extractor_class).item_class
+            case StorageNode():
+                return storage_item(node, self.document.graph)
+            case _:
+                return getattr(node, "item_class", None)
+
     def _node_menu(self, item: NodeItem, parent: QWidget) -> QMenu:
         menu = QMenu(parent)
+        subject = self.headline_item(item.node.id)
+        if subject is not None:
+            name = self.document.game_data.item(subject).display_name_fr
+            card = QAction(f"Fiche de {name}", menu)
+            card.triggered.connect(
+                lambda _checked=False, cls=subject: self.itemCardRequested.emit(cls)
+            )
+            menu.addAction(card)
+            menu.addSeparator()
         if isinstance(item.node, MachineNode):
             adjust = QAction("Ajuster ce noeud a ses intrants", menu)
             adjust.triggered.connect(lambda: self.adjust_node(item.node.id))

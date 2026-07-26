@@ -38,7 +38,8 @@ logger = logging.getLogger(__name__)
 # 3 added `buildings.power_exponent` and the `power_shards` table, both needed
 # to price overclocking: the draw follows a power law whose exponent is per
 # building, and the shard says how much clock one of them buys.
-SCHEMA_VERSION: Final = 3
+# 4 added `items.description_fr`: the game's own blurb, for the item card.
+SCHEMA_VERSION: Final = 4
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -67,6 +68,9 @@ CREATE TABLE items (
     class_name      TEXT PRIMARY KEY,
     display_name    TEXT NOT NULL,
     display_name_fr TEXT NOT NULL,
+    -- mDescription, French when the locale has one. Empty rather than null: an
+    -- item with no blurb in the data shows none, and nothing is written for it.
+    description_fr  TEXT NOT NULL DEFAULT '',
     form            TEXT NOT NULL CHECK (form IN ('solid', 'liquid', 'gas')),
     stack_size      REAL NOT NULL,
     icon_file       TEXT,
@@ -225,13 +229,15 @@ def _insert_meta(connection: sqlite3.Connection, dataset: GameDataset) -> None:
 
 def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> None:
     connection.executemany(
-        "INSERT INTO items (class_name, display_name, display_name_fr, form, stack_size,"
-        " icon_file, sink_points, is_raw_resource, is_event) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO items (class_name, display_name, display_name_fr, description_fr, form,"
+        " stack_size, icon_file, sink_points, is_raw_resource, is_event)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 item.class_name,
                 item.display_name,
                 item.display_name_fr,
+                item.description_fr,
                 item.form.value,
                 item.stack_size,
                 item.icon_file,
@@ -384,6 +390,7 @@ def read_items(connection: sqlite3.Connection) -> list[Item]:
             class_name=row["class_name"],
             display_name=row["display_name"],
             display_name_fr=row["display_name_fr"],
+            description_fr=row["description_fr"],
             form=ItemForm(row["form"]),
             stack_size=row["stack_size"],
             icon_file=row["icon_file"],

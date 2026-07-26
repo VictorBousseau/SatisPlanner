@@ -77,6 +77,27 @@ class PaletteEntry:
     is_alternate: bool = False
     is_event: bool = False
 
+    def subject_item(self, game_data: GameData) -> str | None:
+        """The item this entry is *about*, for the item card.
+
+        A recipe is about what it makes, an extractor about what it pulls out, and
+        an endpoint about what it carries. A storage entry is about a building, not
+        an item, and has no card.
+        """
+        match self.kind:
+            case EntryKind.RECIPE:
+                recipe = game_data.recipes.get(self.class_name)
+                if recipe is None or not recipe.products:
+                    return None
+                return recipe.products[0].item_class
+            case EntryKind.WATER_EXTRACTOR:
+                extractor = game_data.extractors.get(self.class_name)
+                return extractor.item_class if extractor else None
+            case EntryKind.STORAGE:
+                return None
+            case _:
+                return self.class_name if self.class_name in game_data.items else None
+
     @property
     def search_key(self) -> str:
         """Everything worth matching a query against, folded once."""
