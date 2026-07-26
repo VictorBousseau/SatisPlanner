@@ -23,11 +23,19 @@ from satisplanner.core.graph import (
     StorageNode,
     WaterExtractorNode,
 )
-from satisplanner.core.models import BuildingKind, GameData, Item, ItemForm
+from satisplanner.core.models import BuildingKind, GameData, Item, ItemForm, Purity
 
 # Default rate offered when the user drops an "import from outside" node. It is only
 # a starting point, edited on the node itself, and no game value is implied.
 DEFAULT_EXTERNAL_RATE: Final = 60.0
+
+# The one place the three purities are spelled in French, so a node, a table cell and
+# a menu cannot end up calling the same thing three different names.
+PURITY_LABELS: Final[dict[Purity, str]] = {
+    Purity.IMPURE: "Impur",
+    Purity.NORMAL: "Normal",
+    Purity.PURE: "Pur",
+}
 
 
 class EntryKind(StrEnum):
@@ -306,6 +314,37 @@ def machine_choices(game_data: GameData) -> list[tuple[str, str]]:
             if building.kind is BuildingKind.MANUFACTURER
         ),
         key=lambda pair: fold(pair[1]),
+    )
+
+
+def extractor_choices(game_data: GameData, item_class: str) -> list[tuple[str, str]]:
+    """Extractors that could work this deposit, as ``(class name, French label)``.
+
+    Filtered on what the game allows: the form has to match, and an extractor that
+    names one resource -- the oil pump, the water pump -- only appears for it. That
+    is what makes "change the miner on this node" a safe operation rather than one
+    that has to be checked afterwards.
+    """
+    item = game_data.items.get(item_class)
+    if item is None:
+        return []
+    candidates = [
+        extractor
+        for extractor in game_data.extractors.values()
+        if extractor.allowed_form.is_fluid is item.form.is_fluid
+        and extractor.item_class in (None, item_class)
+    ]
+    return sorted(
+        (
+            (
+                extractor.class_name,
+                game_data.buildings[extractor.class_name].display_name_fr
+                if extractor.class_name in game_data.buildings
+                else extractor.class_name,
+            )
+            for extractor in candidates
+        ),
+        key=lambda choice: choice[1],
     )
 
 

@@ -74,7 +74,8 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
 - **Palette** : recherche insensible aux accents et par mots indépendants (« alt plaque » trouve
   « Alternative : plaque de fer moulée »), filtre par machine, bascules pour les recettes
   alternatives et les objets d'événement, et le tier par défaut des nouvelles lignes.
-  Glisser-déposer vers le canvas ; **double-clic pour ouvrir la fiche** de l'objet.
+  Glisser-déposer vers le canvas, **Entrée** pour poser au centre de la vue, et
+  **double-clic pour ouvrir la fiche** de l'objet.
 - **Fiche d'objet** : double-clic dans la palette, ou clic droit ▸ « Fiche de… » sur un nœud.
   Description du jeu, forme, taille de pile, points au collecteur AWESOME, puis toutes les recettes
   qui le fabriquent — machine, durée de cycle, quantités par cycle et débits par minute,
@@ -83,6 +84,11 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
   chaîne de fabrication comme on suit un wiki. Chaque recette porte un bouton « poser sur le
   canvas ». Le coût en minerai est **indicatif et le dit** : il ne suit que les recettes standard
   et ne crédite pas les sous-produits.
+- **Gisements** : la pureté et le type d'extracteur se lisent sur le nœud
+  (« 1 Foreuse Mk.3 — gisement pur ») et se changent par clic droit ou par les colonnes du
+  tableau, sans supprimer le nœud ni ses lignes. **La pureté appartient au gisement** : elle
+  multiplie tous les extracteurs du nœud. Deux gisements de puretés différentes sont deux nœuds,
+  et c'est la seule façon de les représenter.
 - **Cadence** : chaque extracteur et chaque machine se règle de 1 % à 250 % (clic droit ▸
   « Cadence… », ou la colonne du tableau). Un nœud dont la cadence n'est pas 100 % l'affiche en
   toutes lettres. Le débit suit la cadence exactement ; l'électricité suit une loi de puissance,
@@ -93,7 +99,8 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
   nombre de machines ; clic droit sur une ligne pour changer de tier ou passer au tier suffisant.
 - **Tableau** : un nœud par ligne, tri, filtre, sélection synchronisée dans les deux sens avec le
   canvas, colonne « Quantité » éditable — machines, extracteurs, débit d'un apport externe ou
-  stock initial d'un tampon selon le type de nœud — et colonne « Cadence », éditable elle aussi.
+  stock initial d'un tampon selon le type de nœud — plus « Cadence », « Pureté » et
+  « Extracteur ». Les deux dernières se choisissent dans une liste, jamais en tapant du texte.
 - **Totaux** : matières brutes, fluides et sous-produits, électricité, liste de courses. Quand
   l'usine vit sur un stock, un bandeau rouge et deux colonnes de chiffres — « avec les stocks » et
   « régime établi » — remplacent le silence qui laisserait croire à une réussite.
@@ -334,7 +341,12 @@ rien. C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
     ce qui n'est pas un hasard. Le nombre d'éclats se déduit de `mExtraPotential` ; seul le nombre
     d'emplacements (trois) n'est pas exporté et vit dans `core/constants.py`, avec un test qui
     vérifie que la borne de 250 % reste égale à ce que trois éclats achètent réellement.
-12. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
+12. **Chaque champ modifiable n'a qu'une implémentation, pas deux qui s'accordent.**
+    `ui/edits.py` porte la validation et la commande ; le menu contextuel et la cellule du
+    tableau l'appellent tous les deux. La première version en avait deux, écrites pour donner
+    le même résultat et vérifiées par un test — ce qui tient à trois champs et se casse au
+    quatrième.
+13. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
     coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
     écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
     affichant la même image coûte seize millisecondes.

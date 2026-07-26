@@ -12,9 +12,9 @@ with, which is what makes capacity being a constraint bearable to work with.
 
 **A double-click opens the item's card, it does not place the node.** It used to do
 the latter, and the change is deliberate: a palette is a catalogue before it is a
-stock of parts, and "tell me about this" is the more common question. Placing is
-still a drag onto the canvas, and every recipe on the card carries a button that
-places it in the middle of the view.
+stock of parts, and "tell me about this" is the more common question. Placing is a
+drag onto the canvas, the **Enter key** on the highlighted row, or the button every
+recipe carries on its card.
 """
 
 import logging
@@ -31,7 +31,7 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QColor, QDrag
+from PySide6.QtGui import QColor, QDrag, QKeyEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -165,6 +165,7 @@ class PaletteList(QListView):
 
     # A PaletteEntry is a plain dataclass, so it travels as an opaque Python object.
     entryOpened = Signal(object)
+    entryActivated = Signal(object)
 
     def __init__(self, model: PaletteModel, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -181,6 +182,20 @@ class PaletteList(QListView):
         entry = self.palette_model.entry_at(index)
         if entry is not None:
             self.entryOpened.emit(entry)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Enter places the highlighted entry, the double-click having moved on.
+
+        The gesture that used to place a node now opens its card, and this is where
+        the fast path went: search, arrow down, Enter, without touching the mouse.
+        """
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            entry = self.current_entry()
+            if entry is not None:
+                self.entryActivated.emit(entry)
+                event.accept()
+                return
+        super().keyPressEvent(event)
 
     def current_entry(self) -> PaletteEntry | None:
         return self.palette_model.entry_at(self.currentIndex())
@@ -209,8 +224,8 @@ def _alternate_marker(entry: PaletteEntry) -> str:
 class PaletteWidget(QWidget):
     """Search box, filters, and the list of everything that can be placed."""
 
-    # "Put this on the canvas". Emitted by the item card's own button, and by the
-    # tests; a double-click no longer means this -- it opens the card instead.
+    # "Put this on the canvas": the Enter key, and the item card's own button. A
+    # double-click no longer means this -- it opens the card instead.
     entryActivated = Signal(object)
     # "Tell me about this". A double-click, the way a catalogue behaves.
     entryOpened = Signal(object)
@@ -288,6 +303,7 @@ class PaletteWidget(QWidget):
         self.alternates.toggled.connect(self._announce_filters)
         self.events.toggled.connect(self._announce_filters)
         self.list.entryOpened.connect(self.entryOpened)
+        self.list.entryActivated.connect(self.entryActivated)
         self.belt_tier.currentIndexChanged.connect(self._announce_transports)
         self.pipe_tier.currentIndexChanged.connect(self._announce_transports)
 

@@ -29,14 +29,16 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHeaderView,
     QLineEdit,
+    QStyledItemDelegate,
     QTableView,
     QVBoxLayout,
     QWidget,
 )
 
-from satisplanner.core import constants, formatting
+from satisplanner.core import formatting
 from satisplanner.core.graph import (
     ExternalSourceNode,
     GraphError,
@@ -48,7 +50,8 @@ from satisplanner.core.graph import (
     WaterExtractorNode,
 )
 from satisplanner.core.results import LimitingFactor, NodeSolution
-from satisplanner.ui import theme
+from satisplanner.ui import edits, theme
+from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices
 from satisplanner.ui.commands import SetNodeFieldCommand
 from satisplanner.ui.document import FactoryDocument
 
@@ -110,10 +113,12 @@ COLUMN_KIND: Final = 1
 COLUMN_LABEL: Final = 2
 COLUMN_QUANTITY: Final = 3
 COLUMN_CLOCK: Final = 4
-COLUMN_INPUTS: Final = 5
-COLUMN_OUTPUTS: Final = 6
-COLUMN_LIMITING: Final = 7
-COLUMN_RATIO: Final = 8
+COLUMN_PURITY: Final = 5
+COLUMN_EXTRACTOR: Final = 6
+COLUMN_INPUTS: Final = 7
+COLUMN_OUTPUTS: Final = 8
+COLUMN_LIMITING: Final = 9
+COLUMN_RATIO: Final = 10
 
 HEADERS: Final[tuple[str, ...]] = (
     "Noeud",
@@ -121,6 +126,8 @@ HEADERS: Final[tuple[str, ...]] = (
     "Recette / contenu",
     "Quantite",
     "Cadence",
+    "Purete",
+    "Extracteur",
     "Entrees /min",
     "Sorties /min",
     "Facteur limitant",
@@ -132,6 +139,8 @@ COLUMN_WIDTHS: Final[dict[int, int]] = {
     COLUMN_KIND: 75,
     COLUMN_QUANTITY: 105,
     COLUMN_CLOCK: 80,
+    COLUMN_PURITY: 80,
+    COLUMN_EXTRACTOR: 120,
     COLUMN_INPUTS: 170,
     COLUMN_OUTPUTS: 170,
     COLUMN_LIMITING: 135,
@@ -148,6 +157,9 @@ def has_clock(node: Node) -> TypeGuard[ClockedNode]:
 
 
 _ROLE_NODE_ID: Final = int(Qt.ItemDataRole.UserRole)
+# The short list of values a cell accepts, as (stored value, French label). The
+# delegate reads it to build a combo box; an empty list means "type it yourself".
+_ROLE_CHOICES: Final = int(Qt.ItemDataRole.UserRole) + 1
 
 Index = QModelIndex | QPersistentModelIndex
 
@@ -207,6 +219,8 @@ class NodeTableModel(QAbstractTableModel):
             return base | Qt.ItemFlag.ItemIsEditable
         if index.column() == COLUMN_CLOCK and has_clock(node):
             return base | Qt.ItemFlag.ItemIsEditable
+        if index.column() in (COLUMN_PURITY, COLUMN_EXTRACTOR) and isinstance(node, ResourceNode):
+            return base | Qt.ItemFlag.ItemIsEditable
         return base
 
     def data(self, index: Index, role: int = int(Qt.ItemDataRole.DisplayRole)) -> Any:
@@ -222,6 +236,12 @@ class NodeTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.EditRole and column == COLUMN_CLOCK:
             # Edited in percent, stored as a fraction: nobody types 2.5 for 250 %.
             return node.clock_speed * 100.0 if has_clock(node) else None
+        if role == Qt.ItemDataRole.EditRole and column == COLUMN_PURITY:
+            return node.purity.value if isinstance(node, ResourceNode) else None
+        if role == Qt.ItemDataRole.EditRole and column == COLUMN_EXTRACTOR:
+            return node.extractor_class if isinstance(node, ResourceNode) else None
+        if role == _ROLE_CHOICES:
+            return self._choices(node, column)
         if role == _ROLE_NODE_ID:
             return node.id
         if role == Qt.ItemDataRole.ForegroundRole:
@@ -246,6 +266,10 @@ class NodeTableModel(QAbstractTableModel):
                 return self._quantity_text(node)
             case _ if column == COLUMN_CLOCK:
                 return formatting.percent(node.clock_speed) if has_clock(node) else "—"
+            case _ if column == COLUMN_PURITY:
+                return PURITY_LABELS[node.purity] if isinstance(node, ResourceNode) else "—"
+            case _ if column == COLUMN_EXTRACTOR:
+                return self._extractor_name(node)
             case _ if column == COLUMN_INPUTS:
                 return self._flows(solution.inputs if solution else {})
             case _ if column == COLUMN_OUTPUTS:
@@ -261,6 +285,23 @@ class NodeTableModel(QAbstractTableModel):
             return "—"
         value = formatting.number(getattr(node, quantity.field))
         return f"{value} {quantity.label}"
+
+    def _extractor_name(self, node: Node) -> str:
+        """The building working this node, French, or a dash when there is none."""
+        if not isinstance(node, ResourceNode | WaterExtractorNode):
+            return "—"
+        building = self.document.game_data.buildings.get(node.extractor_class)
+        return building.display_name_fr if building else node.extractor_class
+
+    def _choices(self, node: Node, column: int) -> list[tuple[str, str]]:
+        """What a cell of this column accepts, for the delegate's combo box."""
+        if not isinstance(node, ResourceNode):
+            return []
+        if column == COLUMN_PURITY:
+            return [(purity.value, label) for purity, label in PURITY_LABELS.items()]
+        if column == COLUMN_EXTRACTOR:
+            return extractor_choices(self.document.game_data, node.item_class)
+        return []
 
     def _flows(self, values: dict[str, float]) -> str:
         if not values:
@@ -311,7 +352,14 @@ class NodeTableModel(QAbstractTableModel):
         if node is None:
             return False
         if index.column() == COLUMN_CLOCK:
-            return self._set_clock(node, value)
+            # Typed in percent, stored as a fraction: nobody types 2,5 for 250 %.
+            return self._through(
+                edits.set_clock_speed(self.document, node.id, _number(value) / 100.0)
+            )
+        if index.column() == COLUMN_PURITY:
+            return self._through(edits.set_purity(self.document, node.id, str(value)))
+        if index.column() == COLUMN_EXTRACTOR:
+            return self._through(edits.set_extractor(self.document, node.id, str(value)))
         if index.column() != COLUMN_QUANTITY:
             return False
         quantity = quantity_of(node)
@@ -335,33 +383,11 @@ class NodeTableModel(QAbstractTableModel):
         )
         return True
 
-    def _set_clock(self, node: Node, value: Any) -> bool:
-        """Clock speed, typed in percent. Out of range is refused, never clamped.
-
-        Refusing leaves the stored value alone, which is what the specification asks
-        for: a typo must not silently become 250 % or wipe what was there.
-        """
-        if not has_clock(node):
+    def _through(self, problem: str | None) -> bool:
+        """Report what the shared editor said. A refusal leaves the cell as it was."""
+        if problem is not None:
+            logger.debug("edition refusee dans le tableau : %s", problem)
             return False
-        try:
-            clock = float(value) / 100.0
-        except (TypeError, ValueError):
-            logger.debug("cadence non numerique refusee : %r", value)
-            return False
-        if not constants.MIN_CLOCK_SPEED <= clock <= constants.MAX_CLOCK_SPEED:
-            logger.debug("cadence hors domaine refusee : %r", value)
-            return False
-        if abs(clock - node.clock_speed) < 1e-9:
-            return False
-        self.document.undo_stack.push(
-            SetNodeFieldCommand(
-                self.document,
-                node.id,
-                "clock_speed",
-                clock,
-                f"{node.id} : cadence {formatting.percent(clock)}",
-            )
-        )
         return True
 
     # --------------------------------------------------------------- lookups
@@ -385,6 +411,50 @@ class NodeTableModel(QAbstractTableModel):
             return report.node(node_id)
         except KeyError:
             return None
+
+
+def _number(value: Any) -> float:
+    """A cell's text as a number, or a value the domain check will reject.
+
+    ``NaN`` compares false against every bound, so a non-numeric entry is refused by
+    the same range test as an out-of-range one, and there is one refusal path rather
+    than two.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+class ChoiceDelegate(QStyledItemDelegate):
+    """A combo box for the cells whose value is one of a short, known list.
+
+    Purity and extractor are not numbers to be typed: they are three and four
+    possibilities the catalogue already knows. A line edit expecting the reader to
+    spell "impure" would be an invitation to get it wrong.
+    """
+
+    def createEditor(self, parent: QWidget, option: Any, index: Index) -> QWidget:
+        choices = index.data(_ROLE_CHOICES)
+        if not choices:
+            return super().createEditor(parent, option, index)
+        combo = QComboBox(parent)
+        for value, label in choices:
+            combo.addItem(label, value)
+        return combo
+
+    def setEditorData(self, editor: QWidget, index: Index) -> None:
+        if isinstance(editor, QComboBox):
+            position = editor.findData(index.data(Qt.ItemDataRole.EditRole))
+            editor.setCurrentIndex(max(position, 0))
+            return
+        super().setEditorData(editor, index)
+
+    def setModelData(self, editor: QWidget, model: Any, index: Index) -> None:
+        if isinstance(editor, QComboBox):
+            model.setData(index, editor.currentData(), Qt.ItemDataRole.EditRole)
+            return
+        super().setModelData(editor, model, index)
 
 
 class NodeTablePanel(QWidget):
@@ -423,6 +493,10 @@ class NodeTablePanel(QWidget):
         # given room and the rest scroll, rather than every column being unreadable.
         for column, width in COLUMN_WIDTHS.items():
             self.view.setColumnWidth(column, width)
+        # Purity and extractor are chosen from a list, never typed.
+        self.choice_delegate = ChoiceDelegate(self.view)
+        for column in (COLUMN_PURITY, COLUMN_EXTRACTOR):
+            self.view.setItemDelegateForColumn(column, self.choice_delegate)
         self.view.selectionModel().selectionChanged.connect(self._announce_selection)
 
         layout = QVBoxLayout(self)

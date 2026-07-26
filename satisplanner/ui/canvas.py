@@ -51,11 +51,17 @@ from satisplanner.core.graph import (
     WaterExtractorNode,
     storage_item,
 )
-from satisplanner.core.models import ItemForm
+from satisplanner.core.models import ItemForm, Purity
 from satisplanner.core.results import FactoryReport
-from satisplanner.ui import theme
+from satisplanner.ui import edits, theme
 from satisplanner.ui.canvas_items import ANY_ITEM, EdgeItem, NodeItem, Port, curve
-from satisplanner.ui.catalogue import PaletteEntry, build_entries, transport_choices
+from satisplanner.ui.catalogue import (
+    PURITY_LABELS,
+    PaletteEntry,
+    build_entries,
+    extractor_choices,
+    transport_choices,
+)
 from satisplanner.ui.commands import (
     AddNodeCommand,
     ConnectCommand,
@@ -547,6 +553,9 @@ class FactoryScene(QGraphicsScene):
             count = QAction("Nombre de machines...", menu)
             count.triggered.connect(lambda: self.ask_machine_count(item.node.id, parent))
             menu.addAction(count)
+        if isinstance(item.node, ResourceNode):
+            menu.addMenu(self._purity_menu(item.node, menu))
+            menu.addMenu(self._extractor_menu(item.node, menu))
         if isinstance(item.node, MachineNode | ResourceNode | WaterExtractorNode):
             clock = QAction("Cadence...", menu)
             clock.triggered.connect(lambda: self.ask_clock_speed(item.node.id, parent))
@@ -558,6 +567,51 @@ class FactoryScene(QGraphicsScene):
         menu.addSeparator()
         menu.addAction(delete)
         return menu
+
+    def _purity_menu(self, node: ResourceNode, parent: QMenu) -> QMenu:
+        """The purity of the deposit, which nothing else in the interface can set.
+
+        It has been in the model since the beginning and reachable from nowhere,
+        which is the same as not existing. It cannot live in the palette -- ten ores
+        by three miners by three purities is a hundred entries -- so it belongs on
+        the node that is already on the canvas.
+        """
+        menu = QMenu("Purete du gisement", parent)
+        for purity, label in PURITY_LABELS.items():
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(node.purity is purity)
+            action.triggered.connect(
+                lambda _checked=False, value=purity: self.set_purity(node.id, value)
+            )
+            menu.addAction(action)
+        return menu
+
+    def _extractor_menu(self, node: ResourceNode, parent: QMenu) -> QMenu:
+        """Swap the miner without deleting the node and its lines with it."""
+        menu = QMenu("Extracteur", parent)
+        for class_name, label in extractor_choices(self.document.game_data, node.item_class):
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(node.extractor_class == class_name)
+            action.triggered.connect(
+                lambda _checked=False, cls=class_name: self.set_extractor(node.id, cls)
+            )
+            menu.addAction(action)
+        return menu
+
+    def set_purity(self, node_id: str, purity: Purity | str) -> bool:
+        return self._apply(edits.set_purity(self.document, node_id, purity))
+
+    def set_extractor(self, node_id: str, extractor_class: str) -> bool:
+        return self._apply(edits.set_extractor(self.document, node_id, extractor_class))
+
+    def _apply(self, problem: str | None) -> bool:
+        """Report a refusal in the status bar, and say whether the edit went through."""
+        if problem is not None:
+            self.selectionSummaryChanged.emit(problem)
+            return False
+        return True
 
     def _storage_content_menu(self, node: StorageNode, parent: QMenu) -> QMenu:
         """Choose what a buffer holds, or hand the decision back to the lines.
@@ -695,32 +749,8 @@ class FactoryScene(QGraphicsScene):
         )
 
     def set_clock_speed(self, node_id: str, clock_speed: float) -> bool:
-        """Change one node's clock. The single door, shared with the table.
-
-        Refuses a value outside the game's own range rather than clamping it: a
-        silently corrected 400 % teaches the user nothing.
-        """
-        node = self.document.graph.node(node_id)
-        if not isinstance(node, MachineNode | ResourceNode | WaterExtractorNode):
-            return False
-        if not constants.MIN_CLOCK_SPEED <= clock_speed <= constants.MAX_CLOCK_SPEED:
-            self.selectionSummaryChanged.emit(
-                f"Cadence hors domaine : {formatting.percent(constants.MIN_CLOCK_SPEED)} a "
-                f"{formatting.percent(constants.MAX_CLOCK_SPEED)}."
-            )
-            return False
-        if abs(node.clock_speed - clock_speed) < 1e-9:
-            return False
-        self.document.undo_stack.push(
-            SetNodeFieldCommand(
-                self.document,
-                node_id,
-                "clock_speed",
-                clock_speed,
-                f"cadence a {formatting.percent(clock_speed)}",
-            )
-        )
-        return True
+        """Change one node's clock, through the door the table also uses."""
+        return self._apply(edits.set_clock_speed(self.document, node_id, clock_speed))
 
     def ask_clock_speed(self, node_id: str, parent: QWidget) -> None:
         node = self.document.graph.node(node_id)

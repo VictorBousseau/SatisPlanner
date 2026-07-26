@@ -44,6 +44,7 @@ from satisplanner.core.graph import (
 from satisplanner.core.models import GameData, ItemForm
 from satisplanner.core.results import EdgeSolution, LimitingFactor, NodeSolution
 from satisplanner.ui import theme
+from satisplanner.ui.catalogue import PURITY_LABELS
 from satisplanner.ui.icon_provider import IconProvider
 
 logger = logging.getLogger(__name__)
@@ -227,9 +228,9 @@ class NodeItem(QGraphicsItem):
                 return f"{building} — {count} machine(s){_clock_suffix(machine.clock_speed)}"
             case ResourceNode() as deposit:
                 extractor = self.game_data.building(deposit.extractor_class).display_name_fr
-                purity = {"impure": "impur", "normal": "normal", "pure": "pur"}[
-                    deposit.purity.value
-                ]
+                # The purity is on the face of the node because nothing else shows it
+                # and everything depends on it: the same miner pulls 120, 240 or 480.
+                purity = PURITY_LABELS[deposit.purity].lower()
                 count = formatting.number(deposit.count)
                 clock = _clock_suffix(deposit.clock_speed)
                 return f"{count} {extractor} — gisement {purity}{clock}"

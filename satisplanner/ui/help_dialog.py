@@ -59,7 +59,11 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     (
         "Clic droit sur un noeud",
         "fiche de l'objet, ajuster aux intrants, nombre de machines, cadence, "
-        "contenu du tampon, supprimer",
+        "purete du gisement, extracteur, contenu du tampon, supprimer",
+    ),
+    (
+        "Entree dans la palette",
+        "pose l'entree surlignee au centre de la vue",
     ),
     (
         "Clic droit sur une ligne",
@@ -73,6 +77,25 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "Clic sur un diagnostic",
         "selectionne et centre le noeud ou la ligne concernee",
     ),
+)
+
+
+# Rules a user cannot deduce from the interface and will otherwise assume wrongly.
+# Each one is a modelling choice, not a limitation to be worked around.
+MODELLING_NOTES: Final[tuple[str, ...]] = (
+    "La purete d'un gisement s'applique a <b>tous</b> les extracteurs de ce noeud : "
+    "un noeud est un gisement. Deux gisements de puretes differentes, ce sont deux "
+    "noeuds, et c'est la seule facon de les representer.",
+    "La cadence multiplie le debit a l'identique et l'electricite en loi de "
+    "puissance : a 250 %, une machine produit 2,5 fois plus et consomme environ "
+    "3,36 fois plus.",
+    "Les repartiteurs, groupeurs et jonctions ne sont jamais des noeuds. Ils sont "
+    "deduits des lignes qui partagent un noeud et comptes dans la liste de courses.",
+    "Les tampons sont des puits et des sources infinis. L'application dit si les "
+    "debits sont tenables et en combien de temps un stock se vide, mais ne simule "
+    "pas le temps qui passe.",
+    "Rien ici n'est de la geometrie : ni distance, ni elevation, ni hauteur de "
+    "refoulement des pompes.",
 )
 
 
@@ -103,6 +126,7 @@ def help_html(shortcuts: Sequence[tuple[str, str]]) -> str:
         f"<tr><td class='key'>{keystroke}</td><td>{label}</td></tr>"
         for label, keystroke in shortcuts
     )
+    notes = "".join(f"<li>{note}</li>" for note in MODELLING_NOTES)
     return f"""
     <style>
       body {{ font-size: 10pt; }}
@@ -110,6 +134,7 @@ def help_html(shortcuts: Sequence[tuple[str, str]]) -> str:
       td {{ padding: 3px 10px 3px 0; vertical-align: top; }}
       td.key {{ color: {theme.ACCENT}; white-space: nowrap; }}
       p.note {{ color: {theme.TEXT_MUTED}; }}
+      li {{ margin-bottom: 6px; }}
     </style>
     <h2>Gestes du canvas</h2>
     <table>{gestures}</table>
@@ -117,6 +142,8 @@ def help_html(shortcuts: Sequence[tuple[str, str]]) -> str:
     <table>{keys}</table>
     <p class="note">La touche Suppr efface la selection, noeuds et lignes confondus.
     Tout passe par la pile d'annulation, deplacements compris.</p>
+    <h2>Ce que l'outil modelise, et comment</h2>
+    <ul>{notes}</ul>
     """
 
 

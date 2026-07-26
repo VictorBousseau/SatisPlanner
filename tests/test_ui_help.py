@@ -16,7 +16,13 @@ from pytestqt.qtbot import QtBot
 from satisplanner import __version__
 from satisplanner.core.models import GameData
 from satisplanner.data import db
-from satisplanner.ui.help_dialog import GESTURES, HelpDialog, help_html, shortcut_rows
+from satisplanner.ui.help_dialog import (
+    GESTURES,
+    MODELLING_NOTES,
+    HelpDialog,
+    help_html,
+    shortcut_rows,
+)
 from satisplanner.ui.main_window import MainWindow
 from tests.conftest import temporary_settings
 
@@ -57,7 +63,8 @@ def test_the_usual_suspects_are_bound(window: MainWindow) -> None:
 
 def test_menu_mnemonics_do_not_leak_into_the_page(window: MainWindow) -> None:
     page = help_html(shortcut_rows(window.documented_actions()))
-    assert "&" not in page.replace("&nbsp;", ""), "les & de menu ne sont pas du texte"
+    rendered = page.replace("&nbsp;", "").replace("&lt;", "").replace("&gt;", "")
+    assert "&" not in rendered, "les & de menu ne sont pas du texte"
 
 
 def test_the_canvas_gestures_are_all_described(window: MainWindow) -> None:
@@ -68,6 +75,15 @@ def test_the_canvas_gestures_are_all_described(window: MainWindow) -> None:
         assert effect in page
     assert "Clic milieu" in page
     assert "Molette" in page
+
+
+def test_the_modelling_rules_are_stated_where_a_user_looks(window: MainWindow) -> None:
+    """Rules nobody can deduce from the screen, and will otherwise assume wrongly."""
+    page = help_html(shortcut_rows(window.documented_actions()))
+    for note in MODELLING_NOTES:
+        assert note in page
+    assert "purete d'un gisement s'applique" in page
+    assert "deux noeuds" in page
 
 
 def test_the_page_opens_from_the_menu(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
