@@ -101,6 +101,50 @@ def extractor_rate_per_minute(
     return rate_per_minute(items_per_cycle, cycle_seconds, form)
 
 
+def energy_mj(m_energy_value: float, form: ItemForm) -> float:
+    """Energy one unit of an item carries, in MJ per item or per m3.
+
+    Source: ``mEnergyValue``.
+    Formula: solids unchanged, fluids and gases **multiplied** by 1000.
+    Control: Coal 300 MJ per item; Fuel stores 0.75, which is 0.75 MJ per litre,
+    i.e. 750 MJ per m3 -- the same factor as every other fluid quantity, and the
+    packaged twins confirm it: ``Desc_Fuel_C`` (a solid canister holding 1 m3)
+    stores 750 outright.
+
+    Multiplied, not divided: the field is per litre while every rate in the
+    application is per m3, so the litre factor lands on the other side here than
+    it does in :func:`normalise_amount`.
+    """
+    if form.is_fluid:
+        return m_energy_value * LITRES_PER_CUBIC_METRE
+    return m_energy_value
+
+
+def fuel_rate_per_minute(power_mw: float, energy_per_unit_mj: float) -> float:
+    """Fuel a generator burns, in items/min or m3/min.
+
+    Source: ``mPowerProduction`` and the fuel's :func:`energy_mj`.
+    Formula: ``power / energy x 60`` -- a MW is a MJ per second.
+    Control: coal generator, 75 MW on 300 MJ coal -> 15 items/min; fuel
+    generator, 250 MW on 750 MJ/m3 fuel -> 20 m3/min, and 7.5 m3/min on
+    turbofuel at 2000 MJ/m3.
+    """
+    if energy_per_unit_mj <= 0:
+        return 0.0
+    return power_mw / energy_per_unit_mj * SECONDS_PER_MINUTE
+
+
+def supplemental_rate_per_minute(ratio: float, power_mw: float) -> float:
+    """Make-up water a generator needs, in m3/min.
+
+    Source: ``mSupplementalToPowerRatio``, litres per second and per MW.
+    Formula: ``ratio x power x 60 / 1000``.
+    Control: coal generator, 10 x 75 = 750 L/s -> 45 m3/min. The fuel generator
+    declares 0 and needs none.
+    """
+    return ratio * power_mw * SECONDS_PER_MINUTE / LITRES_PER_CUBIC_METRE
+
+
 def stack_size(m_cached_stack_size: float, form: ItemForm) -> float:
     """Stack size, in items for solids and in m3 for fluids.
 

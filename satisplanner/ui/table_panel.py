@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 from satisplanner.core import formatting
 from satisplanner.core.graph import (
     ExternalSourceNode,
+    GeneratorNode,
     GraphError,
     MachineNode,
     Node,
@@ -51,7 +52,7 @@ from satisplanner.core.graph import (
 )
 from satisplanner.core.results import LimitingFactor, NodeSolution
 from satisplanner.ui import edits, theme
-from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices
+from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices, fuel_choices
 from satisplanner.ui.commands import SetNodeFieldCommand
 from satisplanner.ui.document import FactoryDocument
 
@@ -62,6 +63,7 @@ KIND_LABELS: Final[dict[str, str]] = {
     "water_extractor": "Pompe",
     "external_source": "Entree",
     "machine": "Machine",
+    "generator": "Generateur",
     "storage": "Tampon",
     "output": "Sortie",
 }
@@ -100,6 +102,8 @@ def quantity_of(node: Node) -> Quantity | None:
         case ResourceNode() | WaterExtractorNode():
             # Strictly positive in the model: zero extractors is a deleted node.
             return Quantity("count", "extracteur(s)", minimum=1e-9)
+        case GeneratorNode():
+            return Quantity("count", "generateur(s)", minimum=1e-9)
         case ExternalSourceNode():
             return Quantity("rate_per_minute", "/min")
         case StorageNode():
@@ -115,10 +119,11 @@ COLUMN_QUANTITY: Final = 3
 COLUMN_CLOCK: Final = 4
 COLUMN_PURITY: Final = 5
 COLUMN_EXTRACTOR: Final = 6
-COLUMN_INPUTS: Final = 7
-COLUMN_OUTPUTS: Final = 8
-COLUMN_LIMITING: Final = 9
-COLUMN_RATIO: Final = 10
+COLUMN_FUEL: Final = 7
+COLUMN_INPUTS: Final = 8
+COLUMN_OUTPUTS: Final = 9
+COLUMN_LIMITING: Final = 10
+COLUMN_RATIO: Final = 11
 
 HEADERS: Final[tuple[str, ...]] = (
     "Noeud",
@@ -128,6 +133,7 @@ HEADERS: Final[tuple[str, ...]] = (
     "Cadence",
     "Purete",
     "Extracteur",
+    "Carburant",
     "Entrees /min",
     "Sorties /min",
     "Facteur limitant",
@@ -141,6 +147,7 @@ COLUMN_WIDTHS: Final[dict[int, int]] = {
     COLUMN_CLOCK: 80,
     COLUMN_PURITY: 80,
     COLUMN_EXTRACTOR: 120,
+    COLUMN_FUEL: 120,
     COLUMN_INPUTS: 170,
     COLUMN_OUTPUTS: 170,
     COLUMN_LIMITING: 135,
@@ -221,6 +228,8 @@ class NodeTableModel(QAbstractTableModel):
             return base | Qt.ItemFlag.ItemIsEditable
         if index.column() in (COLUMN_PURITY, COLUMN_EXTRACTOR) and isinstance(node, ResourceNode):
             return base | Qt.ItemFlag.ItemIsEditable
+        if index.column() == COLUMN_FUEL and isinstance(node, GeneratorNode):
+            return base | Qt.ItemFlag.ItemIsEditable
         return base
 
     def data(self, index: Index, role: int = int(Qt.ItemDataRole.DisplayRole)) -> Any:
@@ -240,6 +249,8 @@ class NodeTableModel(QAbstractTableModel):
             return node.purity.value if isinstance(node, ResourceNode) else None
         if role == Qt.ItemDataRole.EditRole and column == COLUMN_EXTRACTOR:
             return node.extractor_class if isinstance(node, ResourceNode) else None
+        if role == Qt.ItemDataRole.EditRole and column == COLUMN_FUEL:
+            return node.fuel_class if isinstance(node, GeneratorNode) else None
         if role == _ROLE_CHOICES:
             return self._choices(node, column)
         if role == _ROLE_NODE_ID:
@@ -270,6 +281,10 @@ class NodeTableModel(QAbstractTableModel):
                 return PURITY_LABELS[node.purity] if isinstance(node, ResourceNode) else "—"
             case _ if column == COLUMN_EXTRACTOR:
                 return self._extractor_name(node)
+            case _ if column == COLUMN_FUEL:
+                if not isinstance(node, GeneratorNode):
+                    return "—"
+                return self._item_name(node.fuel_class)
             case _ if column == COLUMN_INPUTS:
                 return self._flows(solution.inputs if solution else {})
             case _ if column == COLUMN_OUTPUTS:
@@ -295,6 +310,8 @@ class NodeTableModel(QAbstractTableModel):
 
     def _choices(self, node: Node, column: int) -> list[tuple[str, str]]:
         """What a cell of this column accepts, for the delegate's combo box."""
+        if isinstance(node, GeneratorNode) and column == COLUMN_FUEL:
+            return fuel_choices(self.document.game_data, node.generator_class)
         if not isinstance(node, ResourceNode):
             return []
         if column == COLUMN_PURITY:
@@ -360,6 +377,8 @@ class NodeTableModel(QAbstractTableModel):
             return self._through(edits.set_purity(self.document, node.id, str(value)))
         if index.column() == COLUMN_EXTRACTOR:
             return self._through(edits.set_extractor(self.document, node.id, str(value)))
+        if index.column() == COLUMN_FUEL:
+            return self._through(edits.set_fuel(self.document, node.id, str(value)))
         if index.column() != COLUMN_QUANTITY:
             return False
         quantity = quantity_of(node)
@@ -493,9 +512,9 @@ class NodeTablePanel(QWidget):
         # given room and the rest scroll, rather than every column being unreadable.
         for column, width in COLUMN_WIDTHS.items():
             self.view.setColumnWidth(column, width)
-        # Purity and extractor are chosen from a list, never typed.
+        # Purity, extractor and fuel are chosen from a list, never typed.
         self.choice_delegate = ChoiceDelegate(self.view)
-        for column in (COLUMN_PURITY, COLUMN_EXTRACTOR):
+        for column in (COLUMN_PURITY, COLUMN_EXTRACTOR, COLUMN_FUEL):
             self.view.setItemDelegateForColumn(column, self.choice_delegate)
         self.view.selectionModel().selectionChanged.connect(self._announce_selection)
 

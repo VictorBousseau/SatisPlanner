@@ -22,6 +22,8 @@ from satisplanner.core.models import (
     BuildingKind,
     Extractor,
     GameData,
+    Generator,
+    GeneratorFuel,
     Item,
     ItemForm,
     Pipe,
@@ -39,7 +41,10 @@ logger = logging.getLogger(__name__)
 # to price overclocking: the draw follows a power law whose exponent is per
 # building, and the shard says how much clock one of them buys.
 # 4 added `items.description_fr`: the game's own blurb, for the item card.
-SCHEMA_VERSION: Final = 4
+# 5 added `items.energy_mj` and the `generators` / `generator_fuels` tables, so
+# that power can be produced and not only consumed. The burn rate of every fuel
+# is derived at generation time, exactly as a recipe's rates are.
+SCHEMA_VERSION: Final = 5
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -77,7 +82,10 @@ CREATE TABLE items (
     sink_points     INTEGER NOT NULL,
     is_raw_resource INTEGER NOT NULL CHECK (is_raw_resource IN (0, 1)),
     -- Seasonal event content: kept in the database, hidden by default in the UI.
-    is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1))
+    is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1)),
+    -- mEnergyValue, normalised: MJ per item for a solid, MJ per m3 for a fluid.
+    -- Zero for anything that cannot be burnt.
+    energy_mj       REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE buildings (
@@ -127,6 +135,26 @@ CREATE TABLE extractors (
     allowed_form    TEXT NOT NULL CHECK (allowed_form IN ('solid', 'liquid', 'gas')),
     rate_per_minute REAL NOT NULL,
     has_purity      INTEGER NOT NULL CHECK (has_purity IN (0, 1))
+);
+
+-- Buildings that put power on the grid instead of taking it off.
+CREATE TABLE generators (
+    class_name TEXT PRIMARY KEY REFERENCES buildings (class_name),
+    -- mPowerProduction, in MW at 100 %. Generators are not clockable in this
+    -- version: their production exponent is not the consumption one.
+    power_mw   REAL NOT NULL
+);
+
+CREATE TABLE generator_fuels (
+    generator_class    TEXT NOT NULL REFERENCES generators (class_name),
+    slot_index         INTEGER NOT NULL,
+    item_class         TEXT NOT NULL REFERENCES items (class_name),
+    -- Burnt at nominal power: items/min for a solid, m3/min for a fluid.
+    rate_per_minute    REAL NOT NULL,
+    -- Make-up water. A real input on a pipe, hence a class name and a rate.
+    supplemental_class TEXT REFERENCES items (class_name),
+    supplemental_per_minute REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (generator_class, slot_index)
 );
 
 CREATE TABLE belts (
@@ -198,6 +226,7 @@ def build_database(dataset: GameDataset, path: Path) -> None:
         _insert_buildings(connection, dataset.buildings)
         _insert_recipes(connection, dataset.recipes)
         _insert_extractors(connection, dataset.extractors)
+        _insert_generators(connection, dataset.generators)
         _insert_belts(connection, dataset.belts)
         _insert_pipes(connection, dataset.pipes)
         _insert_storages(connection, dataset.storages)
@@ -230,8 +259,8 @@ def _insert_meta(connection: sqlite3.Connection, dataset: GameDataset) -> None:
 def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> None:
     connection.executemany(
         "INSERT INTO items (class_name, display_name, display_name_fr, description_fr, form,"
-        " stack_size, icon_file, sink_points, is_raw_resource, is_event)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " stack_size, icon_file, sink_points, is_raw_resource, is_event, energy_mj)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 item.class_name,
@@ -244,6 +273,7 @@ def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> No
                 item.sink_points,
                 int(item.is_raw_resource),
                 int(item.is_event),
+                item.energy_mj,
             )
             for item in items
         ],
@@ -325,6 +355,29 @@ def _insert_extractors(connection: sqlite3.Connection, extractors: tuple[Extract
     )
 
 
+def _insert_generators(connection: sqlite3.Connection, generators: tuple[Generator, ...]) -> None:
+    connection.executemany(
+        "INSERT INTO generators (class_name, power_mw) VALUES (?, ?)",
+        [(generator.class_name, generator.power_mw) for generator in generators],
+    )
+    connection.executemany(
+        "INSERT INTO generator_fuels (generator_class, slot_index, item_class, rate_per_minute,"
+        " supplemental_class, supplemental_per_minute) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            (
+                generator.class_name,
+                index,
+                fuel.item_class,
+                fuel.rate_per_minute,
+                fuel.supplemental_class,
+                fuel.supplemental_per_minute,
+            )
+            for generator in generators
+            for index, fuel in enumerate(generator.fuels)
+        ],
+    )
+
+
 def _insert_belts(connection: sqlite3.Connection, belts: tuple[Belt, ...]) -> None:
     connection.executemany(
         "INSERT INTO belts (class_name, tier, items_per_minute) VALUES (?, ?, ?)",
@@ -397,6 +450,7 @@ def read_items(connection: sqlite3.Connection) -> list[Item]:
             sink_points=row["sink_points"],
             is_raw_resource=bool(row["is_raw_resource"]),
             is_event=bool(row["is_event"]),
+            energy_mj=row["energy_mj"],
         )
         for row in connection.execute("SELECT * FROM items ORDER BY class_name")
     ]
@@ -456,6 +510,28 @@ def read_extractors(connection: sqlite3.Connection) -> list[Extractor]:
             has_purity=bool(row["has_purity"]),
         )
         for row in connection.execute("SELECT * FROM extractors ORDER BY class_name")
+    ]
+
+
+def read_generators(connection: sqlite3.Connection) -> list[Generator]:
+    fuels: dict[str, list[GeneratorFuel]] = {}
+    query = "SELECT * FROM generator_fuels ORDER BY generator_class, slot_index"
+    for row in connection.execute(query):
+        fuels.setdefault(row["generator_class"], []).append(
+            GeneratorFuel(
+                item_class=row["item_class"],
+                rate_per_minute=row["rate_per_minute"],
+                supplemental_class=row["supplemental_class"],
+                supplemental_per_minute=row["supplemental_per_minute"],
+            )
+        )
+    return [
+        Generator(
+            class_name=row["class_name"],
+            power_mw=row["power_mw"],
+            fuels=tuple(fuels.get(row["class_name"], [])),
+        )
+        for row in connection.execute("SELECT * FROM generators ORDER BY class_name")
     ]
 
 
@@ -531,6 +607,7 @@ def load_game_data(connection: sqlite3.Connection) -> GameData:
         recipes=read_recipes(connection),
         buildings=read_buildings(connection),
         extractors=read_extractors(connection),
+        generators=read_generators(connection),
         belts=read_belts(connection),
         pipes=read_pipes(connection),
         storages=read_storages(connection),

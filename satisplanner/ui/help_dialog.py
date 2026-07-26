@@ -59,7 +59,8 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     (
         "Clic droit sur un noeud",
         "fiche de l'objet, ajuster aux intrants, nombre de machines, cadence, "
-        "purete du gisement, extracteur, contenu du tampon, supprimer",
+        "purete du gisement, extracteur, carburant du generateur, contenu du "
+        "tampon, supprimer",
     ),
     (
         "Entree dans la palette",
@@ -96,6 +97,13 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "pas le temps qui passe.",
     "Rien ici n'est de la geometrie : ni distance, ni elevation, ni hauteur de "
     "refoulement des pompes.",
+    "L'electricite est un <b>compteur, pas une contrainte</b> : consommation et "
+    "production sont affichees cote a cote, et un deficit ne bride aucun debit. "
+    "En jeu, manquer de courant ne ralentit pas l'usine, cela disjoncte tout le "
+    "reseau jusqu'a intervention manuelle ; afficher tout a zero n'apprendrait "
+    "rien et un bridage partiel serait une invention. Les generateurs, eux, "
+    "tournent a 100 % : leur surcadencage suit un exposant different de celui des "
+    "machines et fera l'objet d'un travail a part.",
 )
 
 

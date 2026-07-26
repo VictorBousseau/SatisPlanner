@@ -13,11 +13,13 @@ from satisplanner.core.graph import (
     Edge,
     ExternalSourceNode,
     FactoryGraph,
+    GeneratorNode,
     MachineNode,
     Node,
     ResourceNode,
     StorageNode,
     WaterExtractorNode,
+    generator_input_rates,
     machine_building,
     storage_item,
 )
@@ -46,6 +48,7 @@ def diagnose(graph: FactoryGraph, game_data: GameData, report: FactoryReport) ->
     findings.extend(_lines(game_data, report))
     findings.extend(_buffers(graph, game_data, report))
     findings.extend(_sustainability(game_data, report))
+    findings.extend(_power(report))
     order = {Severity.ERROR: 0, Severity.WARNING: 1, Severity.INFO: 2}
     return sorted(
         findings,
@@ -125,17 +128,22 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
                 ),
                 node_id=node.id,
             )
-        for item_class in sorted(recipe.ingredient_rates()):
-            if not any(edge.item_class == item_class for edge in graph.incoming(node.id)):
-                yield Diagnostic(
-                    severity=Severity.WARNING,
-                    code=DiagnosticCode.UNCONNECTED_NODE,
-                    message=(
-                        f"Aucune ligne n'apporte {game_data.item(item_class).display_name_fr} : "
-                        f"l'entree n'est pas raccordee."
-                    ),
-                    node_id=node.id,
-                )
+    if isinstance(node, GeneratorNode):
+        yield from _generator_structure(node, game_data)
+
+    # Fuel, make-up water and every ingredient alike: an input nobody feeds is a
+    # warning wherever it is, and the sentence is the same one.
+    for item_class in sorted(required_inputs(node, game_data)):
+        if not any(edge.item_class == item_class for edge in graph.incoming(node.id)):
+            yield Diagnostic(
+                severity=Severity.WARNING,
+                code=DiagnosticCode.UNCONNECTED_NODE,
+                message=(
+                    f"Aucune ligne n'apporte {game_data.item(item_class).display_name_fr} : "
+                    f"l'entree n'est pas raccordee."
+                ),
+                node_id=node.id,
+            )
 
     if isinstance(node, StorageNode) and storage_item(node, graph) is None:
         yield Diagnostic(
@@ -155,6 +163,28 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             message="Ce noeud n'est raccorde a rien : il ne participe pas au calcul.",
             node_id=node.id,
         )
+
+
+def _generator_structure(node: GeneratorNode, game_data: GameData) -> Iterator[Diagnostic]:
+    """A fuel the building does not accept, which only a hand-edited or foreign
+    file can produce: the interface never offers one."""
+    generator = game_data.generators.get(node.generator_class)
+    if generator is None or generator.accepts(node.fuel_class):
+        return
+    accepted = ", ".join(
+        game_data.item(fuel.item_class).display_name_fr for fuel in generator.fuels
+    )
+    fuel = game_data.items.get(node.fuel_class)
+    yield Diagnostic(
+        severity=Severity.ERROR,
+        code=DiagnosticCode.INCOMPATIBLE_RECIPE,
+        message=(
+            f"{_building_name(node.generator_class, game_data)} ne brule pas "
+            f"{fuel.display_name_fr if fuel else node.fuel_class} : "
+            f"carburants acceptes, {accepted}."
+        ),
+        node_id=node.id,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -191,16 +221,44 @@ def _blocked(node: Node, solution: NodeSolution, game_data: GameData) -> Iterato
     )
 
 
+def required_inputs(node: Node, game_data: GameData) -> dict[str, float]:
+    """Full-load consumption of a node, per item and per minute.
+
+    The same figures the solver takes as nominal, quoted back in the message that
+    tells the user what is missing -- including the clock, which multiplies a
+    machine's appetite exactly as it multiplies its output.
+    """
+    match node:
+        case MachineNode():
+            scale = node.machine_count * node.clock_speed
+            rates = game_data.recipe(node.recipe_class).ingredient_rates()
+            return {item: rate * scale for item, rate in sorted(rates.items())}
+        case GeneratorNode():
+            return generator_input_rates(node, game_data)
+        case _:
+            return {}
+
+
+def _consumer_noun(node: Node) -> str:
+    """How to name a starved consumer in a sentence, subject and verb agreeing."""
+    return "Le generateur" if isinstance(node, GeneratorNode) else "La machine"
+
+
 def _deficit(
     node: Node, graph: FactoryGraph, solution: NodeSolution, game_data: GameData
 ) -> Iterator[Diagnostic]:
-    """Missing input, in per-minute terms, with the resulting operating rate."""
-    if not isinstance(node, MachineNode) or solution.blocked_products:
+    """Missing input, in per-minute terms, with the resulting operating rate.
+
+    Machines and generators alike: a coal generator short of water is starved in
+    exactly the same way as an assembler short of screws, and reads the same.
+    """
+    if not isinstance(node, MachineNode | GeneratorNode) or solution.blocked_products:
         return
-    recipe = game_data.recipe(node.recipe_class)
+    needed = required_inputs(node, game_data)
+    subject = _consumer_noun(node)
+    units = node.machine_count if isinstance(node, MachineNode) else node.count
     for item_class in solution.starved_items:
-        per_machine = recipe.ingredient_rates().get(item_class, 0.0)
-        required = per_machine * node.machine_count
+        required = needed.get(item_class, 0.0)
         if required <= FLOW_EPSILON:
             continue
         # An input that is not wired at all is already reported as unconnected.
@@ -216,9 +274,9 @@ def _deficit(
             code=DiagnosticCode.DEFICIT,
             message=(
                 f"Deficit de {item.display_name_fr} : {_rate(missing, item)} manquants sur "
-                f"{_rate(required, item)} requis. La machine tourne a "
+                f"{_rate(required, item)} requis. {subject} tourne a "
                 f"{_percent(solution.ratio)} ({_number(solution.useful_machine_count or 0)} "
-                f"machine(s) utile(s) sur {_number(node.machine_count)})."
+                f"unite(s) utile(s) sur {_number(units)})."
             ),
             node_id=node.id,
         )
@@ -382,6 +440,36 @@ def _outputs_summary(report: FactoryReport, game_data: GameData) -> str:
     return ", ".join(
         f"{_rate(rate, game_data.item(item_class))} de {game_data.item(item_class).display_name_fr}"
         for item_class, rate in sorted(report.final_outputs.items())
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Power
+# --------------------------------------------------------------------------- #
+
+
+def _power(report: FactoryReport) -> Iterator[Diagnostic]:
+    """The one error that does not throttle anything, and says so.
+
+    Everywhere else in this module an error means a rate has been reduced. Here it
+    does not: electricity is counted, never allocated. In game a shortfall does not
+    slow the factory down, it cuts the whole grid until a player walks over and
+    switches it back on, so "everything at 60 %" would be a fiction and "everything
+    at zero" would hide the very numbers needed to fix it. The message therefore
+    carries the deficit and states plainly that the figures above ignore it.
+    """
+    if not report.has_power_deficit:
+        return
+    yield Diagnostic(
+        severity=Severity.ERROR,
+        code=DiagnosticCode.POWER_DEFICIT,
+        message=(
+            f"Deficit electrique : {_number(report.power_total_mw)} MW consommes pour "
+            f"{_number(report.power_production_mw)} MW produits, soit "
+            f"{_number(abs(report.power_balance_mw))} MW manquants. En jeu, le reseau "
+            f"disjoncte entierement jusqu'a intervention manuelle : les debits affiches "
+            f"ci-dessus ne sont donc pas brides, ils supposent le courant retabli."
+        ),
     )
 
 

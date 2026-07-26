@@ -53,6 +53,7 @@ from satisplanner.core.graph import (
     Edge,
     ExternalSourceNode,
     FactoryGraph,
+    GeneratorNode,
     MachineNode,
     Node,
     NodeKind,
@@ -61,6 +62,7 @@ from satisplanner.core.graph import (
     StorageNode,
     WaterExtractorNode,
     condensation_order,
+    generator_input_rates,
     machine_building,
     storage_item,
 )
@@ -247,6 +249,11 @@ class _Solver:
                 rates = self.game_data.recipe(node.recipe_class).product_rates()
                 scale = node.machine_count * node.clock_speed
                 return {item: rate * scale for item, rate in sorted(rates.items())}
+            case GeneratorNode():
+                # A generator puts out power, which no line carries and which the
+                # solver therefore never allocates. Its production is accounted for
+                # in the report, not in the flows.
+                return {}
             case StorageNode():
                 # Filled in at every iteration: a buffer hands downstream what it
                 # asks for, drawing on its stock if its own intake is not enough.
@@ -262,6 +269,9 @@ class _Solver:
                 rates = self.game_data.recipe(node.recipe_class).ingredient_rates()
                 scale = node.machine_count * node.clock_speed
                 return {item: rate * scale for item, rate in sorted(rates.items())}
+            case GeneratorNode():
+                # Fuel and make-up water, both ordinary inputs on ordinary lines.
+                return generator_input_rates(node, self.game_data)
             case StorageNode() | OutputNode():
                 item = (
                     storage_item(node, self.graph)
@@ -477,6 +487,8 @@ class _Solver:
             byproducts=self._byproducts(nodes),
             power_total_mw=round(sum(node.power_mw for node in nodes), 9),
             power_by_building=self._power_by_building(nodes),
+            power_production_mw=round(sum(node.power_produced_mw for node in nodes), 9),
+            power_production_by_building=self._power_by_building(nodes, produced=True),
             final_outputs=self._outputs(discarded=False),
             discarded_outputs=self._outputs(discarded=True),
             shopping_list=self._shopping_list(nodes),
@@ -505,6 +517,17 @@ class _Solver:
         shards = 0
         if machine_count is not None and clock > 1.0:
             shards = sum(self.game_data.shards_for(clock, machine_count).values())
+        # Production, unlike consumption, follows the operating ratio: a generator
+        # short of coal burns less and puts out less, whereas a machine standing
+        # idle still draws its share. The asymmetry is the physical one.
+        produced = 0.0
+        if isinstance(node, GeneratorNode):
+            # A generator loaded with a fuel its building does not accept burns
+            # nothing and therefore produces nothing. Only a hand-edited or foreign
+            # file can reach that state, and it is diagnosed rather than crashed on.
+            generator = self.game_data.generators.get(node.generator_class)
+            if generator is not None and generator.accepts(node.fuel_class):
+                produced = generator.power_mw * node.count * ratio
         return NodeSolution(
             node_id=node.id,
             kind=node.kind,
@@ -521,6 +544,7 @@ class _Solver:
             clock_speed=clock,
             power_shards=shards,
             power_mw=round(power, 9),
+            power_produced_mw=round(produced, 9),
         )
 
     def _building_of(self, node: Node) -> str | None:
@@ -529,6 +553,8 @@ class _Solver:
                 return machine_building(node, self.game_data)
             case ResourceNode() | WaterExtractorNode():
                 return node.extractor_class
+            case GeneratorNode():
+                return node.generator_class
             case StorageNode():
                 return node.storage_class
             case _:
@@ -543,6 +569,8 @@ class _Solver:
                 return self.game_data.item(node.item_class).display_name_fr
             case WaterExtractorNode():
                 return self.game_data.building(node.extractor_class).display_name_fr
+            case GeneratorNode():
+                return self.game_data.building(node.generator_class).display_name_fr
             case StorageNode():
                 return self.game_data.building(node.storage_class).display_name_fr
 
@@ -646,15 +674,21 @@ class _Solver:
             for item_class in sorted(secondary)
         )
 
-    def _power_by_building(self, nodes: Iterable[NodeSolution]) -> dict[str, float]:
-        """Draw per building class. Idle machines still count: they are still built."""
+    def _power_by_building(
+        self, nodes: Iterable[NodeSolution], *, produced: bool = False
+    ) -> dict[str, float]:
+        """Draw -- or output -- per building class.
+
+        Idle machines still count on the consumption side: they are still built and
+        still plugged in. Idle generators do not count on the production side, for
+        the same physical reason: a generator with no fuel produces nothing.
+        """
         totals: dict[str, float] = {}
         for solution in nodes:
-            if solution.building_class is None or solution.power_mw <= 0:
+            power = solution.power_produced_mw if produced else solution.power_mw
+            if solution.building_class is None or power <= 0:
                 continue
-            totals[solution.building_class] = (
-                totals.get(solution.building_class, 0.0) + solution.power_mw
-            )
+            totals[solution.building_class] = totals.get(solution.building_class, 0.0) + power
         return _clean(totals)
 
     def _outputs(self, *, discarded: bool) -> dict[str, float]:

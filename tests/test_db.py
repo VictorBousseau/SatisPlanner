@@ -39,6 +39,8 @@ def test_every_table_of_the_specification_exists(database: Path) -> None:
         "storages",
         "attachments",
         "power_shards",
+        "generators",
+        "generator_fuels",
     }
     with db.connect(database) as connection:
         tables = {
@@ -109,6 +111,35 @@ def test_the_power_shard_survives_the_round_trip(database: Path, dataset: GameDa
     assert [s.class_name for s in shards] == [s.class_name for s in dataset.power_shards]
     assert catalogue.overclock_shard() is not None
     assert catalogue.overclock_shard().extra_potential == pytest.approx(0.5)  # type: ignore[union-attr]
+
+
+def test_generators_and_their_fuels_survive_the_round_trip(
+    database: Path, dataset: GameDataset
+) -> None:
+    with db.connect(database) as connection:
+        stored = {generator.class_name: generator for generator in db.read_generators(connection)}
+    assert set(stored) == {generator.class_name for generator in dataset.generators}
+
+    coal = stored["Build_GeneratorCoal_C"]
+    assert coal.power_mw == 75.0
+    # Order matters: the first fuel is the one a freshly placed node starts on.
+    assert [fuel.item_class for fuel in coal.fuels] == [
+        "Desc_Coal_C",
+        "Desc_CompactedCoal_C",
+        "Desc_PetroleumCoke_C",
+    ]
+    assert coal.fuels[0].rate_per_minute == pytest.approx(15.0)
+    assert coal.fuels[0].supplemental_class == "Desc_Water_C"
+    assert coal.fuels[0].supplemental_per_minute == pytest.approx(45.0)
+
+
+def test_energy_values_survive_the_round_trip_in_the_right_unit(database: Path) -> None:
+    """The litre factor again, on the field the burn rates are derived from."""
+    with db.connect(database) as connection:
+        items = {item.class_name: item for item in db.read_items(connection)}
+    assert items["Desc_Coal_C"].energy_mj == 300.0
+    assert items["Desc_LiquidFuel_C"].energy_mj == 750.0  # 0.75 MJ/L in the files
+    assert items["Desc_IronPlate_C"].energy_mj == 0.0
 
 
 def test_fluid_rates_are_stored_in_cubic_metres(database: Path) -> None:

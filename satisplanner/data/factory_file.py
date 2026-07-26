@@ -38,6 +38,7 @@ from satisplanner.core.graph import (
     SCHEMA_VERSION,
     ExternalSourceNode,
     FactoryGraph,
+    GeneratorNode,
     GraphError,
     MachineNode,
     Node,
@@ -143,8 +144,21 @@ def _one_to_two(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _two_to_three(payload: dict[str, Any]) -> dict[str, Any]:
+    """Schema 2 to 3: the generator node appeared.
+
+    Nothing to write either. A document from before it existed simply has none,
+    and every other node is untouched. The step exists so the walk stays whole and
+    so a schema-3 file is refused by a build that cannot draw a generator.
+    """
+    return payload
+
+
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
-MIGRATIONS: Final[dict[int, Callable[[dict[str, Any]], dict[str, Any]]]] = {1: _one_to_two}
+MIGRATIONS: Final[dict[int, Callable[[dict[str, Any]], dict[str, Any]]]] = {
+    1: _one_to_two,
+    2: _two_to_three,
+}
 
 
 def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any], list[str]]:
@@ -315,6 +329,11 @@ def _referenced_by(node: Node, game_data: GameData) -> list[tuple[str, Any]]:
             ]
         case WaterExtractorNode() as pump:
             return [(pump.extractor_class, game_data.extractors)]
+        case GeneratorNode() as generator:
+            return [
+                (generator.generator_class, game_data.generators),
+                (generator.fuel_class, game_data.items),
+            ]
         case ExternalSourceNode() | OutputNode() as endpoint:
             return [(endpoint.item_class, game_data.items)]
         case StorageNode() as storage:

@@ -1,0 +1,43 @@
+{
+  "schema_version": 3,
+  "nodes": [
+    {
+      "kind": "resource",
+      "id": "coal",
+      "label": "Gisement de charbon",
+      "item_class": "Desc_Coal_C",
+      "extractor_class": "Build_MinerMk2_C",
+      "purity": "normal",
+      "count": 1
+    },
+    {
+      "kind": "water_extractor",
+      "id": "pump",
+      "extractor_class": "Build_WaterPump_C",
+      "count": 3
+    },
+    {
+      "kind": "generator",
+      "id": "generators",
+      "generator_class": "Build_GeneratorCoal_C",
+      "fuel_class": "Desc_Coal_C",
+      "count": 8
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "coal",
+      "target": "generators",
+      "item_class": "Desc_Coal_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e2",
+      "source": "pump",
+      "target": "generators",
+      "item_class": "Desc_Water_C",
+      "transport_class": "Build_PipelineMK2_C"
+    }
+  ]
+}

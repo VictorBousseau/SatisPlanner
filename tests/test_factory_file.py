@@ -11,7 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from satisplanner.core.graph import SCHEMA_VERSION, FactoryGraph, MachineNode, StorageNode
+from satisplanner.core.graph import (
+    SCHEMA_VERSION,
+    FactoryGraph,
+    GeneratorNode,
+    MachineNode,
+    StorageNode,
+)
 from satisplanner.core.models import GameData
 from satisplanner.data import factory_file
 from satisplanner.data.db import GAME_VERSION
@@ -234,6 +240,41 @@ def test_a_document_from_before_the_clock_existed_still_opens(tmp_path: Path) ->
     assert isinstance(node, MachineNode)
     assert node.clock_speed == 1.0
     assert any("schema 1 au schema 2" in warning for warning in loaded.warnings)
+    # ...and the walk carried on to the current version rather than stopping at 2.
+    assert any("schema 2 au schema 3" in warning for warning in loaded.warnings)
+
+
+def test_a_generator_survives_the_round_trip(tmp_path: Path) -> None:
+    graph = FactoryGraph()
+    graph.add_node(
+        GeneratorNode(
+            id="g1",
+            generator_class="Build_GeneratorCoal_C",
+            fuel_class="Desc_PetroleumCoke_C",
+            count=4.0,
+        )
+    )
+    path = tmp_path / "centrale.sfp"
+    factory_file.save(path, graph)
+
+    node = factory_file.load(path).graph.node("g1")
+    assert isinstance(node, GeneratorNode)
+    assert node.generator_class == "Build_GeneratorCoal_C"
+    assert node.fuel_class == "Desc_PetroleumCoke_C"
+    assert node.count == 4.0
+    # No clock field at all, and not one pinned to 100 %: absent is the honest shape
+    # while a generator's production exponent is not modelled.
+    assert not hasattr(node, "clock_speed")
+
+
+def test_a_generator_whose_building_left_the_catalogue_is_pruned(game_data: GameData) -> None:
+    graph = FactoryGraph()
+    graph.add_node(
+        GeneratorNode(id="g1", generator_class="Build_GeneratorNuclear_C", fuel_class="Desc_Coal_C")
+    )
+    missing, removed = factory_file.prune_unknown(graph, game_data)
+    assert missing == ["Build_GeneratorNuclear_C"]
+    assert removed == ["g1"]
 
 
 def test_a_clock_survives_the_round_trip(tmp_path: Path) -> None:

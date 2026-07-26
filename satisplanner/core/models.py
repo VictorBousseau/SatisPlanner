@@ -62,6 +62,7 @@ class BuildingKind(StrEnum):
 
     MANUFACTURER = "manufacturer"
     EXTRACTOR = "extractor"
+    GENERATOR = "generator"
     BELT = "belt"
     PIPE = "pipe"
     STORAGE = "storage"
@@ -92,6 +93,10 @@ class Item(_Row):
     sink_points: int
     is_raw_resource: bool
     is_event: bool = False
+    # `mEnergyValue`, normalised: MJ per item for a solid, MJ per m3 for a fluid.
+    # Zero for everything that cannot be burnt. This is what a generator's fuel
+    # consumption is derived from, and the litre factor is already applied.
+    energy_mj: float = 0.0
 
 
 class RecipeSlot(_Row):
@@ -184,6 +189,61 @@ class Extractor(_Row):
         return self.rate_per_minute * purity.multiplier
 
 
+class GeneratorFuel(_Row):
+    """One fuel a generator accepts, with everything burning it costs per minute.
+
+    The rates are derived at parse time from the generator's power and the fuel's
+    energy value, exactly as a recipe's rates are derived from its cycle time: the
+    domain layer reasons in per-minute figures and never in joules.
+    """
+
+    item_class: str
+    # Burnt at nominal power, in items/min for a solid and m3/min for a fluid.
+    rate_per_minute: float
+    # Make-up water, which is a real input on a pipe and not an accounting line:
+    # the coal generator names it per fuel entry in the game files.
+    supplemental_class: str | None = None
+    supplemental_per_minute: float = 0.0
+
+    def input_rates(self) -> dict[str, float]:
+        """Everything one such generator swallows per minute, by item."""
+        rates = {self.item_class: self.rate_per_minute}
+        if self.supplemental_class and self.supplemental_per_minute > 0:
+            rates[self.supplemental_class] = self.supplemental_per_minute
+        return rates
+
+
+class Generator(_Row):
+    """A building that burns something and puts power on the grid.
+
+    Its clock is fixed at 100 %: the game raises a generator's *production* by an
+    exponent of its own, distinct from the consumption exponent that prices an
+    overclocked machine, and conflating the two would invent numbers. Overclocking
+    generators is therefore a subject in itself and stays out of this version --
+    which is why :class:`~satisplanner.core.graph.GeneratorNode` has no clock field
+    at all rather than one pinned to 1.0 by convention.
+    """
+
+    class_name: str
+    # `mPowerProduction`: what one unit puts on the grid at 100 %.
+    power_mw: float
+    fuels: tuple[GeneratorFuel, ...]
+
+    def fuel(self, item_class: str) -> GeneratorFuel | None:
+        for candidate in self.fuels:
+            if candidate.item_class == item_class:
+                return candidate
+        return None
+
+    def accepts(self, item_class: str) -> bool:
+        return self.fuel(item_class) is not None
+
+    @property
+    def default_fuel(self) -> str | None:
+        """The fuel a freshly placed generator starts on: the game's own first."""
+        return self.fuels[0].item_class if self.fuels else None
+
+
 class Belt(_Row):
     class_name: str
     tier: int
@@ -246,6 +306,7 @@ class GameData(BaseModel):
     recipes: dict[str, Recipe] = Field(default_factory=dict)
     buildings: dict[str, Building] = Field(default_factory=dict)
     extractors: dict[str, Extractor] = Field(default_factory=dict)
+    generators: dict[str, Generator] = Field(default_factory=dict)
     belts: dict[str, Belt] = Field(default_factory=dict)
     pipes: dict[str, Pipe] = Field(default_factory=dict)
     storages: dict[str, Storage] = Field(default_factory=dict)
@@ -260,6 +321,7 @@ class GameData(BaseModel):
         recipes: Iterable[Recipe] = (),
         buildings: Iterable[Building] = (),
         extractors: Iterable[Extractor] = (),
+        generators: Iterable[Generator] = (),
         belts: Iterable[Belt] = (),
         pipes: Iterable[Pipe] = (),
         storages: Iterable[Storage] = (),
@@ -271,6 +333,7 @@ class GameData(BaseModel):
             recipes={row.class_name: row for row in recipes},
             buildings={row.class_name: row for row in buildings},
             extractors={row.class_name: row for row in extractors},
+            generators={row.class_name: row for row in generators},
             belts={row.class_name: row for row in belts},
             pipes={row.class_name: row for row in pipes},
             storages={row.class_name: row for row in storages},
@@ -289,6 +352,9 @@ class GameData(BaseModel):
 
     def extractor(self, class_name: str) -> Extractor:
         return _get(self.extractors, class_name, "extracteur")
+
+    def generator(self, class_name: str) -> Generator:
+        return _get(self.generators, class_name, "generateur")
 
     def storage(self, class_name: str) -> Storage:
         return _get(self.storages, class_name, "stockage")

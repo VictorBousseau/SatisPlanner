@@ -137,6 +137,23 @@ KEEP: Final[frozenset[str]] = frozenset(
         # kept alongside it to prove the production-boost kind stays out of scope
         "Desc_CrystalShard_C",
         "Desc_WAT1_C",
+        # -- electricity: the three generators in scope, plus the two out of scope
+        # kept to prove the filtering. Rocket and ionized fuel are deliberately
+        # **absent** although the fuel generator lists them: that is what exercises
+        # the "fuel outside the catalogue is dropped" path.
+        "Build_GeneratorBiomass_Automated_C",
+        "Build_GeneratorCoal_C",
+        "Build_GeneratorFuel_C",
+        "Build_GeneratorGeoThermal_C",
+        "Build_GeneratorNuclear_C",
+        "Desc_PetroleumCoke_C",
+        "Desc_Leaves_C",
+        "Desc_Wood_C",
+        "Desc_Mycelia_C",
+        "Desc_GenericBiomass_C",
+        "Desc_Biofuel_C",
+        "Desc_PackagedBiofuel_C",
+        "Desc_LiquidBiofuel_C",
         # -- storage
         "Build_StorageContainerMk1_C",
         "Build_StorageContainerMk2_C",

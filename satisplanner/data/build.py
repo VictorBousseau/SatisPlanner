@@ -116,6 +116,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
 
     per_machine = Counter(recipe.building_class for recipe in dataset.recipes)
     names = {building.class_name: building.display_name_fr for building in dataset.buildings}
+    names_of_items = {item.class_name: item.display_name_fr for item in dataset.items}
     for machine, count in sorted(per_machine.items(), key=lambda pair: -pair[1]):
         log("    %-28s %3d recettes", names.get(machine, machine), count)
 
@@ -138,6 +139,28 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
             unit,
             "" if extractor.has_purity else " (debit fixe, sans purete)",
         )
+    item_forms = {item.class_name: item.form for item in dataset.items}
+    for generator in sorted(dataset.generators, key=lambda g: g.class_name):
+        log(
+            "    %-24s %7.0f MW produits, %d carburant(s)",
+            names.get(generator.class_name, generator.class_name),
+            generator.power_mw,
+            len(generator.fuels),
+        )
+        for fuel in generator.fuels:
+            unit = "m3/min" if item_forms[fuel.item_class].is_fluid else "items/min"
+            water = (
+                f", + {fuel.supplemental_per_minute:.0f} m3/min de {fuel.supplemental_class}"
+                if fuel.supplemental_class
+                else ""
+            )
+            log(
+                "        %-28s %8.3f %s%s",
+                names_of_items.get(fuel.item_class, fuel.item_class),
+                fuel.rate_per_minute,
+                unit,
+                water,
+            )
     for storage in sorted(dataset.storages, key=lambda s: s.class_name):
         capacity = (
             f"{storage.slots} emplacements"

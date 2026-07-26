@@ -17,12 +17,13 @@ import logging
 
 from satisplanner.core import constants, formatting
 from satisplanner.core.graph import (
+    GeneratorNode,
     MachineNode,
     ResourceNode,
     WaterExtractorNode,
 )
 from satisplanner.core.models import Purity
-from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices
+from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices, fuel_choices
 from satisplanner.ui.commands import SetNodeFieldCommand
 from satisplanner.ui.document import FactoryDocument
 
@@ -105,6 +106,36 @@ def set_extractor(document: FactoryDocument, node_id: str, extractor_class: str)
     document.undo_stack.push(
         SetNodeFieldCommand(
             document, node_id, "extractor_class", extractor_class, allowed[extractor_class]
+        )
+    )
+    return None
+
+
+def set_fuel(document: FactoryDocument, node_id: str, fuel_class: str) -> str | None:
+    """Change what a bank of generators burns.
+
+    Refused when the building does not accept the fuel, on the catalogue's own list:
+    a fuel generator runs on fuel, turbofuel or liquid biofuel, and a coal generator
+    on none of them. The refusal is the same shape as the one an oil pump gets on an
+    iron deposit -- a sentence in the status bar, never a silent correction.
+
+    Changing the fuel changes the whole node: 20 m3/min of fuel and 7.5 of turbofuel
+    buy the same 250 MW, which is precisely why this has to be one command and not a
+    delete followed by a placement.
+    """
+    node = document.graph.node(node_id)
+    if not isinstance(node, GeneratorNode):
+        return "Seul un generateur a un carburant."
+    allowed = dict(fuel_choices(document.game_data, node.generator_class))
+    if fuel_class not in allowed:
+        building = document.game_data.buildings.get(node.generator_class)
+        name = building.display_name_fr if building else node.generator_class
+        return f"{name} ne brule pas ce carburant."
+    if node.fuel_class == fuel_class:
+        return None
+    document.undo_stack.push(
+        SetNodeFieldCommand(
+            document, node_id, "fuel_class", fuel_class, f"carburant : {allowed[fuel_class]}"
         )
     )
     return None

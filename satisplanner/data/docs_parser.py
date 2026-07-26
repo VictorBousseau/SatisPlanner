@@ -19,7 +19,7 @@ import logging
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict
 
@@ -32,6 +32,8 @@ from satisplanner.core.models import (
     BuildingKind,
     Extractor,
     GameData,
+    Generator,
+    GeneratorFuel,
     Item,
     ItemForm,
     Pipe,
@@ -43,6 +45,14 @@ from satisplanner.core.models import (
 from satisplanner.data import conversions
 
 logger = logging.getLogger(__name__)
+
+# One class of the dump. Almost every value is a string -- numbers included, which
+# is why :func:`parse_float` exists -- but a handful of fields are real JSON: a
+# generator's ``mFuel`` is a list of objects. The value type is therefore ``Any``
+# rather than ``str``, so that the annotation says what the file actually holds.
+ClassEntry = dict[str, Any]
+# A whole locale file, grouped by short native class name.
+Locale = dict[str, list[ClassEntry]]
 
 # --------------------------------------------------------------------------- #
 # Locating and reading the source files
@@ -118,17 +128,17 @@ def read_text_file(path: Path) -> str:
     raise DocsFileError(msg)
 
 
-def read_locale(path: Path) -> dict[str, list[dict[str, str]]]:
+def read_locale(path: Path) -> Locale:
     """Load one locale file and group its classes by short native class name."""
     raw = json.loads(read_text_file(path))
-    grouped: dict[str, list[dict[str, str]]] = {}
+    grouped: Locale = {}
     for entry in raw:
         native = entry["NativeClass"].rsplit(".", 1)[-1].strip("'\"")
         grouped.setdefault(native, []).extend(entry["Classes"])
     return grouped
 
 
-def french_labels(grouped: dict[str, list[dict[str, str]]]) -> dict[str, str]:
+def french_labels(grouped: Locale) -> dict[str, str]:
     """Flatten a locale into ``class name -> display name``.
 
     Class names are unique across native classes, so a single flat mapping is
@@ -142,7 +152,7 @@ def french_labels(grouped: dict[str, list[dict[str, str]]]) -> dict[str, str]:
     }
 
 
-def french_descriptions(grouped: dict[str, list[dict[str, str]]]) -> dict[str, str]:
+def french_descriptions(grouped: Locale) -> dict[str, str]:
     """Flatten a locale into ``class name -> description``.
 
     Separate from :func:`french_labels` because most classes have a label and only
@@ -249,6 +259,33 @@ EXCLUDED_MACHINES: Final[frozenset[str]] = frozenset(
     }
 )
 
+# Generators in scope. The biomass burner, the coal generator and the fuel
+# generator: everything that burns an item a V1 factory can produce or extract.
+GENERATORS: Final[frozenset[str]] = frozenset(
+    {
+        "Build_GeneratorBiomass_Automated_C",
+        "Build_GeneratorCoal_C",
+        "Build_GeneratorFuel_C",
+    }
+)
+
+# Out of scope, listed rather than inferred so a generator added by a future game
+# version shows up as unknown instead of being silently swallowed. The geothermal
+# generator has no input at all -- its output depends on a spot on the map, which
+# is geometry -- and the nuclear plant belongs to a tier this version does not model.
+EXCLUDED_GENERATORS: Final[frozenset[str]] = frozenset(
+    {"Build_GeneratorGeoThermal_C", "Build_GeneratorNuclear_C"}
+)
+
+# Native classes generators live under. Fuel-burning ones are the only kind that
+# takes an input; the other two are named so that finding a class there is a
+# deliberate exclusion rather than an oversight.
+GENERATOR_NATIVE_CLASS: Final = "FGBuildableGeneratorFuel"
+OTHER_GENERATOR_NATIVE_CLASSES: Final[tuple[str, ...]] = (
+    "FGBuildableGeneratorGeoThermal",
+    "FGBuildableGeneratorNuclear",
+)
+
 # True when the extracted node has a purity (impure / normal / pure). The Water
 # Extractor has a fixed output and no node purity.
 EXTRACTOR_HAS_PURITY: Final[dict[str, bool]] = {
@@ -324,6 +361,7 @@ class GameDataset(BaseModel):
     recipes: tuple[Recipe, ...]
     buildings: tuple[Building, ...]
     extractors: tuple[Extractor, ...]
+    generators: tuple[Generator, ...] = ()
     belts: tuple[Belt, ...]
     pipes: tuple[Pipe, ...]
     storages: tuple[Storage, ...]
@@ -338,6 +376,7 @@ class GameDataset(BaseModel):
             recipes=self.recipes,
             buildings=self.buildings,
             extractors=self.extractors,
+            generators=self.generators,
             belts=self.belts,
             pipes=self.pipes,
             storages=self.storages,
@@ -351,7 +390,7 @@ class GameDataset(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
-def _iter_all_classes(grouped: dict[str, list[dict[str, str]]]) -> Iterator[dict[str, str]]:
+def _iter_all_classes(grouped: Locale) -> Iterator[ClassEntry]:
     for classes in grouped.values():
         yield from classes
 
@@ -361,7 +400,7 @@ def _label(class_name: str, fallback: str, labels: dict[str, str]) -> str:
     return labels.get(class_name) or fallback
 
 
-def is_event_class(cls: dict[str, str]) -> bool:
+def is_event_class(cls: ClassEntry) -> bool:
     """True for seasonal event content (FICSMAS).
 
     Decided on the asset path rather than the class name: items expose it through
@@ -375,7 +414,7 @@ def is_event_class(cls: dict[str, str]) -> bool:
 
 
 def parse_items(
-    grouped: dict[str, list[dict[str, str]]],
+    grouped: Locale,
     labels: dict[str, str],
     descriptions: dict[str, str] | None = None,
 ) -> list[Item]:
@@ -411,12 +450,13 @@ def parse_items(
                 sink_points=int(parse_float(cls.get("mResourceSinkPoints"))),
                 is_raw_resource=class_name in raw_resources,
                 is_event=is_event_class(cls),
+                energy_mj=conversions.energy_mj(parse_float(cls.get("mEnergyValue")), form),
             )
         )
     return sorted(items, key=lambda item: item.class_name)
 
 
-def _machine_of(recipe: dict[str, str]) -> str | None:
+def _machine_of(recipe: ClassEntry) -> str | None:
     """The V1 production machine a recipe runs in, if any.
 
     ``mProducedIn`` also lists manual crafting stations (the build gun, the
@@ -429,7 +469,7 @@ def _machine_of(recipe: dict[str, str]) -> str | None:
 
 
 def parse_recipes(
-    grouped: dict[str, list[dict[str, str]]],
+    grouped: Locale,
     labels: dict[str, str],
     forms: dict[str, ItemForm],
     warnings: list[str],
@@ -505,7 +545,7 @@ def parse_recipes(
     return sorted(recipes, key=lambda recipe: recipe.class_name)
 
 
-def _building_icon(class_name: str, descriptors: dict[str, dict[str, str]]) -> str | None:
+def _building_icon(class_name: str, descriptors: dict[str, ClassEntry]) -> str | None:
     """Icons live on the ``Desc_*`` twin of a ``Build_*`` class."""
     descriptor = descriptors.get(class_name.replace("Build_", "Desc_", 1))
     if descriptor is None:
@@ -514,10 +554,10 @@ def _building_icon(class_name: str, descriptors: dict[str, dict[str, str]]) -> s
 
 
 def _building(
-    cls: dict[str, str],
+    cls: ClassEntry,
     kind: BuildingKind,
     labels: dict[str, str],
-    descriptors: dict[str, dict[str, str]],
+    descriptors: dict[str, ClassEntry],
 ) -> Building:
     class_name = cls["ClassName"]
     display_name = cls.get("mDisplayName") or class_name
@@ -535,7 +575,7 @@ def _building(
 
 
 def parse_power_shards(
-    grouped: dict[str, list[dict[str, str]]],
+    grouped: Locale,
 ) -> list[PowerShard]:
     """The consumable that raises a building's clock ceiling.
 
@@ -554,8 +594,103 @@ def parse_power_shards(
     return shards
 
 
+def parse_fuel_entries(raw: object) -> list[tuple[str, str | None]]:
+    """``mFuel`` into ``(fuel class, supplemental class or None)`` pairs.
+
+    One of the very few fields the dump stores as real JSON rather than as a
+    pseudo-structured string, so there is nothing to parse with a regular
+    expression -- only a shape to check, because a malformed entry must be dropped
+    rather than crash the build.
+    """
+    if not isinstance(raw, list):
+        return []
+    pairs: list[tuple[str, str | None]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        fuel = str(entry.get("mFuelClass") or "")
+        if not fuel:
+            continue
+        supplemental = str(entry.get("mSupplementalResourceClass") or "")
+        pairs.append((fuel, supplemental or None))
+    return pairs
+
+
+def parse_generators(
+    grouped: Locale,
+    labels: dict[str, str],
+    forms: dict[str, ItemForm],
+    energies: dict[str, float],
+    warnings: list[str],
+) -> tuple[list[Building], list[Generator]]:
+    """Generators in scope, with the rate of every fuel they accept.
+
+    Nothing here is hard-coded: the power comes from ``mPowerProduction``, the burn
+    rate from that power and the fuel's own energy value, and the make-up water from
+    ``mSupplementalToPowerRatio``. A fuel whose item is not in the catalogue -- rocket
+    fuel, whose recipes belong to machines this version excludes -- is dropped from
+    the list rather than offered as a choice that could never be supplied.
+    """
+    descriptors = {
+        cls["ClassName"]: cls
+        for cls in grouped.get("FGBuildingDescriptor", [])
+        if "ClassName" in cls
+    }
+    buildings: list[Building] = []
+    generators: list[Generator] = []
+
+    for cls in grouped.get(GENERATOR_NATIVE_CLASS, []):
+        class_name = cls["ClassName"]
+        if class_name not in GENERATORS:
+            if class_name not in EXCLUDED_GENERATORS:
+                warnings.append(f"{class_name} : generateur inconnu, hors perimetre par defaut")
+            continue
+        power = parse_float(cls.get("mPowerProduction"))
+        if power <= 0:
+            warnings.append(f"{class_name} : puissance produite nulle, generateur ignore")
+            continue
+        ratio = parse_float(cls.get("mSupplementalToPowerRatio"))
+        supplemental_rate = conversions.supplemental_rate_per_minute(ratio, power)
+
+        fuels: list[GeneratorFuel] = []
+        unknown: list[str] = []
+        for fuel_class, supplemental in parse_fuel_entries(cls.get("mFuel")):
+            form = forms.get(fuel_class)
+            energy = energies.get(fuel_class, 0.0)
+            if form is None or energy <= 0:
+                unknown.append(fuel_class)
+                continue
+            fuels.append(
+                GeneratorFuel(
+                    item_class=fuel_class,
+                    rate_per_minute=conversions.fuel_rate_per_minute(power, energy),
+                    supplemental_class=supplemental,
+                    supplemental_per_minute=supplemental_rate if supplemental else 0.0,
+                )
+            )
+        if unknown:
+            logger.debug("%s : carburant(s) hors catalogue ignore(s) : %s", class_name, unknown)
+        if not fuels:
+            warnings.append(f"{class_name} : aucun carburant exploitable, generateur ignore")
+            continue
+
+        buildings.append(_building(cls, BuildingKind.GENERATOR, labels, descriptors))
+        generators.append(Generator(class_name=class_name, power_mw=power, fuels=tuple(fuels)))
+
+    for native in OTHER_GENERATOR_NATIVE_CLASSES:
+        for cls in grouped.get(native, []):
+            if cls.get("ClassName") not in EXCLUDED_GENERATORS:
+                warnings.append(
+                    f"{cls.get('ClassName')} : generateur inconnu sous {native}, hors perimetre"
+                )
+
+    buildings.sort(key=lambda building: building.class_name)
+    generators.sort(key=lambda generator: generator.class_name)
+    return buildings, generators
+
+
 def parse_buildings(
-    grouped: dict[str, list[dict[str, str]]],
+    grouped: Locale,
     labels: dict[str, str],
     warnings: list[str],
 ) -> tuple[
@@ -591,7 +726,7 @@ def parse_buildings(
 
     # Extractors: solid miners and the oil pump, plus the water extractor which
     # the game models with its own native class.
-    extractor_classes: Iterable[dict[str, str]] = [
+    extractor_classes: Iterable[ClassEntry] = [
         *grouped.get("FGBuildableResourceExtractor", []),
         *grouped.get("FGBuildableWaterPump", []),
     ]
@@ -710,7 +845,7 @@ def parse_buildings(
 
 
 def parse_dataset(
-    reference: dict[str, list[dict[str, str]]],
+    reference: Locale,
     labels: dict[str, str],
     descriptions: dict[str, str] | None = None,
     *,
@@ -726,6 +861,9 @@ def parse_dataset(
     buildings, extractors, belts, pipes, storages, attachments = parse_buildings(
         reference, labels, warnings
     )
+    energies = {item.class_name: item.energy_mj for item in items}
+    generator_buildings, generators = parse_generators(reference, labels, forms, energies, warnings)
+    buildings = sorted([*buildings, *generator_buildings], key=lambda b: b.class_name)
 
     known_buildings = {building.class_name for building in buildings}
     orphans = sorted({r.building_class for r in recipes} - known_buildings)
@@ -740,6 +878,7 @@ def parse_dataset(
         recipes=tuple(recipes),
         buildings=tuple(buildings),
         extractors=tuple(extractors),
+        generators=tuple(generators),
         belts=tuple(belts),
         pipes=tuple(pipes),
         storages=tuple(storages),

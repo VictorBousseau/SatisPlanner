@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from satisplanner.core import formatting
 from satisplanner.core.graph import (
     ExternalSourceNode,
+    GeneratorNode,
     MachineNode,
     Node,
     OutputNode,
@@ -149,6 +150,10 @@ class NodeItem(QGraphicsItem):
                     tuple(slot.item_class for slot in recipe.ingredients),
                     tuple(slot.item_class for slot in recipe.products),
                 )
+            case GeneratorNode() as generator:
+                # Fuel first, make-up water second: the game's own order, not the
+                # alphabet. A generator has no output port -- power is not a flow.
+                return (self._generator_inputs(generator), ())
             case StorageNode():
                 content = self.content_item
                 return ((content or ANY_ITEM,), (content,) if content else ())
@@ -159,6 +164,13 @@ class NodeItem(QGraphicsItem):
             case WaterExtractorNode() as pump:
                 item = self.game_data.extractor(pump.extractor_class).item_class
                 return ((), (item,) if item else ())
+
+    def _generator_inputs(self, node: GeneratorNode) -> tuple[str, ...]:
+        generator = self.game_data.generators.get(node.generator_class)
+        fuel = generator.fuel(node.fuel_class) if generator else None
+        if fuel is None:
+            return ()
+        return tuple(fuel.input_rates())
 
     def boundingRect(self) -> QRectF:
         margin = BORDER_WIDTH + PORT_RADIUS
@@ -215,6 +227,8 @@ class NodeItem(QGraphicsItem):
                 return self.game_data.item(endpoint.item_class).display_name_fr
             case WaterExtractorNode() as pump:
                 return self.game_data.building(pump.extractor_class).display_name_fr
+            case GeneratorNode() as generator:
+                return self.game_data.building(generator.generator_class).display_name_fr
             case StorageNode() as storage:
                 return self.game_data.building(storage.storage_class).display_name_fr
 
@@ -237,6 +251,15 @@ class NodeItem(QGraphicsItem):
             case WaterExtractorNode() as pump:
                 count = formatting.number(pump.count)
                 return f"{count} unite(s) — debit fixe{_clock_suffix(pump.clock_speed)}"
+            case GeneratorNode() as generator:
+                # The fuel is on the face of the node for the same reason the purity
+                # of a deposit is: it changes every number, starting with how much
+                # of it the thing swallows.
+                fuel = self.game_data.item(generator.fuel_class).display_name_fr
+                power = self.game_data.generators[generator.generator_class].power_mw
+                count = formatting.number(generator.count)
+                total = formatting.number(power * generator.count)
+                return f"{count} unite(s) — {fuel} — {total} MW produits"
             case ExternalSourceNode() as source:
                 item = self.game_data.item(source.item_class)
                 return f"apport externe {formatting.rate(source.rate_per_minute, item)}"
@@ -278,6 +301,8 @@ class NodeItem(QGraphicsItem):
                 return self.icons.for_item(self.game_data.item(endpoint.item_class))
             case WaterExtractorNode() as pump:
                 return self.icons.for_building(self.game_data.building(pump.extractor_class))
+            case GeneratorNode() as generator:
+                return self.icons.for_building(self.game_data.building(generator.generator_class))
             case StorageNode() as storage:
                 return self.icons.for_building(self.game_data.building(storage.storage_class))
 
@@ -446,7 +471,9 @@ class NodeItem(QGraphicsItem):
                 f"{self.solution.integer_machine_count} a batir"
             )
         if self.solution.power_mw:
-            lines.append(f"{formatting.number(self.solution.power_mw)} MW")
+            lines.append(f"{formatting.number(self.solution.power_mw)} MW consommes")
+        if self.solution.power_produced_mw:
+            lines.append(f"{formatting.number(self.solution.power_produced_mw)} MW produits")
         return "\n".join(lines)
 
 

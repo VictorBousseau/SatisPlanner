@@ -25,7 +25,12 @@ Autant le dire avant d'ouvrir la fenêtre.
   temps un stock se vide, mais ne joue pas le film.
 - **Pas de Somersloop ni d'amplification de production.** Le surcadençage, lui, est modélisé :
   de 1 % à 250 %, débits proportionnels et électricité en loi de puissance. (Somersloop en V2)
-- **Pas de génération d'électricité.** Seule la consommation est calculée. (V2)
+- **L'électricité est un compteur, pas une contrainte.** Consommation et production sont
+  affichées côte à côte, et un déficit est signalé en erreur — mais il ne bride aucun débit. En
+  jeu, manquer de courant ne ralentit pas l'usine : cela disjoncte tout le réseau jusqu'à
+  intervention manuelle. Afficher tout à zéro n'apprendrait rien, et un bridage partiel serait une
+  invention. Les générateurs tournent à 100 % : leur surcadençage suit un exposant différent de
+  celui des machines. (V2)
 - **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Ils sont comptés dans la liste
   de courses, jamais dessinés et jamais un goulot — un répartiteur passe 2000 items/min quand le
   meilleur convoyeur plafonne à 1200.
@@ -93,14 +98,21 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
   « Cadence… », ou la colonne du tableau). Un nœud dont la cadence n'est pas 100 % l'affiche en
   toutes lettres. Le débit suit la cadence exactement ; l'électricité suit une loi de puissance,
   et les éclats de charge nécessaires apparaissent dans la liste de courses.
+- **Générateurs** : brûleur de biomasse, générateur à charbon et générateur à carburant. Le
+  carburant se lit sur le nœud (« 1 unité(s) — Charbon — 75 MW produits ») et se change par clic
+  droit ▸ « Carburant » ou par la colonne du tableau ; seuls les carburants que le bâtiment accepte
+  sont proposés. **L'eau d'appoint du générateur à charbon est une vraie entrée fluide** : elle se
+  raccorde par tuyauterie et subit les mêmes contraintes de capacité et de contre-pression que
+  n'importe quelle autre. Les débits sont déduits de la puissance produite et de la valeur
+  énergétique de l'item, jamais codés en dur.
 - **Canvas** : une connexion se tire d'un port de sortie vers un port d'entrée. **Une liaison
   impossible est refusée pendant le tirage** — le trait devient rouge avec la raison en infobulle
   — et non signalée après coup. Clic droit sur un nœud pour l'ajuster à ses intrants ou fixer son
   nombre de machines ; clic droit sur une ligne pour changer de tier ou passer au tier suffisant.
 - **Tableau** : un nœud par ligne, tri, filtre, sélection synchronisée dans les deux sens avec le
   canvas, colonne « Quantité » éditable — machines, extracteurs, débit d'un apport externe ou
-  stock initial d'un tampon selon le type de nœud — plus « Cadence », « Pureté » et
-  « Extracteur ». Les deux dernières se choisissent dans une liste, jamais en tapant du texte.
+  stock initial d'un tampon selon le type de nœud — plus « Cadence », « Pureté », « Extracteur »
+  et « Carburant ». Les trois dernières se choisissent dans une liste, jamais en tapant du texte.
 - **Totaux** : matières brutes, fluides et sous-produits, électricité, liste de courses. Quand
   l'usine vit sur un stock, un bandeau rouge et deux colonnes de chiffres — « avec les stocks » et
   « régime établi » — remplacent le silence qui laisserait croire à une réussite.
@@ -346,7 +358,13 @@ rien. C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
     tableau l'appellent tous les deux. La première version en avait deux, écrites pour donner
     le même résultat et vérifiées par un test — ce qui tient à trois champs et se casse au
     quatrième.
-13. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
+13. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
+    diagnostic d'erreur ne se traduit pas par un taux réduit, et c'est délibéré : en jeu, un
+    déficit ne ralentit pas l'usine, il déclenche une coupure générale jusqu'à intervention
+    manuelle. Afficher « tout à zéro » n'apprendrait rien et un bridage partiel serait une
+    invention. Le test qui compte n'est pas que les chiffres soient justes, c'est que la même
+    usine résolue avec et sans assez de générateurs donne exactement les mêmes débits.
+14. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
     coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
     écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
     affichant la même image coûte seize millisecondes.
@@ -354,8 +372,11 @@ rien. C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
 ## Backlog V2
 
 - Somersloop et amplification de production : autre formule, autre travail.
-- Génération d'électricité, et paliers supérieurs (Mélangeur, Convertisseur, Encodeur quantique,
-  Accélérateur de particules, nucléaire).
+- Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
+  sémantique n'est pas la même. À traiter pour lui-même.
+- Paliers supérieurs : Mélangeur, Convertisseur, Encodeur quantique, Accélérateur de particules,
+  aluminium, azote, nucléaire — et le générateur géothermique, qui n'a pas d'intrant et dépend
+  d'un emplacement de la carte.
 - **Mode objectif descendant** : « je veux tant d'Ordinateurs par minute », résolu par un solveur
   linéaire plutôt que par le point fixe actuel.
 - Répartiteurs intelligents et programmables.

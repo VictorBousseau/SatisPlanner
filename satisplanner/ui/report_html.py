@@ -26,6 +26,9 @@ SEVERITY_LABELS: Final[dict[Severity, str]] = {
     Severity.INFO: "Information",
 }
 
+# An empty table still needs a row, or it renders as a gap with no explanation.
+_NOTHING: Final = "<tr><td class='muted'>Aucun batiment concerne.</td></tr>"
+
 SEVERITY_COLOURS: Final[dict[Severity, str]] = {
     Severity.ERROR: theme.STATE_BLOCKED,
     Severity.WARNING: theme.STATE_STARVED,
@@ -171,16 +174,45 @@ def _fluids(report: FactoryReport, game_data: GameData) -> str:
 
 
 def _power(report: FactoryReport, game_data: GameData) -> str:
-    rows = "".join(
+    """Two numbers side by side, and no third.
+
+    Consumption counts machines that are stopped, because they are built and
+    plugged in. Production counts only what is actually burnt, because a generator
+    with no coal produces nothing. Neither figure bridles anything: electricity is
+    a counter here, never a term of the ``min()`` -- see the help page.
+    """
+    consumed = "".join(
         f"<tr><td>{escape(_building_name(class_name, game_data))}</td>"
         f"<td class='value'>{formatting.number(power)} MW</td></tr>"
         for class_name, power in sorted(report.power_by_building.items())
     )
+    produced = "".join(
+        f"<tr><td>{escape(_building_name(class_name, game_data))}</td>"
+        f"<td class='value'>{formatting.number(power)} MW</td></tr>"
+        for class_name, power in sorted(report.power_production_by_building.items())
+    )
+    balance = ""
+    if report.has_power_deficit:
+        balance = (
+            f"<p class='warn'><b>{formatting.number(abs(report.power_balance_mw))} MW manquants."
+            f"</b> Ce deficit ne bride aucun debit ci-dessus : en jeu, manquer de courant ne "
+            f"ralentit pas l'usine, cela coupe tout le reseau jusqu'a intervention manuelle.</p>"
+        )
+    elif report.has_generators:
+        balance = (
+            f"<p class='muted'><b>{formatting.number(report.power_balance_mw)} MW</b> de marge.</p>"
+        )
     return (
         f"<h2>3. Electricite</h2>"
-        f"<p><b>{formatting.number(report.power_total_mw)} MW</b> au total, "
-        f"machines a l'arret comprises : elles sont construites.</p>"
-        f"<table>{rows}</table>"
+        f"<table><tr>"
+        f"<td class='value'><b>{formatting.number(report.power_total_mw)} MW consommes</b></td>"
+        f"<td class='value'><b>{formatting.number(report.power_production_mw)} MW produits"
+        f"</b></td></tr></table>"
+        f"{balance}"
+        f"<h3>Consommation, machines a l'arret comprises : elles sont construites</h3>"
+        f"<table>{consumed or _NOTHING}</table>"
+        f"<h3>Production</h3>"
+        f"<table>{produced or _NOTHING}</table>"
     )
 
 
@@ -299,4 +331,7 @@ def plain_lines(report: FactoryReport, game_data: GameData) -> Iterable[str]:
     yield f"Production : {_inline_rates(report.final_outputs, game_data)}"
     yield f"Solides : {_inline_rates(report.raw_solids, game_data)}"
     yield f"Fluides : {_inline_rates(report.raw_fluids, game_data)}"
-    yield f"Electricite : {formatting.number(report.power_total_mw)} MW"
+    yield (
+        f"Electricite : {formatting.number(report.power_total_mw)} MW consommes, "
+        f"{formatting.number(report.power_production_mw)} MW produits"
+    )

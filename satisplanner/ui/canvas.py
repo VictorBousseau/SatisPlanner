@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 
 from satisplanner.core import constants, engine, formatting
 from satisplanner.core.graph import (
+    GeneratorNode,
     MachineNode,
     ResourceNode,
     StorageNode,
@@ -60,6 +61,7 @@ from satisplanner.ui.catalogue import (
     PaletteEntry,
     build_entries,
     extractor_choices,
+    fuel_choices,
     transport_choices,
 )
 from satisplanner.ui.commands import (
@@ -530,6 +532,8 @@ class FactoryScene(QGraphicsScene):
                 return recipe.products[0].item_class if recipe.products else None
             case WaterExtractorNode():
                 return self.document.game_data.extractor(node.extractor_class).item_class
+            case GeneratorNode():
+                return node.fuel_class
             case StorageNode():
                 return storage_item(node, self.document.graph)
             case _:
@@ -556,6 +560,8 @@ class FactoryScene(QGraphicsScene):
         if isinstance(item.node, ResourceNode):
             menu.addMenu(self._purity_menu(item.node, menu))
             menu.addMenu(self._extractor_menu(item.node, menu))
+        if isinstance(item.node, GeneratorNode):
+            menu.addMenu(self._fuel_menu(item.node, menu))
         if isinstance(item.node, MachineNode | ResourceNode | WaterExtractorNode):
             clock = QAction("Cadence...", menu)
             clock.triggered.connect(lambda: self.ask_clock_speed(item.node.id, parent))
@@ -600,8 +606,24 @@ class FactoryScene(QGraphicsScene):
             menu.addAction(action)
         return menu
 
+    def _fuel_menu(self, node: GeneratorNode, parent: QMenu) -> QMenu:
+        """What this bank of generators burns, among what the building accepts."""
+        menu = QMenu("Carburant", parent)
+        for class_name, label in fuel_choices(self.document.game_data, node.generator_class):
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(node.fuel_class == class_name)
+            action.triggered.connect(
+                lambda _checked=False, cls=class_name: self.set_fuel(node.id, cls)
+            )
+            menu.addAction(action)
+        return menu
+
     def set_purity(self, node_id: str, purity: Purity | str) -> bool:
         return self._apply(edits.set_purity(self.document, node_id, purity))
+
+    def set_fuel(self, node_id: str, fuel_class: str) -> bool:
+        return self._apply(edits.set_fuel(self.document, node_id, fuel_class))
 
     def set_extractor(self, node_id: str, extractor_class: str) -> bool:
         return self._apply(edits.set_extractor(self.document, node_id, extractor_class))
@@ -803,6 +825,7 @@ def _id_prefix(entry: PaletteEntry) -> str:
         "recipe": "machine",
         "extractor": "gisement",
         "water_extractor": "pompe",
+        "generator": "generateur",
         "storage": "tampon",
         "external": "entree",
         "output": "sortie",

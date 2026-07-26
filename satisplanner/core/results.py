@@ -43,6 +43,7 @@ class DiagnosticCode(StrEnum):
     BUFFER_DRAINING = "buffer_draining"
     NOT_SUSTAINABLE = "not_sustainable"
     NOT_CONVERGED = "not_converged"
+    POWER_DEFICIT = "power_deficit"
 
 
 class _Result(BaseModel):
@@ -102,6 +103,9 @@ class NodeSolution(_Result):
     # Shards this node needs, for the whole buildings it is made of.
     power_shards: int = 0
     power_mw: float = 0.0
+    # What a generator puts on the grid, already scaled by its operating ratio: a
+    # generator starved of fuel burns less and produces less. Zero everywhere else.
+    power_produced_mw: float = 0.0
 
     @property
     def is_overclocked(self) -> bool:
@@ -257,9 +261,18 @@ class FactoryReport(_Result):
     # Category 2: fluids consumed, plus the byproduct balance.
     raw_fluids: dict[str, float] = Field(default_factory=dict)
     byproducts: tuple[ByproductBalance, ...] = ()
-    # Category 3: power draw.
+    # Category 3: power. Two numbers side by side, and nothing more.
+    #
+    # Electricity is a **counter, never a constraint**: a deficit is reported and
+    # changes no rate anywhere. That is deliberate and it is the one place in the
+    # project where an error-level finding does not translate into a reduced ratio.
+    # In game a shortfall does not slow the factory down, it trips the whole grid
+    # until somebody walks over and resets it; showing everything at zero would
+    # teach nothing, and throttling part of it would be an invention.
     power_total_mw: float = 0.0
     power_by_building: dict[str, float] = Field(default_factory=dict)
+    power_production_mw: float = 0.0
+    power_production_by_building: dict[str, float] = Field(default_factory=dict)
 
     final_outputs: dict[str, float] = Field(default_factory=dict)
     discarded_outputs: dict[str, float] = Field(default_factory=dict)
@@ -285,6 +298,26 @@ class FactoryReport(_Result):
 
     def by_severity(self, severity: Severity) -> tuple[Diagnostic, ...]:
         return tuple(item for item in self.diagnostics if item.severity is severity)
+
+    @property
+    def power_balance_mw(self) -> float:
+        """Production minus consumption. Negative means the grid trips in game."""
+        return round(self.power_production_mw - self.power_total_mw, 9)
+
+    @property
+    def has_generators(self) -> bool:
+        return any(solution.kind is NodeKind.GENERATOR for solution in self.nodes)
+
+    @property
+    def has_power_deficit(self) -> bool:
+        """True only when the factory generates and does not generate enough.
+
+        A factory with no generator at all is not in deficit -- it is a factory
+        powered from elsewhere, which is the normal way to draw one here. A factory
+        whose only generator has run out of coal *is*, and that is why the test is
+        on the presence of a generator rather than on a non-zero production.
+        """
+        return self.has_generators and self.power_balance_mw < -FLOW_EPSILON
 
     @property
     def is_sustainable(self) -> bool:

@@ -16,6 +16,7 @@ from typing import Final
 
 from satisplanner.core.graph import (
     ExternalSourceNode,
+    GeneratorNode,
     MachineNode,
     Node,
     OutputNode,
@@ -44,6 +45,7 @@ class EntryKind(StrEnum):
     RECIPE = "recipe"
     EXTRACTOR = "extractor"
     WATER_EXTRACTOR = "water_extractor"
+    GENERATOR = "generator"
     STORAGE = "storage"
     EXTERNAL = "external"
     OUTPUT = "output"
@@ -55,6 +57,7 @@ SECTION_LABELS: Final[dict[EntryKind, str]] = {
     EntryKind.RECIPE: "Recettes",
     EntryKind.EXTRACTOR: "Extraction",
     EntryKind.WATER_EXTRACTOR: "Extraction",
+    EntryKind.GENERATOR: "Electricite",
     EntryKind.STORAGE: "Stockage",
     EntryKind.EXTERNAL: "Entrees et sorties",
     EntryKind.OUTPUT: "Entrees et sorties",
@@ -82,6 +85,9 @@ class PaletteEntry:
     # anything that is not made in a machine.
     machine_class: str | None = None
     extractor_class: str | None = None
+    # The fuel a generator entry drops its node on: the game's own first choice,
+    # changed afterwards on the node itself.
+    fuel_class: str | None = None
     is_alternate: bool = False
     is_event: bool = False
 
@@ -101,6 +107,11 @@ class PaletteEntry:
             case EntryKind.WATER_EXTRACTOR:
                 extractor = game_data.extractors.get(self.class_name)
                 return extractor.item_class if extractor else None
+            case EntryKind.GENERATOR:
+                # A generator is about what it burns, which is the item the card
+                # can actually say something useful about.
+                generator = game_data.generators.get(self.class_name)
+                return generator.default_fuel if generator else None
             case EntryKind.STORAGE:
                 return None
             case _:
@@ -131,6 +142,17 @@ class PaletteEntry:
                 return WaterExtractorNode(
                     id=node_id, extractor_class=self.class_name, position=position
                 )
+            case EntryKind.GENERATOR:
+                # The fuel is carried by the entry rather than looked up here: an
+                # entry has to be able to build its node without a catalogue, and
+                # the palette already knows which fuel it advertised.
+                assert self.fuel_class is not None
+                return GeneratorNode(
+                    id=node_id,
+                    generator_class=self.class_name,
+                    fuel_class=self.fuel_class,
+                    position=position,
+                )
             case EntryKind.STORAGE:
                 return StorageNode(id=node_id, storage_class=self.class_name, position=position)
             case EntryKind.EXTERNAL:
@@ -159,6 +181,7 @@ def build_entries(game_data: GameData) -> list[PaletteEntry]:
     entries: list[PaletteEntry] = []
     entries.extend(_recipes(game_data))
     entries.extend(_extraction(game_data))
+    entries.extend(_generators(game_data))
     entries.extend(_storage(game_data))
     entries.extend(_endpoints(game_data))
     return entries
@@ -233,6 +256,37 @@ def _resources_for(game_data: GameData, form: ItemForm, only: str | None) -> lis
         (item for item in game_data.items.values() if item.is_raw_resource and item.form is form),
         key=lambda item: fold(item.display_name_fr),
     )
+
+
+def _generators(game_data: GameData) -> list[PaletteEntry]:
+    """One entry per generator, not one per fuel.
+
+    A fuel generator would otherwise appear five times for the same building. The
+    fuel is a property of the node, editable there like the purity of a deposit, and
+    the entry simply starts it on the game's first choice.
+    """
+    entries = []
+    for generator in sorted(game_data.generators.values(), key=lambda g: g.class_name):
+        fuel_class = generator.default_fuel
+        if fuel_class is None:
+            continue
+        building = game_data.buildings.get(generator.class_name)
+        fuel = game_data.items.get(fuel_class)
+        detail = f"{generator.power_mw:g} MW produits"
+        if fuel is not None:
+            detail += f" — {fuel.display_name_fr}"
+        entries.append(
+            PaletteEntry(
+                kind=EntryKind.GENERATOR,
+                label=building.display_name_fr if building else generator.class_name,
+                detail=detail,
+                class_name=generator.class_name,
+                icon_class=generator.class_name,
+                icon_file=building.icon_file if building else None,
+                fuel_class=fuel_class,
+            )
+        )
+    return sorted(entries, key=lambda entry: fold(entry.label))
 
 
 def _storage(game_data: GameData) -> list[PaletteEntry]:
@@ -346,6 +400,27 @@ def extractor_choices(game_data: GameData, item_class: str) -> list[tuple[str, s
         ),
         key=lambda choice: choice[1],
     )
+
+
+def fuel_choices(game_data: GameData, generator_class: str) -> list[tuple[str, str]]:
+    """Fuels this generator burns, in the game's own order, as ``(class, label)``.
+
+    The game's order and not the alphabet: it puts the ordinary fuel first, and a
+    list starting with turbofuel would suggest a choice the building does not make
+    by default. Exactly like the extractor list, only what the data allows appears.
+    """
+    generator = game_data.generators.get(generator_class)
+    if generator is None:
+        return []
+    return [
+        (
+            fuel.item_class,
+            game_data.items[fuel.item_class].display_name_fr
+            if fuel.item_class in game_data.items
+            else fuel.item_class,
+        )
+        for fuel in generator.fuels
+    ]
 
 
 def transport_choices(game_data: GameData, form: ItemForm) -> list[tuple[str, str]]:

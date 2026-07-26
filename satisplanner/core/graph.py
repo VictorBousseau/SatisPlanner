@@ -22,7 +22,9 @@ from satisplanner.core.models import GameData, ItemForm, Purity, UnknownClassErr
 # 2 added a clock speed to extractors and machines. Reading a version 1 document
 # needs no conversion -- the field defaults to 100 % -- but the bump is what makes
 # a V1 build refuse a V1.1 file with a sentence instead of a validation error.
-SCHEMA_VERSION: Final = 2
+# 3 added the generator node. Same reasoning: an older document simply has none,
+# but a document that has one must not be opened by a build that cannot draw it.
+SCHEMA_VERSION: Final = 3
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -44,6 +46,7 @@ class NodeKind(StrEnum):
     WATER_EXTRACTOR = "water_extractor"
     EXTERNAL_SOURCE = "external_source"
     MACHINE = "machine"
+    GENERATOR = "generator"
     STORAGE = "storage"
     OUTPUT = "output"
 
@@ -118,6 +121,26 @@ class MachineNode(_NodeBase):
     clock_speed: float = _clock_field()
 
 
+class GeneratorNode(_NodeBase):
+    """A bank of generators burning one chosen fuel.
+
+    ``fuel_class`` is a choice among the fuels the building declares, because a fuel
+    generator runs on fuel or on turbofuel and the two do not have the same appetite
+    at all. It is validated against the catalogue where the catalogue is available --
+    a graph never holds one -- and shown on the node, because it changes every number.
+
+    There is deliberately **no clock field**. The game raises a generator's output by
+    an exponent of its own, distinct from the consumption exponent that prices an
+    overclocked machine; modelling one with the other would invent figures. Absent is
+    therefore more honest than present and pinned to 100 %.
+    """
+
+    kind: Literal[NodeKind.GENERATOR] = NodeKind.GENERATOR
+    generator_class: str
+    fuel_class: str
+    count: float = Field(default=1.0, gt=0)
+
+
 class StorageNode(_NodeBase):
     """A buffer. ``item_class`` may be left empty and inferred from the edges."""
 
@@ -140,12 +163,21 @@ class OutputNode(_NodeBase):
 
 
 Node = Annotated[
-    ResourceNode | WaterExtractorNode | ExternalSourceNode | MachineNode | StorageNode | OutputNode,
+    ResourceNode
+    | WaterExtractorNode
+    | ExternalSourceNode
+    | MachineNode
+    | GeneratorNode
+    | StorageNode
+    | OutputNode,
     Field(discriminator="kind"),
 ]
 
-# Node kinds that can absorb an incoming flow.
-CONSUMER_KINDS: Final = frozenset({NodeKind.MACHINE, NodeKind.STORAGE, NodeKind.OUTPUT})
+# Node kinds that can absorb an incoming flow. A generator is a consumer and only
+# that: what it produces is power, and power does not travel on a line.
+CONSUMER_KINDS: Final = frozenset(
+    {NodeKind.MACHINE, NodeKind.GENERATOR, NodeKind.STORAGE, NodeKind.OUTPUT}
+)
 # Node kinds that can emit a flow.
 PRODUCER_KINDS: Final = frozenset(
     {
@@ -302,6 +334,9 @@ def node_output_items(node: Node, game_data: GameData) -> set[str]:
             return {node.item_class}
         case MachineNode():
             return set(game_data.recipe(node.recipe_class).product_rates())
+        case GeneratorNode():
+            # It produces power, and power is not a flow on a line.
+            return set()
         case StorageNode():
             # A buffer passes through whatever reaches it.
             return {node.item_class} if node.item_class else set()
@@ -314,6 +349,8 @@ def node_input_items(node: Node, game_data: GameData) -> set[str] | None:
     match node:
         case MachineNode():
             return set(game_data.recipe(node.recipe_class).ingredient_rates())
+        case GeneratorNode():
+            return set(generator_input_rates(node, game_data))
         case StorageNode():
             return {node.item_class} if node.item_class else None
         case OutputNode():
@@ -513,3 +550,21 @@ def storage_item(node: StorageNode, graph: FactoryGraph) -> str | None:
 def machine_building(node: MachineNode, game_data: GameData) -> str:
     """The building a machine node runs in: its own, or the recipe's."""
     return node.building_class or game_data.recipe(node.recipe_class).building_class
+
+
+def generator_input_rates(node: GeneratorNode, game_data: GameData) -> dict[str, float]:
+    """What this bank of generators burns per minute, by item, at full load.
+
+    Fuel and make-up water alike: the water of a coal generator is an input on a
+    pipe, subject to the same capacity and back pressure as anything else, and a
+    generator that does not get it is short of an input like any machine.
+
+    Empty when the building does not accept the chosen fuel, which is how a file
+    written against another game version degrades: no consumption, no production,
+    and a diagnostic rather than an exception.
+    """
+    generator = game_data.generator(node.generator_class)
+    fuel = generator.fuel(node.fuel_class)
+    if fuel is None:
+        return {}
+    return {item: rate * node.count for item, rate in sorted(fuel.input_rates().items())}
