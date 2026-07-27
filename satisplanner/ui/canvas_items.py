@@ -54,7 +54,10 @@ from satisplanner.ui.item_colours import ItemPalette
 
 logger = logging.getLogger(__name__)
 
+# The width every node starts at, and the width past which a long row is elided
+# rather than allowed to keep stretching the box.
 NODE_WIDTH: Final = 260.0
+MAX_NODE_WIDTH: Final = 440.0
 HEADER_HEIGHT: Final = 34.0
 DETAIL_HEIGHT: Final = 18.0
 ROW_HEIGHT: Final = 18.0
@@ -309,6 +312,10 @@ class NodeItem(QGraphicsItem):
         self._inputs: tuple[str, ...] = ()
         self._outputs: tuple[str, ...] = ()
         self._height = HEADER_HEIGHT
+        self._width = NODE_WIDTH
+        # Row texts the width was last measured against, and the answer.
+        self._width_key: tuple[tuple[str, str, str], ...] | None = None
+        self._width_value = NODE_WIDTH
         # Measured once and re-used until the text or the width changes.
         self._layout: SubtitleLayout | None = None
         # Port circles, rebuilt when the rows they sit beside move.
@@ -319,10 +326,13 @@ class NodeItem(QGraphicsItem):
     # ---------------------------------------------------------------- geometry
 
     def relayout(self) -> None:
-        """Recompute the port lists and the height. Call after the node changes."""
+        """Recompute the port lists, the width and the height. Call after a change."""
         self._inputs, self._outputs = self._port_items()
         rows = max(len(self._inputs), len(self._outputs))
         self.prepareGeometryChange()
+        # Width before height: the subtitle wraps against it, so the height depends
+        # on it and not the other way round.
+        self._width = self._required_width()
         self._height = (
             HEADER_HEIGHT
             + self._subtitle_height()
@@ -332,6 +342,85 @@ class NodeItem(QGraphicsItem):
         )
         # The ports belong to the rows, and the rows have just moved.
         self._ports_top = None
+
+    def width(self) -> float:
+        """How wide this node is drawn. At least :data:`NODE_WIDTH`, never more than
+        :data:`MAX_NODE_WIDTH`."""
+        return self._width
+
+    def _required_width(self) -> float:
+        """Wide enough for the longest row to be read, within reason.
+
+        The rate is never shortened -- it is the reason the row exists -- so it used
+        to be the item's name that gave way, and a name elided to "Minerai de ..." no
+        longer says which item the row is about. Writing the real and the nominal
+        rate side by side made that common rather than rare.
+
+        So the box grows instead, up to a ceiling. Past that, eliding resumes: a node
+        that stretched to fit "Résidus de pétrole lourd 90 / 180 m³/min" twice over
+        would be readable and would also be half the canvas.
+
+        Measured once per set of texts, and cached against them. This is asked on
+        every report -- a new rate can genuinely change the width -- and measuring
+        five hundred nodes' worth of rows each time cost about seventy milliseconds
+        an edit. Nearly all of those nodes have exactly the rates they had a moment
+        ago; the key is what says so.
+        """
+        key = self._row_texts()
+        if key == self._width_key:
+            return self._width_value
+        value = self._measure_width(key)
+        self._width_key, self._width_value = key, value
+        return value
+
+    def _row_texts(self) -> tuple[tuple[str, str, str], ...]:
+        """``(item, name, rate)`` for every row, inputs then outputs.
+
+        Both the cache key and the thing being measured, so the strings are built
+        once rather than once for each purpose.
+        """
+        rows: list[tuple[str, str, str]] = []
+        for item_class in self._inputs:
+            rows.append(
+                (
+                    item_class,
+                    self._row_name(item_class),
+                    self.port_rate(item_class, is_output=False),
+                )
+            )
+        for item_class in self._outputs:
+            rows.append(
+                (item_class, self._row_name(item_class), self.port_rate(item_class, is_output=True))
+            )
+        return tuple(rows)
+
+    def _row_name(self, item_class: str) -> str:
+        if item_class == ANY_ITEM:
+            return ANY_ITEM_LABEL
+        return self.game_data.item(item_class).display_name_fr
+
+    def _measure_width(self, rows: tuple[tuple[str, str, str], ...]) -> float:
+        metrics = QFontMetricsF(self._row_font())
+        inputs = rows[: len(self._inputs)]
+        outputs = rows[len(self._inputs) :]
+        needed = NODE_WIDTH
+        for index in range(max(len(inputs), len(outputs))):
+            left = inputs[index] if index < len(inputs) else None
+            right = outputs[index] if index < len(outputs) else None
+            if left is not None and right is not None:
+                half = max(_cell_width(metrics, left), _cell_width(metrics, right))
+                needed = max(needed, 2 * (half + ROW_MARGIN + ROW_GAP))
+            else:
+                only = left if left is not None else right
+                assert only is not None
+                needed = max(needed, _cell_width(metrics, only) + 2 * ROW_MARGIN)
+        return min(needed, MAX_NODE_WIDTH)
+
+    def _row_font(self) -> QFont:
+        """The font the item rows are painted with, so measuring matches drawing."""
+        font = QFont()
+        font.setPointSizeF(max(font.pointSizeF() - 0.5, 6.0))
+        return font
 
     def deployed_units(self) -> float | None:
         """The bank this node stands for, when it is being drawn machine by machine."""
@@ -344,7 +433,9 @@ class NodeItem(QGraphicsItem):
         count = self.deployed_units()
         if count is None:
             return None
-        return deployed_layout(count, self.deployed_ceiling)
+        # Per row from this node's own width: a wider box fits more thumbnails.
+        per_row = int((self._width - 2 * ROW_MARGIN + DEPLOYED_GAP) / DEPLOYED_ROW_HEIGHT)
+        return deployed_layout(count, self.deployed_ceiling, max(1, per_row))
 
     def _deployed_band(self) -> float:
         plan = self.deployed_plan()
@@ -393,7 +484,7 @@ class NodeItem(QGraphicsItem):
 
     def boundingRect(self) -> QRectF:
         margin = BORDER_WIDTH + PORT_RADIUS
-        return QRectF(-margin, -margin, NODE_WIDTH + 2 * margin, self._height + 2 * margin)
+        return QRectF(-margin, -margin, self._width + 2 * margin, self._height + 2 * margin)
 
     def ports(self) -> list[Port]:
         """Every port, inputs first, in the order they are drawn.
@@ -411,7 +502,7 @@ class NodeItem(QGraphicsItem):
             for index, item_class in enumerate(self._inputs)
         ]
         found.extend(
-            Port(item_class, True, QPointF(NODE_WIDTH, top + index * ROW_HEIGHT))
+            Port(item_class, True, QPointF(self._width, top + index * ROW_HEIGHT))
             for index, item_class in enumerate(self._outputs)
         )
         self._ports, self._ports_top = found, top
@@ -435,13 +526,24 @@ class NodeItem(QGraphicsItem):
         for port in self.ports():
             if port.item_class == item_class and port.is_output is is_output:
                 return self.mapToScene(port.centre)
-        side = NODE_WIDTH if is_output else 0.0
+        side = self._width if is_output else 0.0
         return self.mapToScene(QPointF(side, self._height / 2))
 
     # ----------------------------------------------------------------- content
 
     def apply(self, solution: NodeSolution | None) -> None:
+        """Take the solved figures, and re-measure only if they changed the shape.
+
+        A rate is part of a row, and a row decides how wide the node has to be, so a
+        new report can genuinely change the geometry -- "60/min" becoming
+        "60 / 90/min" is wider. Laying out again is only worth it when that happens,
+        which is why the width is compared rather than assumed: at five hundred
+        nodes, an unconditional ``relayout`` on every report is exactly the cost Lot
+        1 was spent removing.
+        """
         self.solution = solution
+        if self._required_width() != self._width:
+            self.relayout()
         self.update()
 
     def title(self) -> str:
@@ -534,7 +636,7 @@ class NodeItem(QGraphicsItem):
         trade than a cache that can quietly go stale.
         """
         segments = tuple(self.subtitle_segments())
-        available = NODE_WIDTH - 16
+        available = self._width - 16
         cached = self._layout
         if cached is not None and cached.width == available and cached.segments == segments:
             return cached
@@ -596,7 +698,7 @@ class NodeItem(QGraphicsItem):
         return self.subtitle_layout().height
 
     def _subtitle_rect(self) -> QRectF:
-        return QRectF(8, HEADER_HEIGHT - 16, NODE_WIDTH - 16, self._subtitle_height())
+        return QRectF(8, HEADER_HEIGHT - 16, self._width - 16, self._subtitle_height())
 
     def _detail_font(self) -> QFont:
         """The font the subtitle is painted with, so hit-testing measures the truth."""
@@ -618,13 +720,24 @@ class NodeItem(QGraphicsItem):
 
         The stock is written even when it is zero. It used to be hidden then, which
         made it the one editable value with no place on the node to double-click.
+
+        Cut into runs like every other subtitle, and deliberately short. It used to
+        be one long run -- "tampon — Lingot d'acier (deduit des lignes), stock
+        initial " -- and a run is never broken across two lines, so on a buffer with
+        a long item name the whole thing overflowed the box and was clipped to
+        "...), stc" with the stock left stranded on the line below. Saying "(deduit)"
+        and "stock" instead of "(deduit des lignes)" and "stock initial" costs
+        nothing a reader needed and makes the line fit; the cuts do the rest.
         """
         if self.content_item is None:
             return [Segment("tampon — contenu indetermine")]
         name = self.game_data.item(self.content_item).display_name_fr
-        origin = "fixe" if storage.item_class else "deduit des lignes"
+        origin = "fixe" if storage.item_class else "deduit"
         return [
-            Segment(f"tampon — {name} ({origin}), stock initial "),
+            Segment("tampon — "),
+            Segment(name),
+            Segment(f" ({origin})"),
+            Segment(" — stock "),
             Segment(formatting.number(storage.initial_content), Field.QUANTITY),
         ]
 
@@ -655,7 +768,7 @@ class NodeItem(QGraphicsItem):
     ) -> None:
         del option, widget
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        body = QRectF(0, 0, NODE_WIDTH, self._height)
+        body = QRectF(0, 0, self._width, self._height)
 
         border = QColor(theme.SELECTION) if self.isSelected() else state_colour(self.solution)
         painter.setBrush(QColor(self.background_colour()))
@@ -676,7 +789,7 @@ class NodeItem(QGraphicsItem):
         painter.setPen(QColor(self.text_colour()))
         ratio_width = 52.0
         painter.drawText(
-            QRectF(8 + ICON_SIDE + 6, 5, NODE_WIDTH - ICON_SIDE - ratio_width - 24, 20),
+            QRectF(8 + ICON_SIDE + 6, 5, self._width - ICON_SIDE - ratio_width - 24, 20),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             self.title(),
         )
@@ -684,7 +797,7 @@ class NodeItem(QGraphicsItem):
         if self.solution is not None:
             painter.setPen(state_colour(self.solution))
             painter.drawText(
-                QRectF(NODE_WIDTH - ratio_width - 8, 5, ratio_width, 20),
+                QRectF(self._width - ratio_width - 8, 5, ratio_width, 20),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
                 formatting.percent(self.solution.ratio),
             )
@@ -748,7 +861,7 @@ class NodeItem(QGraphicsItem):
                 QRectF(
                     cell.left(),
                     cell.top(),
-                    NODE_WIDTH - cell.left() - ROW_MARGIN,
+                    self._width - cell.left() - ROW_MARGIN,
                     DEPLOYED_SIDE,
                 ),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -781,16 +894,18 @@ class NodeItem(QGraphicsItem):
         share it. The rate is never shortened -- it is the reason the row exists --
         so it is the item's name that gets elided when the space runs out.
         """
-        font = QFont(painter.font())
-        font.setPointSizeF(max(font.pointSizeF() - 0.5, 6.0))
-        painter.setFont(font)
+        # The very font ``_required_width`` measured with, so the box that was
+        # sized to fit this row really does fit it.
+        painter.setFont(self._row_font())
         top = self._rows_top()
         rows = max(len(self._inputs), len(self._outputs))
         for index in range(rows):
             shared = index < len(self._inputs) and index < len(self._outputs)
             # When both sides are used on the same row they split the width and leave a
             # gutter between them, so an input's rate never abuts an output's name.
-            width = NODE_WIDTH / 2 - ROW_MARGIN - ROW_GAP if shared else NODE_WIDTH - 2 * ROW_MARGIN
+            width = (
+                self._width / 2 - ROW_MARGIN - ROW_GAP if shared else self._width - 2 * ROW_MARGIN
+            )
             y = top + index * ROW_HEIGHT
             if index < len(self._inputs):
                 self._paint_row(
@@ -800,7 +915,7 @@ class NodeItem(QGraphicsItem):
                     is_output=False,
                 )
             if index < len(self._outputs):
-                left = NODE_WIDTH - ROW_MARGIN - width
+                left = self._width - ROW_MARGIN - width
                 self._paint_row(
                     painter,
                     QRectF(left, y, width, ROW_HEIGHT),
@@ -837,8 +952,11 @@ class NodeItem(QGraphicsItem):
 
         Exposed rather than inlined into the painting so that a test can read exactly
         what is on the node without going through a screenshot.
+
+        Empty for the wildcard port of a buffer whose content is not decided: there
+        is no item, so there is no rate and nothing to look up in the catalogue.
         """
-        if self.solution is None:
+        if self.solution is None or item_class == ANY_ITEM:
             return ""
         item = self.game_data.item(item_class)
         flows = self.solution.outputs if is_output else self.solution.inputs
@@ -1076,6 +1194,19 @@ class EdgeItem(QGraphicsPathItem):
         return formatting.pair(
             self.solution.rate_per_minute, self.solution.desired_rate_per_minute, item
         )
+
+
+def _cell_width(metrics: QFontMetricsF, row: tuple[str, str, str], gap: float = ROW_GAP) -> float:
+    """Room one row needs: its name, the gutter, and its rate.
+
+    Takes the already-built texts rather than a node and an item class, so that the
+    strings are made once and serve as both the measurement and the cache key.
+    """
+    _item_class, name, rate = row
+    width = metrics.horizontalAdvance(name)
+    if rate:
+        width += gap + metrics.horizontalAdvance(rate)
+    return width
 
 
 def _lstripped(segment: Segment) -> Segment:

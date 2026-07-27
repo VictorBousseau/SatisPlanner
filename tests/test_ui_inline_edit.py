@@ -300,7 +300,7 @@ def test_a_buffer_stock_is_editable_even_when_it_is_zero(window: MainWindow) -> 
     )
     assert window.scene.connect_nodes(deposit, node_id, "Desc_OreIron_C") is None
 
-    assert "stock initial 0" in window.scene.nodes[node_id].subtitle()
+    assert "stock 0" in window.scene.nodes[node_id].subtitle()
     open_editor(window, node_id, Field.QUANTITY)
     editor = window.view.inline.widget
     assert isinstance(editor, QLineEdit)
