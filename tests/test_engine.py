@@ -318,9 +318,10 @@ def test_input_deficit(game_data: GameData) -> None:
     assert smelter.integer_machine_count == 3
 
     message = message_for(report, DiagnosticCode.DEFICIT)
+    # The rates keep all three decimals; the percentage derived from them gets one.
     assert "30/min" in message, message
     assert "90/min" in message, message
-    assert "66,667 %" in message, message
+    assert "66,7 %" in message, message
 
 
 def test_allocation_shares_equally_rather_than_proportionally(game_data: GameData) -> None:

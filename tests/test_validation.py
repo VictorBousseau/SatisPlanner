@@ -177,8 +177,21 @@ def test_solid_rates_have_no_volume_unit(game_data: GameData) -> None:
 
 def test_decimals_use_a_comma(game_data: GameData) -> None:
     finding = find(diagnostics_of("deficit", game_data), DiagnosticCode.DEFICIT)
-    assert "66,667 %" in finding.message
-    assert "66.667" not in finding.message
+    assert "66,7 %" in finding.message
+    assert "66.7" not in finding.message
+
+
+def test_a_percentage_gets_one_decimal_and_a_rate_keeps_three(game_data: GameData) -> None:
+    """The two are read differently, so they are written differently.
+
+    A rate is added up and compared to a belt's capacity, and its thousandths carry
+    real information. A percentage is glanced at and compared to a hundred; three
+    decimals there are three characters of noise on every node of the canvas.
+    """
+    finding = find(diagnostics_of("deficit", game_data), DiagnosticCode.DEFICIT)
+    assert "66,7 %" in finding.message, finding.message
+    assert "66,667 %" not in finding.message, finding.message
+    assert "30/min" in finding.message, finding.message
 
 
 def test_durations_are_scaled_to_something_readable(game_data: GameData) -> None:

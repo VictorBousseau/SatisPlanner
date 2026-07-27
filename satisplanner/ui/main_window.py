@@ -614,6 +614,9 @@ class MainWindow(QMainWindow):
         deployed = self.preferences.deployed_rendering
         self.deployed_action.setChecked(deployed)
         self.scene.set_deployed_rendering(deployed, self.preferences.deployed_ceiling)
+        palette = self.preferences.item_palette
+        self.scene.set_item_palette(palette)
+        self.palette_widget.set_item_palette(palette)
         self.refresh_recent_menu()
 
     def toggle_deployed_rendering(self) -> None:

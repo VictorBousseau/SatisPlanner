@@ -43,3 +43,35 @@ POWER_SHARD_SLOTS: Final = 3
 # because the graph's field bound cannot reach the catalogue, and checked against
 # the data by `tests/test_conversions.py` so it cannot drift from it.
 MAX_CLOCK_SPEED: Final = 2.5
+
+# ------------------------------------------------------------------- families
+#
+# Which items belong together, for the reader who wants to colour a factory by the
+# nature of what flows through it.
+#
+# Two families cost nothing: **Docs.json** declares `is_raw_resource` and the form
+# of every item, so "raw" and "fluid" are read from the data and never listed here.
+#
+# The two below are **not in Docs.json in any form**. There is no field saying that
+# an iron ingot is a smelted metal, and no field marking the space elevator parts as
+# the things the game asks you to ship. Both are hand-written, both are checked
+# against the shipped catalogue by `tests/test_families.py` so that a class renamed
+# by a game update fails a test instead of silently losing its colour, and neither
+# changes a single rate: a family is a way of looking, not a property of the item.
+
+# The five smelted and cast metals. Concrete is deliberately absent -- it comes out
+# of a constructor, not a smelter, and a reader looking for "the ingots" is looking
+# for the metals.
+INGOT_CLASSES: Final[tuple[str, ...]] = (
+    "Desc_AluminumIngot_C",
+    "Desc_CopperIngot_C",
+    "Desc_GoldIngot_C",
+    "Desc_IronIngot_C",
+    "Desc_SteelIngot_C",
+)
+
+# The twelve space elevator parts, which is what "finished product" means in this
+# game: everything else is an intermediate on the way to one of them.
+SPACE_ELEVATOR_CLASSES: Final[tuple[str, ...]] = tuple(
+    f"Desc_SpaceElevatorPart_{index}_C" for index in range(1, 13)
+)

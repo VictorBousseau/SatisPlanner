@@ -45,11 +45,12 @@ from satisplanner.core.graph import (
     machine_building,
     unit_count,
 )
-from satisplanner.core.models import GameData, ItemForm
+from satisplanner.core.models import GameData, Item, ItemForm
 from satisplanner.core.results import EdgeSolution, LimitingFactor, NodeSolution
-from satisplanner.ui import theme
+from satisplanner.ui import item_colours, theme
 from satisplanner.ui.catalogue import PURITY_LABELS
 from satisplanner.ui.icon_provider import IconProvider
+from satisplanner.ui.item_colours import ItemPalette
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,9 @@ DEPLOYED_PER_ROW: Final = int((NODE_WIDTH - 2 * ROW_MARGIN + DEPLOYED_GAP) / DEP
 # Under this fraction of a machine, nothing is drawn: a sliver two pixels wide reads
 # as a rendering glitch rather than as "a third of an assembler".
 DEPLOYED_MIN_FRACTION: Final = 0.05
+# How far the secondary text is faded towards its background.
+MUTED_TEXT_ALPHA: Final = 0.65
+
 PORT_RADIUS: Final = 5.0
 # Extra slack around a port so it can be grabbed without pixel-hunting.
 PORT_GRAB_SLACK: Final = 4.0
@@ -86,6 +90,9 @@ PORT_GRAB_SLACK: Final = 4.0
 # Horizontal reach of the bezier handles, as a fraction of the gap between ports.
 CURVE_TENSION: Final = 0.45
 EDGE_LABEL_FONT_SIZE: Final = 8
+# Wide enough for "1 200 / 1 800 m³/min", which is the longest a line label gets
+# once the demanded rate is written beside the carried one.
+EDGE_LABEL_WIDTH: Final = 130.0
 
 # Port item class of a buffer whose content is not decided yet: it accepts whatever
 # arrives first, and the graph infers the item from that line.
@@ -295,6 +302,10 @@ class NodeItem(QGraphicsItem):
         # this node overrides it. Purely a way of drawing; nothing reads it back.
         self.deployed = False
         self.deployed_ceiling = 12
+        # Colours by item, handed down by the scene. ``None`` means nobody set one,
+        # and the node is drawn exactly as it was before this existed -- which is
+        # what a test that builds an item on its own gets, and rightly so.
+        self.palette: ItemPalette | None = None
         self._inputs: tuple[str, ...] = ()
         self._outputs: tuple[str, ...] = ()
         self._height = HEADER_HEIGHT
@@ -647,7 +658,7 @@ class NodeItem(QGraphicsItem):
         body = QRectF(0, 0, NODE_WIDTH, self._height)
 
         border = QColor(theme.SELECTION) if self.isSelected() else state_colour(self.solution)
-        painter.setBrush(QColor(theme.SURFACE_RAISED))
+        painter.setBrush(QColor(self.background_colour()))
         painter.setPen(QPen(border, BORDER_WIDTH))
         painter.drawRoundedRect(body, CORNER_RADIUS, CORNER_RADIUS)
 
@@ -662,7 +673,7 @@ class NodeItem(QGraphicsItem):
         title_font = QFont(painter.font())
         title_font.setBold(True)
         painter.setFont(title_font)
-        painter.setPen(QColor(theme.TEXT))
+        painter.setPen(QColor(self.text_colour()))
         ratio_width = 52.0
         painter.drawText(
             QRectF(8 + ICON_SIDE + 6, 5, NODE_WIDTH - ICON_SIDE - ratio_width - 24, 20),
@@ -680,7 +691,7 @@ class NodeItem(QGraphicsItem):
 
         # The very font ``field_at`` measures with, so what is hit is what is seen.
         painter.setFont(self._detail_font())
-        painter.setPen(QColor(theme.TEXT_MUTED))
+        painter.setPen(self.muted_text_colour())
         band = self._subtitle_rect()
         for row, line in enumerate(self.subtitle_layout().lines):
             painter.drawText(
@@ -732,7 +743,7 @@ class NodeItem(QGraphicsItem):
             font = QFont(painter.font())
             font.setPointSizeF(max(font.pointSizeF() - 1.0, 6.0))
             painter.setFont(font)
-            painter.setPen(QColor(theme.TEXT_MUTED))
+            painter.setPen(self.muted_text_colour())
             painter.drawText(
                 QRectF(
                     cell.left(),
@@ -808,10 +819,7 @@ class NodeItem(QGraphicsItem):
 
         item = self.game_data.item(item_class)
         metrics = QFontMetricsF(painter.font())
-        rate = ""
-        if self.solution is not None:
-            flows = self.solution.outputs if is_output else self.solution.inputs
-            rate = formatting.rate(flows.get(item_class, 0.0), item)
+        rate = self.port_rate(item_class, is_output=is_output)
         rate_width = metrics.horizontalAdvance(rate) if rate else 0.0
         name_cell = cell.adjusted(0, 0, -(rate_width + ROW_GAP if rate else 0.0), 0)
         painter.drawText(
@@ -824,17 +832,30 @@ class NodeItem(QGraphicsItem):
         if rate:
             painter.drawText(cell, centre | Qt.AlignmentFlag.AlignRight, rate)
 
+    def port_rate(self, item_class: str, *, is_output: bool) -> str:
+        """What one port reads: the real rate, and the nominal one when they differ.
+
+        Exposed rather than inlined into the painting so that a test can read exactly
+        what is on the node without going through a screenshot.
+        """
+        if self.solution is None:
+            return ""
+        item = self.game_data.item(item_class)
+        flows = self.solution.outputs if is_output else self.solution.inputs
+        nameplate = self.solution.nominal_outputs if is_output else self.solution.nominal_inputs
+        return formatting.pair(flows.get(item_class, 0.0), nameplate.get(item_class), item)
+
     def _row_colour(self, item_class: str, *, is_output: bool) -> QColor:
         """Orange on the item that is actually holding the node back."""
         if item_class == ANY_ITEM or self.solution is None:
-            return QColor(theme.TEXT_MUTED)
+            return self.muted_text_colour()
         if item_class in self.solution.blocked_products and is_output:
             return QColor(theme.STATE_BLOCKED)
         if item_class in self.solution.starved_items and not is_output:
             return QColor(theme.STATE_STARVED)
         if item_class in self.solution.line_limited_items:
             return QColor(theme.EDGE_SATURATED)
-        return QColor(theme.TEXT)
+        return QColor(self.text_colour())
 
     def _paint_ports(self, painter: QPainter) -> None:
         painter.setPen(QPen(QColor(theme.BACKGROUND), 1.0))
@@ -843,11 +864,62 @@ class NodeItem(QGraphicsItem):
             painter.drawEllipse(port.centre, PORT_RADIUS, PORT_RADIUS)
 
     def _port_colour(self, item_class: str) -> str:
+        """The colour of what travels through this port.
+
+        Falls back to the transport's colour when no palette is in play, which is
+        what a node built outside the application gets: a belt is pale, a pipe blue,
+        exactly as before colours by item existed.
+        """
         if item_class == ANY_ITEM:
             return theme.TEXT_MUTED
-        if self.game_data.item(item_class).form.is_fluid:
-            return theme.PIPE_COLOUR
-        return theme.BELT_COLOUR
+        item = self.game_data.item(item_class)
+        if self.palette is not None:
+            return self.palette.colour_for(item)
+        return theme.PIPE_COLOUR if item.form.is_fluid else theme.BELT_COLOUR
+
+    def background_colour(self) -> str:
+        """What the box is filled with: the colour of the item this node is about.
+
+        A node is about one thing -- what it makes, what it extracts, what it holds --
+        and that is what a reader scans the canvas for. Its inputs are named on their
+        own rows and keep their own colours on the ports.
+        """
+        if self.palette is None:
+            return theme.SURFACE_RAISED
+        subject = self.subject_item()
+        if subject is None:
+            return theme.SURFACE_RAISED
+        return self.palette.colour_for(subject)
+
+    def subject_item(self) -> Item | None:
+        """The item this node is *about*, or ``None`` when it is about nothing yet."""
+        match self.node:
+            case MachineNode() as machine:
+                recipe = self.game_data.recipe(machine.recipe_class)
+                headline = recipe.products[0].item_class if recipe.products else None
+            case GeneratorNode() as generator:
+                headline = generator.fuel_class
+            case WaterExtractorNode() as pump:
+                headline = self.game_data.extractor(pump.extractor_class).item_class
+            case StorageNode():
+                headline = self.content_item
+            case _:
+                headline = getattr(self.node, "item_class", None)
+        return self.game_data.items.get(headline) if headline else None
+
+    def text_colour(self) -> str:
+        """Light or dark, whichever survives the background this node ended up with."""
+        return item_colours.text_colour_on(self.background_colour())
+
+    def muted_text_colour(self) -> QColor:
+        """The same decision for the secondary text, kept a step quieter.
+
+        Faded by transparency rather than by a second fixed colour, so that it stays
+        the right side of whatever background the palette produced.
+        """
+        colour = QColor(self.text_colour())
+        colour.setAlphaF(MUTED_TEXT_ALPHA)
+        return colour
 
     def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         """Name the port under the cursor, so a fan of ten lines stays readable."""
@@ -981,16 +1053,28 @@ class EdgeItem(QGraphicsPathItem):
         super().paint(painter, option, widget)
         if self.solution is None:
             return
-        item = self.game_data.item(self.solution.item_class)
         font = QFont(painter.font())
         font.setPointSize(EDGE_LABEL_FONT_SIZE)
         painter.setFont(font)
         painter.setPen(self.pen().color())
         middle = self.path().pointAtPercent(0.5)
         painter.drawText(
-            QRectF(middle.x() - 45, middle.y() - 14, 90, 12),
+            QRectF(middle.x() - EDGE_LABEL_WIDTH / 2, middle.y() - 14, EDGE_LABEL_WIDTH, 12),
             Qt.AlignmentFlag.AlignCenter,
-            formatting.rate(self.solution.rate_per_minute, item),
+            self.label(),
+        )
+
+    def label(self) -> str:
+        """What the line carries, and what it would carry if it were big enough.
+
+        The two differ only on a saturated line, which is exactly the line a reader
+        is looking for: "60 / 120" says at once that half of it is being held back.
+        """
+        if self.solution is None:
+            return ""
+        item = self.game_data.item(self.solution.item_class)
+        return formatting.pair(
+            self.solution.rate_per_minute, self.solution.desired_rate_per_minute, item
         )
 
 

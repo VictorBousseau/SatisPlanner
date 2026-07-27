@@ -54,6 +54,7 @@ from satisplanner.ui.catalogue import (
     transport_choices,
 )
 from satisplanner.ui.icon_provider import IconProvider
+from satisplanner.ui.item_colours import ItemPalette, text_colour_on
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +108,33 @@ class PaletteModel(QAbstractListModel):
     catalogue.
     """
 
-    def __init__(self, icons: IconProvider, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        icons: IconProvider,
+        game_data: GameData | None = None,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
         self.icons = icons
+        self.game_data = game_data
+        # Colours by item, so that the place a reader goes looking for an item shows
+        # the same colour they will see on the canvas once they have dropped it.
+        self.palette = ItemPalette()
         self._rows: list[PaletteEntry | str] = []
+
+    def set_item_palette(self, palette: ItemPalette) -> None:
+        self.palette = palette
+        if self._rows:
+            top, bottom = self.index(0), self.index(len(self._rows) - 1)
+            self.dataChanged.emit(top, bottom, [Qt.ItemDataRole.BackgroundRole])
+
+    def entry_colour(self, entry: PaletteEntry) -> str | None:
+        """The colour of what this entry is about, or ``None`` for a building."""
+        if self.game_data is None:
+            return None
+        subject = entry.subject_item(self.game_data)
+        item = self.game_data.items.get(subject) if subject else None
+        return None if item is None else self.palette.colour_for(item)
 
     def set_rows(self, rows: Sequence[PaletteEntry | str]) -> None:
         self.beginResetModel()
@@ -152,6 +176,12 @@ class PaletteModel(QAbstractListModel):
                 return f"{row.label}{_alternate_marker(row)}\n{row.detail}"
             case Qt.ItemDataRole.DecorationRole:
                 return self.icons.icon_for(row.icon_class, row.icon_file, row.label)
+            case Qt.ItemDataRole.BackgroundRole:
+                colour = self.entry_colour(row)
+                return None if colour is None else QColor(colour)
+            case Qt.ItemDataRole.ForegroundRole:
+                colour = self.entry_colour(row)
+                return None if colour is None else QColor(text_colour_on(colour))
             case Qt.ItemDataRole.ToolTipRole:
                 return f"{row.label}\n{row.detail}\n{row.class_name}"
             case _ if role == _ROLE_ENTRY:
@@ -270,7 +300,7 @@ class PaletteWidget(QWidget):
         for class_name, label in transport_choices(game_data, ItemForm.LIQUID):
             self.pipe_tier.addItem(label, class_name)
 
-        self.model = PaletteModel(icons, self)
+        self.model = PaletteModel(icons, game_data, self)
         self.list = PaletteList(self.model, self)
         self.count_label = QLabel(self)
         self.count_label.setStyleSheet(f"color: {theme.TEXT_MUTED};")
@@ -320,6 +350,10 @@ class PaletteWidget(QWidget):
     def filters(self) -> tuple[bool, bool]:
         """``(alternates shown, event content shown)``."""
         return self.alternates.isChecked(), self.events.isChecked()
+
+    def set_item_palette(self, palette: ItemPalette) -> None:
+        """Colour the list the same way the canvas is coloured."""
+        self.model.set_item_palette(palette)
 
     def _announce_filters(self) -> None:
         self.filtersChanged.emit(*self.filters())

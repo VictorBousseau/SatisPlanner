@@ -632,6 +632,8 @@ class _Solver:
             limiting=state.limiting_factor(spare),
             inputs=_clean(state.inflow),
             outputs=_clean(state.outflow),
+            nominal_inputs=_nameplate(state.nominal_in),
+            nominal_outputs=_nameplate(state.nominal_out),
             blocked_products=state.blocked_products,
             starved_items=state.starved_items(spare),
             building_class=building,
@@ -1022,6 +1024,23 @@ def _clean(values: Mapping[str, float]) -> dict[str, float]:
     return {
         key: round(value, 9) for key, value in sorted(values.items()) if abs(value) > FLOW_EPSILON
     }
+
+
+def _nameplate(values: Mapping[str, float]) -> dict[str, float]:
+    """The same, keeping the zeros and dropping what is not a number.
+
+    Two differences from :func:`_clean`, and both matter to a reader.
+
+    A nominal of zero is kept: a machine set to zero machines has a nameplate, and
+    it says zero. Dropping it would make the port look as though it had no rating
+    rather than a rating of nothing.
+
+    An infinite nominal is dropped. A buffer and an exit take whatever arrives, and
+    a port with no ceiling has no second figure to show beside the first -- writing
+    one would turn "unlimited" into a quantity, and would not survive being written
+    to JSON either.
+    """
+    return {key: round(value, 9) for key, value in sorted(values.items()) if math.isfinite(value)}
 
 
 def solve(graph: FactoryGraph, game_data: GameData) -> FactoryReport:

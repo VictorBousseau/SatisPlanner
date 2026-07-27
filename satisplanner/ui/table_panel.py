@@ -274,9 +274,13 @@ class NodeTableModel(QAbstractTableModel):
                     return "—"
                 return self._item_name(node.fuel_class)
             case _ if column == COLUMN_INPUTS:
-                return self._flows(solution.inputs if solution else {})
+                if solution is None:
+                    return "—"
+                return self._flows(solution.inputs, solution.nominal_inputs)
             case _ if column == COLUMN_OUTPUTS:
-                return self._flows(solution.outputs if solution else {})
+                if solution is None:
+                    return "—"
+                return self._flows(solution.outputs, solution.nominal_outputs)
             case _ if column == COLUMN_LIMITING:
                 return LIMITING_LABELS[solution.limiting] if solution else "—"
             case _:
@@ -308,11 +312,18 @@ class NodeTableModel(QAbstractTableModel):
             return extractor_choices(self.document.game_data, node.item_class)
         return []
 
-    def _flows(self, values: dict[str, float]) -> str:
+    def _flows(self, values: dict[str, float], nameplate: dict[str, float]) -> str:
+        """``Minerai de fer 60 / 90`` -- what arrives, and what the node was built for.
+
+        The nominal is written only where it differs, exactly as on the canvas: a
+        column repeating "60 / 60" on every row would make the one row that reads
+        "60 / 90" harder to find rather than easier.
+        """
         if not values:
             return "—"
         return ", ".join(
-            f"{self._item_name(item_class)} {formatting.number(rate)}"
+            f"{self._item_name(item_class)} "
+            f"{formatting.pair_number(rate, nameplate.get(item_class))}"
             for item_class, rate in sorted(values.items())
         )
 

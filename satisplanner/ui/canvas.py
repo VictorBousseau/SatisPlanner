@@ -79,6 +79,7 @@ from satisplanner.ui.commands import (
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.inline_edit import InlineEditor
+from satisplanner.ui.item_colours import ItemPalette
 from satisplanner.ui.palette import ENTRY_MIME_TYPE, decode_entry
 from satisplanner.ui.preferences import DEFAULT_DEPLOYED_CEILING
 
@@ -138,6 +139,9 @@ class FactoryScene(QGraphicsScene):
         # Deployed rendering: the global preference, which each node may override.
         self._deployed = False
         self._deployed_ceiling = DEFAULT_DEPLOYED_CEILING
+        # Colours by item. Owned by the preferences, handed to every node item on
+        # rebuild, and read by nothing that computes a rate.
+        self._palette = ItemPalette()
 
         document.graphChanged.connect(self.rebuild)
         document.nodesMoved.connect(self.apply_positions)
@@ -165,6 +169,7 @@ class FactoryScene(QGraphicsScene):
                 item.content_item = storage_item(node, graph)
             item.deployed = self._deployed if node.show_deployed is None else node.show_deployed
             item.deployed_ceiling = self._deployed_ceiling
+            item.palette = self._palette
             item.relayout()
             # Only when it really moved: ``setPos`` on an unchanged position still
             # marks the item dirty, and a rebuild would repaint the whole canvas
@@ -490,6 +495,20 @@ class FactoryScene(QGraphicsScene):
 
     def deployed_rendering(self) -> bool:
         return self._deployed
+
+    def set_item_palette(self, palette: ItemPalette) -> None:
+        """Adopt a new set of item colours and redraw.
+
+        Nowhere near the undo stack and nowhere near the engine: it is the same
+        factory, with the same rates, painted differently.
+        """
+        self._palette = palette
+        for item in self.nodes.values():
+            item.palette = palette
+            item.update()
+
+    def item_palette(self) -> ItemPalette:
+        return self._palette
 
     def set_default_transports(self, belt: str, pipe: str) -> None:
         """Tiers new lines are created with. Owned by the palette's tier chooser.

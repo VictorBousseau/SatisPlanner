@@ -87,6 +87,18 @@ class NodeSolution(_Result):
     limiting: LimitingFactor
     inputs: dict[str, float] = Field(default_factory=dict)  # consumed, per item
     outputs: dict[str, float] = Field(default_factory=dict)  # produced, per item
+    # What the node would consume and produce if nothing held it back: the recipe's
+    # rates times the machine count times the clock, before any shortage is applied.
+    #
+    # Carried out of the solver rather than recovered from ``inputs / ratio``, which
+    # is not the same quantity: at a ratio of zero it is not defined at all, and zero
+    # is exactly when a reader most wants to know what the node was meant to do.
+    #
+    # A port with no nameplate has no entry -- a buffer or an exit absorbs whatever
+    # reaches it, and writing an infinity there would be a number pretending to be a
+    # capacity.
+    nominal_inputs: dict[str, float] = Field(default_factory=dict)
+    nominal_outputs: dict[str, float] = Field(default_factory=dict)
     blocked_products: tuple[str, ...] = ()
     # Items this node is genuinely short of: it asked for more and the suppliers had
     # nothing left. An item that is short only because the node is idle for another
