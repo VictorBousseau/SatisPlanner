@@ -588,7 +588,7 @@ class FactoryScene(QGraphicsScene):
             return
         parts = []
         if nodes:
-            parts.append(f"{nodes} noeud(s)")
+            parts.append(f"{nodes} nœud(s)")
         if edges:
             parts.append(f"{edges} ligne(s)")
         self.selectionSummaryChanged.emit(" et ".join(parts) + " sélectionné(s)")
@@ -600,7 +600,7 @@ class FactoryScene(QGraphicsScene):
         node_ids = [item.node.id for item in self.selected_nodes()]
         if not clipboard.write(self.document.graph, node_ids):
             return False
-        self.selectionSummaryChanged.emit(f"{len(node_ids)} noeud(s) copié(s).")
+        self.selectionSummaryChanged.emit(f"{len(node_ids)} nœud(s) copié(s).")
         return True
 
     def cut_selection(self) -> bool:
@@ -638,7 +638,7 @@ class FactoryScene(QGraphicsScene):
         created = command.node_ids
         self.document.undo_stack.push(command)
         self.select_nodes(created)
-        self.selectionSummaryChanged.emit(f"{len(created)} noeud(s) collé(s).")
+        self.selectionSummaryChanged.emit(f"{len(created)} nœud(s) collé(s).")
         return True
 
     # --------------------------------------------------------------- deleting
@@ -650,7 +650,7 @@ class FactoryScene(QGraphicsScene):
             return
         pieces = []
         if nodes:
-            pieces.append(f"{len(nodes)} noeud(s)")
+            pieces.append(f"{len(nodes)} nœud(s)")
         if edges:
             pieces.append(f"{len(edges)} ligne(s)")
         self.document.undo_stack.push(
@@ -701,7 +701,7 @@ class FactoryScene(QGraphicsScene):
             menu.addAction(card)
             menu.addSeparator()
         if isinstance(item.node, MachineNode):
-            adjust = QAction("Ajuster ce noeud à ses intrants", menu)
+            adjust = QAction("Ajuster ce nœud à ses intrants", menu)
             adjust.triggered.connect(lambda: self.adjust_node(item.node.id))
             menu.addAction(adjust)
             count = QAction("Nombre de machines...", menu)
@@ -947,7 +947,7 @@ class FactoryScene(QGraphicsScene):
         node = self.document.graph.node(node_id)
         assert isinstance(node, MachineNode)
         if abs(suggestion - node.machine_count) < 1e-9:
-            self.selectionSummaryChanged.emit("Ce noeud est déjà à la bonne taille.")
+            self.selectionSummaryChanged.emit("Ce nœud est déjà à la bonne taille.")
             return
         self.set_quantity(node_id, suggestion)
 

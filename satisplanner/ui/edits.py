@@ -83,7 +83,7 @@ def set_quantity(document: FactoryDocument, node_id: str, value: float) -> str |
     node = document.graph.node(node_id)
     quantity = quantity_of(node)
     if quantity is None:
-        return "Ce noeud n'a pas de quantité."
+        return "Ce nœud n'a pas de quantité."
     if math.isnan(value):  # what was typed was not a number at all
         return "Ce n'est pas un nombre."
     if value < quantity.minimum:
@@ -134,7 +134,7 @@ def set_clock_speed(document: FactoryDocument, node_id: str, clock_speed: float)
     """
     node = document.graph.node(node_id)
     if not isinstance(node, MachineNode | ResourceNode | WaterExtractorNode):
-        return "Ce noeud n'a pas de cadence."
+        return "Ce nœud n'a pas de cadence."
     if not constants.MIN_CLOCK_SPEED <= clock_speed <= constants.MAX_CLOCK_SPEED:
         return (
             f"Cadence hors domaine : {formatting.percent(constants.MIN_CLOCK_SPEED)} a "

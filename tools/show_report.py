@@ -73,7 +73,7 @@ def _show_sustained(report: FactoryReport, game_data: GameData) -> None:
     """The second set of figures, once the stocks are gone."""
     if report.sustained is None:
         return
-    log("%s\nREGIME ETABLI (une fois les stocks epuises)\n%s", RULE, RULE)
+    log("%s\nRÉGIME ÉTABLI (une fois les stocks épuisés)\n%s", RULE, RULE)
     log("Production finale : %s", rates(report.sustained.final_outputs, game_data))
     log("Solides bruts     : %s", rates(report.sustained.raw_solids, game_data))
     log("Fluides bruts     : %s", rates(report.sustained.raw_fluids, game_data))
@@ -83,8 +83,8 @@ def _show_sustained(report: FactoryReport, game_data: GameData) -> None:
 
 
 def _show_nodes(report: FactoryReport, game_data: GameData) -> None:
-    log("%s\nNOEUDS\n%s", RULE, RULE)
-    log("%-22s %-26s %7s  %-16s %s", "noeud", "role", "taux", "machines", "sorties")
+    log("%s\nNŒUDS\n%s", RULE, RULE)
+    log("%-22s %-26s %7s  %-16s %s", "nœud", "role", "taux", "machines", "sorties")
     for node in report.nodes:
         machines = "-"
         if node.machine_count is not None:
@@ -106,7 +106,7 @@ def _show_edges(report: FactoryReport, game_data: GameData) -> None:
     for edge in report.edges:
         flag = ""
         if edge.is_saturated:
-            flag = f"  SATUREE, {edge.blocked_rate:g} refoules"
+            flag = f"  SATURÉE, {edge.blocked_rate:g} refoules"
         elif edge.is_at_capacity:
             flag = "  pleine"
         log(
@@ -137,13 +137,13 @@ def _show_totals(report: FactoryReport, game_data: GameData) -> None:
             balance.exported,
             balance.discarded,
         )
-    log("3. Electricite : %.1f MW au total", report.power_total_mw)
+    log("3. Électricité : %.1f MW au total", report.power_total_mw)
     for building, power in sorted(report.power_by_building.items()):
         log("   %-28s %8.1f MW", building_name(building, game_data), power)
 
     log("Production finale : %s", rates(report.final_outputs, game_data))
     if report.discarded_outputs:
-        log("Rejets assumes    : %s", rates(report.discarded_outputs, game_data))
+        log("Rejets assumés    : %s", rates(report.discarded_outputs, game_data))
     for buffer in report.buffers:
         detail = f"net {buffer.net:+g}"
         if buffer.minutes_to_full is not None:
@@ -186,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         "--database",
         type=Path,
         default=db.default_database_path(),
-        help="base de donnees de jeu (defaut : celle embarquee dans le paquet)",
+        help="base de données de jeu (défaut : celle embarquée dans le paquet)",
     )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
@@ -206,8 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     log("Usine      : %s", args.graph)
     log("Base       : %s", args.database)
     log(
-        "Resolution : %s en %d iteration(s)",
-        "convergee" if report.converged else "NON CONVERGEE",
+        "Résolution : %s en %d itération(s)",
+        "convergée" if report.converged else "NON CONVERGÉE",
         report.iterations,
     )
     show(report, game_data)

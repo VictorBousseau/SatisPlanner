@@ -113,7 +113,7 @@ def ico_bytes(images: dict[int, bytes]) -> bytes:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(message)s")
-    parser = argparse.ArgumentParser(description="Genere l'icone de l'application.")
+    parser = argparse.ArgumentParser(description="Génère l'icône de l'application.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args(argv)
 
@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(ico_bytes(images))
     logger.info(
-        "%s ecrit (%d tailles, %d octets)", args.output, len(images), args.output.stat().st_size
+        "%s écrit (%d tailles, %d octets)", args.output, len(images), args.output.stat().st_size
     )
     return 0
 

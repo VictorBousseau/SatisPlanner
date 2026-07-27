@@ -214,6 +214,8 @@ ACCENTED: dict[str, str] = {
     "modifies": "modifiés",
     "necessaire": "nécessaire",
     "numero": "numéro",
+    "noeud": "nœud",
+    "noeuds": "nœuds",
     "operation": "opération",
     "operationnel": "opérationnel",
     "operations": "opérations",
@@ -335,7 +337,12 @@ def accented(word: str) -> str:
 
 
 def source_files() -> list[Path]:
-    return sorted(PACKAGE_ROOT.rglob("*.py"))
+    """The package, and the command-line tools beside it.
+
+    The tools are developer-facing, but they speak French on a console and there is
+    no reason for that French to be worse than the application's.
+    """
+    return sorted(PACKAGE_ROOT.rglob("*.py")) + sorted((PROJECT_ROOT / "tools").rglob("*.py"))
 
 
 def docstring_nodes(tree: ast.AST) -> set[int]:
@@ -418,9 +425,9 @@ def test_the_dictionary_itself_is_spelled_correctly() -> None:
     """Every replacement must actually carry an accent, or it fixes nothing."""
     for wrong, right in ACCENTED.items():
         assert wrong != right, wrong
-        assert any(letter in right for letter in "éèêëàâçùûôîï"), (
-            f"« {right} » ne porte aucun accent : il n'a rien a faire dans le dictionnaire"
+        assert any(letter in right for letter in "éèêëàâçùûôîïœ"), (
+            f"« {right} » ne porte ni accent ni ligature"
         )
-        assert len(wrong) == len(right), (
-            f"« {wrong} » et « {right} » n'ont pas la meme longueur : ce n'est pas qu'un accent"
+        assert not right.isascii(), (
+            f"« {right} » ne sort pas de l'ASCII : il n'a rien a faire dans le dictionnaire"
         )

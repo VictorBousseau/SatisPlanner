@@ -211,7 +211,7 @@ def test_removing_a_node_does_reset_the_table(window: MainWindow) -> None:
     window.scene.select_nodes([doomed])
     window.scene.delete_selection()
 
-    assert resets, "un noeud en moins change la structure du tableau"
+    assert resets, "un nœud en moins change la structure du tableau"
 
 
 def test_the_table_still_reads_the_right_row_after_a_deletion(window: MainWindow) -> None:
@@ -250,13 +250,13 @@ def test_the_graph_index_follows_every_way_a_node_can_appear_or_go(
 
     window.scene.select_nodes([victim])
     window.scene.delete_selection()
-    with pytest.raises(Exception, match="noeud inconnu"):
+    with pytest.raises(Exception, match="nœud inconnu"):
         graph.node(victim)
 
     window.document.undo_stack.undo()
     assert graph.node(victim).id == victim
     window.document.undo_stack.redo()
-    with pytest.raises(Exception, match="noeud inconnu"):
+    with pytest.raises(Exception, match="nœud inconnu"):
         graph.node(victim)
 
 
@@ -377,7 +377,7 @@ def test_a_resolution_stays_within_its_ceiling(game_data: GameData, size: int) -
     elapsed = _median(lambda: engine.solve(graph, game_data), repeats=3)
     ceiling = MEASURED_SOLVE_MS[size] * MARGIN
     assert elapsed < ceiling, (
-        f"résolution de {size} noeuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
+        f"résolution de {size} nœuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
         f"(banc version {BENCHMARK_VERSION})"
     )
 
@@ -402,7 +402,7 @@ def test_an_edit_stays_within_its_ceiling(window: MainWindow, size: int) -> None
     elapsed = _median(one_edit, repeats=3)
     ceiling = MEASURED_EDIT_MS[size] * MARGIN
     assert elapsed < ceiling, (
-        f"édition sur {size} noeuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
+        f"édition sur {size} nœuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
         f"(banc version {BENCHMARK_VERSION})"
     )
 
@@ -427,7 +427,7 @@ def test_a_move_stays_within_its_ceiling(window: MainWindow, size: int) -> None:
     elapsed = _median(one_move)
     ceiling = MEASURED_MOVE_MS[size] * MARGIN
     assert elapsed < ceiling, (
-        f"déplacement sur {size} noeuds en {elapsed:.1f} ms, plafond {ceiling:.1f} ms "
+        f"déplacement sur {size} nœuds en {elapsed:.1f} ms, plafond {ceiling:.1f} ms "
         f"(banc version {BENCHMARK_VERSION})"
     )
 
@@ -460,7 +460,7 @@ def test_a_move_does_not_grow_with_the_size_of_the_factory(window: MainWindow) -
     # Ten times the nodes. Three times the cost is already far more slack than a
     # constant-time operation needs, and a hundredth of what proportional would be.
     assert large < small * 3.0 + 1.0, (
-        f"un déplacement coute {small:.1f} ms a 50 noeuds et {large:.1f} ms a 500 : "
+        f"un déplacement coute {small:.1f} ms a 50 nœuds et {large:.1f} ms a 500 : "
         f"il suit la taille de l'usine, ce qu'il ne doit pas faire"
     )
 

@@ -83,7 +83,7 @@ def test_the_modelling_rules_are_stated_where_a_user_looks(window: MainWindow) -
     for note in MODELLING_NOTES:
         assert note in page
     assert "pureté d'un gisement s'applique" in page
-    assert "deux noeuds" in page
+    assert "deux nœuds" in page
 
 
 def test_the_page_opens_from_the_menu(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:

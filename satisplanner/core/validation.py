@@ -160,7 +160,7 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
         yield Diagnostic(
             severity=Severity.INFO,
             code=DiagnosticCode.UNCONNECTED_NODE,
-            message="Ce noeud n'est raccordé à rien : il ne participe pas au calcul.",
+            message="Ce nœud n'est raccordé à rien : il ne participe pas au calcul.",
             node_id=node.id,
         )
 

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 GESTURES: Final[tuple[tuple[str, str], ...]] = (
     (
         "Glisser une entrée de la palette sur le canvas",
-        "pose le noeud à l'endroit lâché, aligné sur la grille",
+        "pose le nœud à l'endroit lâché, aligné sur la grille",
     ),
     (
         "Double-clic dans la palette",
@@ -52,12 +52,12 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "Lâcher n'importe où sur un tampon vide",
         "le raccorde : un tampon sans contenu accepte le premier item qui arrive",
     ),
-    ("Glisser un noeud", "le déplace. Un glissement continu vaut une seule annulation"),
+    ("Glisser un nœud", "le déplace. Un glissement continu vaut une seule annulation"),
     ("Glisser sur le fond", "sélection rectangulaire"),
     ("Clic milieu maintenu", "déplace la vue"),
     ("Molette", "zoom avant et arrière autour du curseur"),
     (
-        "Clic droit sur un noeud",
+        "Clic droit sur un nœud",
         "fiche de l'objet, ajuster aux intrants, nombre de machines, cadence, "
         "pureté du gisement, extracteur, carburant du générateur, contenu du "
         "tampon, supprimer",
@@ -67,7 +67,7 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "pose l'entrée surlignée au centre de la vue",
     ),
     (
-        "Double-clic sur une valeur d'un noeud",
+        "Double-clic sur une valeur d'un nœud",
         "l'édite sur place : nombre de machines, cadence, pureté, extracteur, "
         "carburant, débit d'un apport, stock d'un tampon. Entrée valide, Échap "
         "annule, une valeur hors domaine est refusée sans être effacée",
@@ -78,13 +78,13 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     ),
     (
         "Copier une sélection",
-        "emporte les noeuds et les lignes qui les relient entre eux ; une ligne qui "
+        "emporte les nœuds et les lignes qui les relient entre eux ; une ligne qui "
         "sortait de la sélection n'a plus de quoi s'accrocher et n'est pas copiée",
     ),
     (
         "Affichage ▸ Machines déployées",
-        "dessine une vignette par machine bâtie sur chaque noeud. Clic droit sur un "
-        "noeud pour y déroger. Purement visuel : aucun chiffre ne change",
+        "dessine une vignette par machine bâtie sur chaque nœud. Clic droit sur un "
+        "nœud pour y déroger. Purement visuel : aucun chiffre ne change",
     ),
     (
         "Clic droit sur une ligne",
@@ -92,11 +92,11 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     ),
     (
         "Clic sur une ligne du tableau",
-        "sélectionne le noeud sur le canvas, et réciproquement",
+        "sélectionne le nœud sur le canvas, et réciproquement",
     ),
     (
         "Clic sur un diagnostic",
-        "sélectionne et centre le noeud ou la ligne concernée",
+        "sélectionne et centre le nœud ou la ligne concernée",
     ),
 )
 
@@ -104,14 +104,14 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
 # Rules a user cannot deduce from the interface and will otherwise assume wrongly.
 # Each one is a modelling choice, not a limitation to be worked around.
 MODELLING_NOTES: Final[tuple[str, ...]] = (
-    "La pureté d'un gisement s'applique à <b>tous</b> les extracteurs de ce noeud : "
-    "un noeud est un gisement. Deux gisements de puretés différentes, ce sont deux "
-    "noeuds, et c'est la seule façon de les représenter.",
+    "La pureté d'un gisement s'applique à <b>tous</b> les extracteurs de ce nœud : "
+    "un nœud est un gisement. Deux gisements de puretés différentes, ce sont deux "
+    "nœuds, et c'est la seule façon de les représenter.",
     "La cadence multiplie le débit à l'identique et l'électricité en loi de "
     "puissance : à 250 %, une machine produit 2,5 fois plus et consomme environ "
     "3,36 fois plus.",
-    "Les répartiteurs, groupeurs et jonctions ne sont jamais des noeuds. Ils sont "
-    "déduits des lignes qui partagent un noeud et comptés dans la liste de courses.",
+    "Les répartiteurs, groupeurs et jonctions ne sont jamais des nœuds. Ils sont "
+    "déduits des lignes qui partagent un nœud et comptés dans la liste de courses.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
     "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",
@@ -174,7 +174,7 @@ def help_html(shortcuts: Sequence[tuple[str, str]]) -> str:
     <table>{gestures}</table>
     <h2>Raccourcis</h2>
     <table>{keys}</table>
-    <p class="note">La touche Suppr efface la sélection, noeuds et lignes confondus.
+    <p class="note">La touche Suppr efface la sélection, nœuds et lignes confondus.
     Tout passe par la pile d'annulation, déplacements compris.</p>
     <h2>Ce que l'outil modélise, et comment</h2>
     <ul>{notes}</ul>

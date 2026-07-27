@@ -156,6 +156,6 @@ def test_the_status_bar_summarises_the_report(window: MainWindow) -> None:
     )
     window.document.solve_now()
     message = window.statusBar().currentMessage()
-    assert "1 noeud(s)" in message
+    assert "1 nœud(s)" in message
     # A lone smelter is connected to nothing: that is a warning, not a silence.
     assert "avertissement" in message

@@ -97,7 +97,7 @@ COLUMN_LIMITING: Final = 10
 COLUMN_RATIO: Final = 11
 
 HEADERS: Final[tuple[str, ...]] = (
-    "Noeud",
+    "Nœud",
     "Type",
     "Recette / contenu",
     "Quantité",
@@ -473,7 +473,7 @@ class NodeTablePanel(QWidget):
         self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
 
         self.filter = QLineEdit(self)
-        self.filter.setPlaceholderText("Filtrer les noeuds...")
+        self.filter.setPlaceholderText("Filtrer les nœuds...")
         self.filter.setClearButtonEnabled(True)
         self.filter.textChanged.connect(self.proxy.setFilterFixedString)
 

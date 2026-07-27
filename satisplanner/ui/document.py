@@ -220,7 +220,7 @@ class FactoryDocument(QObject):
         report = engine.solve(self.graph, self.game_data)
         self._report = report
         logger.debug(
-            "résolution : %d noeud(s), %d itération(s), %d diagnostic(s)",
+            "résolution : %d nœud(s), %d itération(s), %d diagnostic(s)",
             len(report.nodes),
             report.iterations,
             len(report.diagnostics),

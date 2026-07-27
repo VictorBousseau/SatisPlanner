@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 # Findings whose fix the panel can carry out itself, and the button's wording.
 ACTIONABLE: Final[dict[DiagnosticCode, str]] = {
     DiagnosticCode.LINE_SATURATION: "Passer au tier suffisant",
-    DiagnosticCode.DEFICIT: "Ajuster ce noeud",
-    DiagnosticCode.BACKPRESSURE: "Ajuster ce noeud",
+    DiagnosticCode.DEFICIT: "Ajuster ce nœud",
+    DiagnosticCode.BACKPRESSURE: "Ajuster ce nœud",
 }
 
 _ROLE_DIAGNOSTIC: Final = int(Qt.ItemDataRole.UserRole)

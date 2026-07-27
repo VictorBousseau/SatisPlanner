@@ -203,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         (docs_dir / FRENCH_FILENAME, args.output_dir / "docs_fr.json"),
     ):
         if not source.is_file():
-            logger.warning("%s absent, fixture non ecrite", source.name)
+            logger.warning("%s absent, fixture non écrite", source.name)
             continue
         data = subset(json.loads(read_text_file(source)))
         write_fixture(data, target)

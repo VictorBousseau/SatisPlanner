@@ -313,7 +313,7 @@ class FactoryReport(_Result):
         try:
             return self._by_node[node_id]
         except KeyError:
-            msg = f"aucun résultat pour le noeud {node_id}"
+            msg = f"aucun résultat pour le nœud {node_id}"
             raise KeyError(msg) from None
 
     def edge(self, edge_id: str) -> EdgeSolution:

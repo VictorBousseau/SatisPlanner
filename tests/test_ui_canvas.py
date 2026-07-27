@@ -207,7 +207,7 @@ def test_deleting_a_node_takes_its_lines_with_it_and_undo_puts_them_back(
 
     scene.document.undo_stack.undo()
     assert smelter in {node.id for node in scene.document.graph.nodes}
-    assert len(scene.document.graph.edges) == 2, "les lignes reviennent avec le noeud"
+    assert len(scene.document.graph.edges) == 2, "les lignes reviennent avec le nœud"
     assert len(scene.edges) == 2, "et elles sont redessinees"
 
 
@@ -220,7 +220,7 @@ def test_deleting_only_a_line_leaves_the_nodes(scene: FactoryScene) -> None:
     scene.delete_selection()
 
     assert edge_id not in {edge.id for edge in scene.document.graph.edges}
-    assert len(scene.document.graph.nodes) == 3, "les noeuds restent"
+    assert len(scene.document.graph.nodes) == 3, "les nœuds restent"
 
     scene.document.undo_stack.undo()
     assert edge_id in {edge.id for edge in scene.document.graph.edges}

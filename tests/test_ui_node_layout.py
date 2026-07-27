@@ -100,9 +100,9 @@ def test_a_shared_row_with_a_pair_keeps_the_item_name_readable(window: MainWindo
     item = smelter(window, supplied=60.0)
 
     assert item.port_rate("Desc_OreIron_C", is_output=False) == "60 / 90/min", (
-        "le noeud doit bien être sous-alimente, sinon le test ne teste rien"
+        "le nœud doit bien être sous-alimente, sinon le test ne teste rien"
     )
-    assert item.width() > NODE_WIDTH, "le noeud doit s'elargir pour contenir la ligne"
+    assert item.width() > NODE_WIDTH, "le nœud doit s'elargir pour contenir la ligne"
     assert name_fits(item, "Desc_OreIron_C", is_output=False, shared=True)
     assert name_fits(item, "Desc_IronIngot_C", is_output=True, shared=True)
 

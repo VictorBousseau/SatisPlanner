@@ -348,7 +348,7 @@ class _Solver:
         if logger.isEnabledFor(logging.DEBUG):
             components = condensation_order(self.graph)
             logger.debug(
-                "%d noeud(s), %d composante(s) dont %d cyclique(s)",
+                "%d nœud(s), %d composante(s) dont %d cyclique(s)",
                 len(self.graph.nodes),
                 len(components),
                 sum(1 for component in components if len(component) > 1),
@@ -1141,7 +1141,7 @@ def suggest_machine_count(graph: FactoryGraph, game_data: GameData, node_id: str
     """
     node = graph.node(node_id)
     if not isinstance(node, MachineNode):
-        msg = f"le noeud {node_id} n'est pas une machine"
+        msg = f"le nœud {node_id} n'est pas une machine"
         raise TypeError(msg)
     rates = game_data.recipe(node.recipe_class).ingredient_rates()
     if not rates:

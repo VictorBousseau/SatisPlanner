@@ -325,7 +325,7 @@ class PreferencesDialog(QDialog):
 
         self.alternates = QCheckBox("Afficher les recettes alternatives", self)
         self.events = QCheckBox("Afficher les objets d'événement (FICSMAS)", self)
-        self.deployed = QCheckBox("Dessiner les machines une par une sur les noeuds", self)
+        self.deployed = QCheckBox("Dessiner les machines une par une sur les nœuds", self)
         self.deployed_ceiling = QSpinBox(self)
         self.deployed_ceiling.setRange(*DEPLOYED_CEILING_RANGE)
 

@@ -28,7 +28,7 @@ def test_the_report_prints_every_section(
         show_report.show(report, game_data)
     output = caplog.text
 
-    for section in ("NOEUDS", "LIGNES", "BILAN", "LISTE DE COURSES", "DIAGNOSTICS"):
+    for section in ("NŒUDS", "LIGNES", "BILAN", "LISTE DE COURSES", "DIAGNOSTICS"):
         assert section in output
     assert "Raffinerie" in output
     assert "Résidus de pétrole lourd" in output

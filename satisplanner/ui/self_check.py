@@ -134,11 +134,11 @@ class SelfCheck:
         assert not self.window.document.graph.nodes
         assert self.window.open_file(path), "la réouverture a échoué"
         reopened = {node.id for node in self.window.document.graph.nodes}
-        assert reopened == chain, f"noeuds perdus : {chain - reopened}"
+        assert reopened == chain, f"nœuds perdus : {chain - reopened}"
 
         outputs = self.window.document.solve_now().final_outputs
         assert outputs == report.final_outputs, "les débits ont changé en passant par le disque"
-        return f"{len(chain)} noeuds, {path.name} ({path.stat().st_size} octets), débits identiques"
+        return f"{len(chain)} nœuds, {path.name} ({path.stat().st_size} octets), débits identiques"
 
     def _share_code(self) -> str:
         code = self.window.document.share_code()

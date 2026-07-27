@@ -392,7 +392,7 @@ def describe_unknown(missing: Sequence[str], removed: Sequence[str] = ()) -> str
     )
     if removed:
         sentence += (
-            f" Les {len(removed)} noeud(s) concerné(s) ont été retiré(s) "
+            f" Les {len(removed)} nœud(s) concerné(s) ont été retiré(s) "
             f"({', '.join(removed[:8])}) ; le reste de l'usine est intact."
         )
     return sentence

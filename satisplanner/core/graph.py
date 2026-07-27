@@ -275,7 +275,7 @@ class FactoryGraph(BaseModel):
         seen: set[str] = set()
         for node in self.nodes:
             if node.id in seen:
-                msg = f"identifiant de noeud en doublon : {node.id}"
+                msg = f"identifiant de nœud en doublon : {node.id}"
                 raise GraphError(msg)
             seen.add(node.id)
 
@@ -287,10 +287,10 @@ class FactoryGraph(BaseModel):
             edge_ids.add(edge.id)
             for endpoint in (edge.source, edge.target):
                 if endpoint not in seen:
-                    msg = f"l'arête {edge.id} référence un noeud inconnu : {endpoint}"
+                    msg = f"l'arête {edge.id} référence un nœud inconnu : {endpoint}"
                     raise GraphError(msg)
             if edge.source == edge.target:
-                msg = f"l'arête {edge.id} boucle sur le noeud {edge.source}"
+                msg = f"l'arête {edge.id} boucle sur le nœud {edge.source}"
                 raise GraphError(msg)
         return self
 
@@ -309,7 +309,7 @@ class FactoryGraph(BaseModel):
     def node(self, node_id: str) -> Node:
         found = self._nodes_by_id().get(node_id)
         if found is None:
-            msg = f"noeud inconnu : {node_id}"
+            msg = f"nœud inconnu : {node_id}"
             raise GraphError(msg)
         return found
 
@@ -355,7 +355,7 @@ class FactoryGraph(BaseModel):
 
     def add_node(self, node: Node) -> Node:
         if node.id in self._nodes_by_id():
-            msg = f"identifiant de noeud en doublon : {node.id}"
+            msg = f"identifiant de nœud en doublon : {node.id}"
             raise GraphError(msg)
         self.nodes.append(node)
         return node
@@ -462,20 +462,20 @@ def check_edge(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
         raise GraphError(msg)
 
     if source.kind not in PRODUCER_KINDS:
-        msg = f"le noeud {source.id} ne produit rien"
+        msg = f"le nœud {source.id} ne produit rien"
         raise GraphError(msg)
     if target.kind not in CONSUMER_KINDS:
-        msg = f"le noeud {target.id} ne consomme rien"
+        msg = f"le nœud {target.id} ne consomme rien"
         raise GraphError(msg)
 
     produced = node_output_items(source, game_data)
     if produced and edge.item_class not in produced:
-        msg = f"le noeud {source.id} ne produit pas {item.display_name_fr}"
+        msg = f"le nœud {source.id} ne produit pas {item.display_name_fr}"
         raise GraphError(msg)
 
     accepted = node_input_items(target, game_data)
     if accepted is not None and edge.item_class not in accepted:
-        msg = f"le noeud {target.id} ne consomme pas {item.display_name_fr}"
+        msg = f"le nœud {target.id} ne consomme pas {item.display_name_fr}"
         raise GraphError(msg)
 
     _check_port_budget(graph, edge, game_data)
@@ -487,14 +487,14 @@ def _check_port_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> 
     if isinstance(target, MachineNode):
         items = {other.item_class for other in graph.incoming(target.id)} | {edge.item_class}
         if len(items) > MAX_MACHINE_INPUTS:
-            msg = f"le noeud {target.id} dépassé {MAX_MACHINE_INPUTS} entrées distinctes"
+            msg = f"le nœud {target.id} dépassé {MAX_MACHINE_INPUTS} entrées distinctes"
             raise GraphError(msg)
 
     source = graph.node(edge.source)
     if isinstance(source, MachineNode):
         items = {other.item_class for other in graph.outgoing(source.id)} | {edge.item_class}
         if len(items) > MAX_MACHINE_OUTPUTS:
-            msg = f"le noeud {source.id} dépassé {MAX_MACHINE_OUTPUTS} sorties distinctes"
+            msg = f"le nœud {source.id} dépassé {MAX_MACHINE_OUTPUTS} sorties distinctes"
             raise GraphError(msg)
     _ = game_data  # kept for symmetry with check_edge's signature
 

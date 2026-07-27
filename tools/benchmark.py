@@ -171,7 +171,7 @@ def build_window(graph: FactoryGraph, game_data: GameData) -> tuple[QApplication
 def run(sizes: tuple[int, ...]) -> None:
     game_data = db.load_game_data_from_file(db.default_database_path())
     print(f"banc d'essai version {BENCHMARK_VERSION}, mediane de {REPEATS} passages")
-    print(f"{'taille':>7} {'aretes':>7} {'resolution':>12} {'edition':>12} {'deplacement':>13}")
+    print(f"{'taille':>7} {'arêtes':>7} {'résolution':>12} {'édition':>12} {'déplacement':>13}")
     for size in sizes:
         graph = benchmark_graph(size)
         solve = measure_solve(graph, game_data)
@@ -215,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         "--profile",
         type=int,
         metavar="TAILLE",
-        help="profiler une resolution de cette taille au lieu de mesurer",
+        help="profiler une résolution de cette taille au lieu de mesurer",
     )
     arguments = parser.parse_args(argv)
     if arguments.profile:

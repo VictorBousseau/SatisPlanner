@@ -422,7 +422,7 @@ def test_opening_a_file_with_an_unknown_class_warns_and_keeps_the_rest(
     assert {node.id for node in window.document.graph.nodes} == kept
     assert notices
     assert "Recipe_Supprimee_C" in notices[0]
-    assert "disparue" in notices[0], "l'utilisateur doit savoir quel noeud a saute"
+    assert "disparue" in notices[0], "l'utilisateur doit savoir quel nœud a saute"
     # And the factory that survived still computes.
     assert window.document.solve_now().final_outputs == {"Desc_IronPlate_C": 40.0}
 

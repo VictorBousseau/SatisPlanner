@@ -107,7 +107,7 @@ def test_duplicate_identifiers_are_refused(game_data: GameData) -> None:
 
 
 def test_an_edge_cannot_reference_an_unknown_node() -> None:
-    with pytest.raises(GraphError, match="noeud inconnu"):
+    with pytest.raises(GraphError, match="nœud inconnu"):
         FactoryGraph(
             nodes=[OutputNode(id="out", item_class="Desc_IronIngot_C")],
             edges=[

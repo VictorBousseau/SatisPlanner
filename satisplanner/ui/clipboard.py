@@ -72,7 +72,7 @@ def write(graph: FactoryGraph, node_ids: Sequence[str]) -> bool:
     # way: a user who pastes into a chat window gets a factory rather than nothing.
     payload.setText(code)
     QApplication.clipboard().setMimeData(payload)
-    logger.debug("%d noeud(s) dans le presse-papiers", len(node_ids))
+    logger.debug("%d nœud(s) dans le presse-papiers", len(node_ids))
     return True
 
 

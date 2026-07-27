@@ -323,9 +323,9 @@ class MainWindow(QMainWindow):
             self, "Coller", QKeySequence.StandardKey.Paste, self.scene.paste
         )
         self.duplicate_action = _action(self, "Dupliquer", "Ctrl+D", self.scene.duplicate_selection)
-        self.adjust_action = _action(self, "Ajuster ce noeud", "Ctrl+E", self._adjust_selection)
+        self.adjust_action = _action(self, "Ajuster ce nœud", "Ctrl+E", self._adjust_selection)
         self.adjust_action.setToolTip(
-            "Dimensionne le noeud sélectionné à ce que ses intrants permettent (calcul local)"
+            "Dimensionne le nœud sélectionné à ce que ses intrants permettent (calcul local)"
         )
         toolbar.addAction(self.delete_action)
         toolbar.addAction(self.adjust_action)
@@ -796,7 +796,7 @@ class MainWindow(QMainWindow):
             return
         errors = len(report.by_severity(Severity.ERROR))
         warnings = len(report.by_severity(Severity.WARNING))
-        parts = [f"{len(report.nodes)} noeud(s)", f"{len(report.edges)} ligne(s)"]
+        parts = [f"{len(report.nodes)} nœud(s)", f"{len(report.edges)} ligne(s)"]
         if not report.converged:
             parts.append("Résolution NON Convergée")
         if not report.is_sustainable:

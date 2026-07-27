@@ -55,7 +55,7 @@ def test_search_matches_every_word_independently(entries: list[PaletteEntry]) ->
 
 def test_every_entry_kind_is_offered(entries: list[PaletteEntry]) -> None:
     kinds = {entry.kind for entry in entries}
-    assert kinds == set(EntryKind), "chaque type de noeud doit être posable"
+    assert kinds == set(EntryKind), "chaque type de nœud doit être posable"
 
 
 def _made(entries: list[PaletteEntry], kind: EntryKind, class_name: str) -> Node:
