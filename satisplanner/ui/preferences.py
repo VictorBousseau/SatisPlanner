@@ -253,7 +253,7 @@ class FamilyColourRow(QWidget):
         self.swatch = QPushButton(self)
         self.swatch.setFixedWidth(120)
         self.swatch.clicked.connect(self._choose)
-        self.reset = QPushButton("Defaut", self)
+        self.reset = QPushButton("Défaut", self)
         self.reset.setFixedWidth(70)
         self.reset.clicked.connect(self._reset)
 
@@ -301,7 +301,7 @@ class PreferencesDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.preferences = preferences
-        self.setWindowTitle("Preferences")
+        self.setWindowTitle("Préférences")
         self.setMinimumWidth(520)
 
         self.belt = QComboBox(self)
@@ -357,7 +357,7 @@ class PreferencesDialog(QDialog):
         form = QFormLayout()
         form.addRow("Convoyeur par défaut", self.belt)
         form.addRow("Tuyauterie par défaut", self.pipe)
-        form.addRow("Dossier d'icones", icon_row)
+        form.addRow("Dossier d'icônes", icon_row)
         form.addRow("Fichiers récents conserves", self.max_recent)
         form.addRow(self.alternates)
         form.addRow(self.events)
@@ -368,9 +368,9 @@ class PreferencesDialog(QDialog):
         form.addRow("Palette", palette_buttons)
 
         hint = QLabel(
-            f"{indexed_icons} fichier(s) d'icone indexe(s). Les classes sans fichier sont "
-            "dessinées par l'application ; un dossier d'icones est facultatif.\n"
-            "Le changement de dossier est pris en compte immediatement.",
+            f"{indexed_icons} fichier(s) d'icône indexé(s). Les classes sans fichier sont "
+            "dessinées par l'application ; un dossier d'icônes est facultatif.\n"
+            "Le changement de dossier est pris en compte immédiatement.",
             self,
         )
         hint.setWordWrap(True)
@@ -398,7 +398,7 @@ class PreferencesDialog(QDialog):
 
     def _browse(self) -> None:
         chosen = QFileDialog.getExistingDirectory(
-            self, "Dossier d'icones", self.icon_directory.text()
+            self, "Dossier d'icônes", self.icon_directory.text()
         )
         if chosen:
             self.icon_directory.setText(chosen)

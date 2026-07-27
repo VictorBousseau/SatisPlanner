@@ -51,12 +51,12 @@ def test_an_item_without_a_file_is_drawn_rather_than_missing(
     item = game_data.item("Desc_OreIron_C")
     icon = provider.for_item(item)
 
-    assert not icon.isNull(), "l'absence d'icone n'est pas une degradation"
+    assert not icon.isNull(), "l'absence d'icône n'est pas une degradation"
     assert provider.was_generated(item.class_name)
     assert provider.generated_count == 1
     pixmap = icon.pixmap(64, 64)
     assert not pixmap.isNull()
-    assert pixmap.toImage().pixelColor(32, 32).alpha() > 0, "le carre doit etre peint"
+    assert pixmap.toImage().pixelColor(32, 32).alpha() > 0, "le carre doit être peint"
 
 
 def test_two_classes_get_different_generated_icons(qtbot: QtBot) -> None:

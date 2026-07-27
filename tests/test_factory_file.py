@@ -125,7 +125,7 @@ def test_a_missing_file_says_so(tmp_path: Path) -> None:
 def test_something_that_is_not_a_zip_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "faux.sfp"
     path.write_text("ceci n'est pas une archive", encoding="utf-8")
-    with pytest.raises(FactoryFileError, match="illisible ou endommage"):
+    with pytest.raises(FactoryFileError, match="illisible ou endommagé"):
         factory_file.load(path)
 
 
@@ -163,7 +163,7 @@ def test_an_inconsistent_graph_is_refused_with_the_reason(tmp_path: Path) -> Non
     }
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(GRAPH_MEMBER, json.dumps(payload))
-    with pytest.raises(FactoryFileError, match="incoherente"):
+    with pytest.raises(FactoryFileError, match="incohérente"):
         factory_file.load(path)
 
 
@@ -180,7 +180,7 @@ def test_a_file_from_the_future_is_refused_rather_than_guessed_at(tmp_path: Path
             MANIFEST_MEMBER,
             json.dumps({"schema_version": SCHEMA_VERSION + 5, "game_version": GAME_VERSION}),
         )
-    with pytest.raises(FactoryFileError, match="version plus recente"):
+    with pytest.raises(FactoryFileError, match="version plus récente"):
         factory_file.load(path)
 
 
@@ -210,7 +210,7 @@ def test_an_unreadable_schema_version_is_refused(tmp_path: Path) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(GRAPH_MEMBER, json.dumps({"nodes": [], "edges": []}))
         archive.writestr(MANIFEST_MEMBER, json.dumps({"schema_version": "deux"}))
-    with pytest.raises(FactoryFileError, match="version de schema illisible"):
+    with pytest.raises(FactoryFileError, match="version de schéma illisible"):
         factory_file.load(path)
 
 
@@ -239,9 +239,9 @@ def test_a_document_from_before_the_clock_existed_still_opens(tmp_path: Path) ->
     node = loaded.graph.node("m1")
     assert isinstance(node, MachineNode)
     assert node.clock_speed == 1.0
-    assert any("schema 1 au schema 2" in warning for warning in loaded.warnings)
+    assert any("schéma 1 au schéma 2" in warning for warning in loaded.warnings)
     # ...and the walk carried on to the current version rather than stopping at 2.
-    assert any("schema 2 au schema 3" in warning for warning in loaded.warnings)
+    assert any("schéma 2 au schéma 3" in warning for warning in loaded.warnings)
 
 
 def test_a_generator_survives_the_round_trip(tmp_path: Path) -> None:
@@ -280,7 +280,7 @@ def test_a_generator_whose_building_left_the_catalogue_is_pruned(game_data: Game
 def test_a_clock_survives_the_round_trip(tmp_path: Path) -> None:
     graph = FactoryGraph()
     graph.add_node(MachineNode(id="m1", recipe_class="Recipe_IngotIron_C", clock_speed=2.5))
-    path = tmp_path / "surcadencee.sfp"
+    path = tmp_path / "surcadencée.sfp"
     factory_file.save(path, graph)
 
     node = factory_file.load(path).graph.node("m1")
@@ -410,7 +410,7 @@ def test_a_code_from_a_future_schema_is_refused(looping_factory: FactoryGraph) -
         "graph": json.loads(looping_factory.model_dump_json()),
     }
     body = base64.urlsafe_b64encode(zlib.compress(json.dumps(envelope).encode("utf-8")))
-    with pytest.raises(FactoryFileError, match="version plus recente"):
+    with pytest.raises(FactoryFileError, match="version plus récente"):
         factory_file.decode_share_code(SHARE_PREFIX + body.decode("ascii"))
 
 
@@ -461,7 +461,7 @@ def test_the_documented_example_is_still_a_valid_factory(game_data: GameData) ->
     graph = FactoryGraph.model_validate_json(path.read_text(encoding="utf-8"))
 
     assert graph.schema_version == SCHEMA_VERSION
-    assert len({node.kind for node in graph.nodes}) == 7, "les sept types doivent y etre"
+    assert len({node.kind for node in graph.nodes}) == 7, "les sept types doivent y être"
     report = engine.solve(graph, game_data)
     assert report.converged
-    assert not report.has_errors(), "l'exemple de reference ne doit rien avoir de casse"
+    assert not report.has_errors(), "l'exemple de référence ne doit rien avoir de casse"

@@ -31,7 +31,7 @@ def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWi
 def test_the_whole_checklist_passes(window: MainWindow, tmp_path: Path) -> None:
     passed, text = self_check.run_self_check(window, tmp_path / "verification")
     assert passed, text
-    assert "ECHEC" not in text
+    assert "Échec" not in text
 
 
 def test_it_produces_the_files_it_claims_to(window: MainWindow, tmp_path: Path) -> None:
@@ -55,15 +55,15 @@ def test_a_failing_step_is_a_line_and_not_a_traceback(
     """The checklist must survive its own failures: that is when it is read."""
 
     def broken(_self: self_check.SelfCheck) -> str:
-        msg = "l'export a echoue"
+        msg = "l'export a échoué"
         raise RuntimeError(msg)
 
     monkeypatch.setattr(self_check.SelfCheck, "_pdf", broken)
     passed, text = self_check.run_self_check(window, tmp_path / "verification")
 
     assert passed is False
-    assert "[ECHEC] Export PDF" in text
-    assert "l'export a echoue" in text
+    assert "[ÉCHEC] Export PDF" in text
+    assert "l'export a échoué" in text
     assert "Traceback" not in text
     # And the checks after the failure still ran.
     assert text.count("[OK   ]") == 7

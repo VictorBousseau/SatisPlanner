@@ -107,7 +107,7 @@ def test_the_open_entry_of_the_file_menu_opens_a_file(
     assert [node.id for node in window.document.graph.nodes] == [node.id for node in saved.nodes]
     assert window.document.path == path
     assert window.scene.nodes.keys() == {"machine1"}, "le canvas doit montrer l'usine ouverte"
-    assert window.document.is_modified is False, "un fichier qui vient d'etre ouvert est propre"
+    assert window.document.is_modified is False, "un fichier qui vient d'être ouvert est propre"
 
 
 def test_the_open_entry_survives_being_cancelled(
@@ -134,7 +134,7 @@ def test_an_action_calls_its_slot_with_no_argument(window: MainWindow) -> None:
 
     action.trigger()
 
-    assert seen == [()], "une action ne doit rien passer a son slot, pas meme l'etat coche"
+    assert seen == [()], "une action ne doit rien passer a son slot, pas même l'état coche"
 
 
 def test_a_checkable_action_still_reaches_its_slot(window: MainWindow) -> None:

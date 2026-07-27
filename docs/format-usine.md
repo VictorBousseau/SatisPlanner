@@ -98,7 +98,7 @@ gisement. Deux gisements de puretés différentes sont deux nœuds.
 `clock_speed` est une fraction — `1.0` vaut 100 %, `2.5` vaut 250 % — bornée entre
 0,01 et 2,5. Le débit lui est strictement proportionnel ; l'électricité, non.
 
-Débit produit = `débit de base × purete × count × clock_speed`.
+Débit produit = `débit de base × pureté × count × clock_speed`.
 Ici : 120 × 2 × 1 × 1 = **240 minerai/min**.
 
 ### `water_extractor` — une pompe à eau

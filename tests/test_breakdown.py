@@ -61,7 +61,7 @@ def test_producers_put_the_standard_recipe_first(game_data: GameData) -> None:
     assert made[0].is_alternate is False
     assert [recipe.is_alternate for recipe in made] == sorted(
         recipe.is_alternate for recipe in made
-    ), "les alternatives viennent apres, jamais entremelees"
+    ), "les alternatives viennent après, jamais entremelees"
 
 
 def test_consumers_find_what_eats_an_item(game_data: GameData) -> None:

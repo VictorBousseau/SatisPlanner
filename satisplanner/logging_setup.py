@@ -169,7 +169,7 @@ def build_report(exception: BaseException) -> CrashReport:
     return CrashReport(
         title="Erreur inattendue",
         message=(
-            "SatisPlanner a rencontre une erreur inattendue.\n\n"
+            "SatisPlanner a rencontré une erreur inattendue.\n\n"
             "L'usine en cours n'a pas été modifiée par cette erreur ; si elle contient "
             "du travail non enregistré, enregistrez-la sous un autre nom avant de "
             "continuer."

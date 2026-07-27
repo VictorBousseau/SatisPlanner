@@ -88,8 +88,8 @@ def locate_docs_directory(game_dir: Path) -> Path:
         if candidate.is_dir() and any(candidate.glob("*.json")):
             return candidate
     msg = (
-        f"aucun fichier .json trouve dans {game_dir / DOCS_SUBPATH} "
-        f"ni dans {game_dir} : verifiez --game-dir"
+        f"aucun fichier .json trouvé dans {game_dir / DOCS_SUBPATH} "
+        f"ni dans {game_dir} : vérifiez --game-dir"
     )
     raise DocsFileError(msg)
 
@@ -835,7 +835,7 @@ def parse_buildings(
     missing_icons = [b.class_name for b in buildings if b.icon_file is None]
     if missing_icons:
         warnings.append(
-            f"{len(missing_icons)} bâtiment(s) sans nom d'icone dans les donnees : "
+            f"{len(missing_icons)} bâtiment(s) sans nom d'icône dans les données : "
             f"{', '.join(sorted(missing_icons)[:5])}"
         )
 
@@ -868,7 +868,7 @@ def parse_dataset(
     known_buildings = {building.class_name for building in buildings}
     orphans = sorted({r.building_class for r in recipes} - known_buildings)
     if orphans:
-        warnings.append(f"recettes rattachees a un bâtiment absent : {', '.join(orphans)}")
+        warnings.append(f"recettes rattachées à un bâtiment absent : {', '.join(orphans)}")
 
     return GameDataset(
         source_file=source_file,

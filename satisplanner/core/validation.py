@@ -68,7 +68,7 @@ def _convergence(report: FactoryReport) -> Iterator[Diagnostic]:
         severity=Severity.ERROR,
         code=DiagnosticCode.NOT_CONVERGED,
         message=(
-            f"La résolution n'a pas converge en {report.iterations} itérations : les débits "
+            f"La résolution n'a pas convergé en {report.iterations} itérations : les débits "
             f"affichés sont ceux de la dernière itération et sont instables. "
             f"Une boucle de recyclage est probablement mal bouclée."
         ),
@@ -151,7 +151,7 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             code=DiagnosticCode.AMBIGUOUS_BUFFER,
             message=(
                 "Le contenu de ce tampon est indéterminé : raccordez une seule entrée, "
-                "ou choisissez explicitement l'item stocke."
+                "ou choisissez explicitement l'item stocké."
             ),
             node_id=node.id,
         )
@@ -160,7 +160,7 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
         yield Diagnostic(
             severity=Severity.INFO,
             code=DiagnosticCode.UNCONNECTED_NODE,
-            message="Ce noeud n'est raccordé a rien : il ne participe pas au calcul.",
+            message="Ce noeud n'est raccordé à rien : il ne participe pas au calcul.",
             node_id=node.id,
         )
 
@@ -273,8 +273,8 @@ def _deficit(
             severity=Severity.WARNING,
             code=DiagnosticCode.DEFICIT,
             message=(
-                f"Deficit de {item.display_name_fr} : {_rate(missing, item)} manquants sur "
-                f"{_rate(required, item)} requis. {subject} tourne a "
+                f"Déficit de {item.display_name_fr} : {_rate(missing, item)} manquants sur "
+                f"{_rate(required, item)} requis. {subject} tourne à "
                 f"{_percent(solution.ratio)} ({_number(solution.useful_machine_count or 0)} "
                 f"unité(s) utile(s) sur {_number(units)})."
             ),
@@ -305,9 +305,9 @@ def _throttled(
             severity=Severity.WARNING,
             code=DiagnosticCode.BACKPRESSURE,
             message=(
-                f"Contre-pression : la sortie n'est absorbée qu'a {_percent(solution.ratio)}, "
-                f"donc la machine ne tourne qu'a {_percent(solution.ratio)}. "
-                f"Evacuez davantage, ou réduisez le nombre de machines."
+                f"Contre-pression : la sortie n'est absorbée qu'à {_percent(solution.ratio)}, "
+                f"donc la machine ne tourne qu'à {_percent(solution.ratio)}. "
+                f"Évacuez davantage, ou réduisez le nombre de machines."
             ),
             node_id=node.id,
         )
@@ -384,7 +384,7 @@ def _lines(game_data: GameData, report: FactoryReport) -> Iterator[Diagnostic]:
             message=(
                 f"Ligne saturée : {_rate(solution.demanded_rate, item)} demandes pour "
                 f"{_rate(solution.capacity_per_minute, item)} de capacité en {current} "
-                f"({_percent(solution.saturation)}). Le débit est bride a "
+                f"({_percent(solution.saturation)}). Le débit est bridé à "
                 f"{_rate(solution.rate_per_minute, item)} et "
                 f"{_rate(solution.blocked_rate, item)} refluent en amont. "
                 f"{advice[0].upper()}{advice[1:]}."
@@ -464,11 +464,11 @@ def _power(report: FactoryReport) -> Iterator[Diagnostic]:
         severity=Severity.ERROR,
         code=DiagnosticCode.POWER_DEFICIT,
         message=(
-            f"Deficit électrique : {_number(report.power_total_mw)} MW consommes pour "
+            f"Déficit électrique : {_number(report.power_total_mw)} MW consommés pour "
             f"{_number(report.power_production_mw)} MW produits, soit "
             f"{_number(abs(report.power_balance_mw))} MW manquants. En jeu, le réseau "
-            f"disjoncte entièrement jusqu'a intervention manuelle : les débits affichés "
-            f"ci-dessus ne sont donc pas brides, ils supposent le courant rétabli."
+            f"disjoncte entièrement jusqu'à intervention manuelle : les débits affichés "
+            f"ci-dessus ne sont donc pas bridés, ils supposent le courant rétabli."
         ),
     )
 
@@ -493,7 +493,7 @@ def _buffers(
                 code=DiagnosticCode.BUFFER_FILLING,
                 message=(
                     f"Tampon en remplissage : +{_rate(buffer.net, item)}, "
-                    f"sature en {_duration(buffer.minutes_to_full)} "
+                    f"saturé en {_duration(buffer.minutes_to_full)} "
                     f"({_number(buffer.capacity)} de capacité)."
                 ),
                 node_id=buffer.node_id,
@@ -513,7 +513,7 @@ def _buffers(
             yield Diagnostic(
                 severity=Severity.INFO,
                 code=DiagnosticCode.BUFFER_FILLING,
-                message="Tampon a l'équilibre : entrées et sorties se compensent.",
+                message="Tampon à l'équilibre : entrées et sorties se compensent.",
                 node_id=buffer.node_id,
             )
 

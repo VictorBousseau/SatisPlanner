@@ -53,7 +53,7 @@ def test_cli_reports_missing_icons(tmp_path: Path, caplog: pytest.LogCaptureFixt
                 str(tmp_path / "empty"),
             ]
         )
-    assert "sans icone" in caplog.text
+    assert "sans icône" in caplog.text
 
 
 def test_scope_excludes_equipment_but_keeps_raw_resources(dataset: GameDataset) -> None:

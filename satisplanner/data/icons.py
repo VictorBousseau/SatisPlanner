@@ -49,7 +49,7 @@ class IconIndex:
 
     def _index(self, root: Path) -> None:
         if not root.is_dir():
-            logger.debug("dossier d'icones absent, ignore : %s", root)
+            logger.debug("dossier d'icônes absent, ignore : %s", root)
             return
         found = 0
         for path in root.rglob("*"):
@@ -58,7 +58,7 @@ class IconIndex:
             # First root wins, so embedded icons take precedence over user ones.
             self._by_name.setdefault(path.name.lower(), path)
             found += 1
-        logger.debug("%s : %d fichier(s) d'icone indexe(s)", root, found)
+        logger.debug("%s : %d fichier(s) d'icône indexé(s)", root, found)
 
     def resolve(self, filename: str | None) -> Path | None:
         """Path of the icon with this file name, or ``None`` if it was not exported."""

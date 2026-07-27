@@ -86,7 +86,7 @@ def card_html(game_data: GameData, item_class: str) -> str:
     if item is None:
         return _page(
             f"<h1>{escape(item_class)}</h1>"
-            "<p class='warn'>Cet objet est absent du catalogue embarque.</p>"
+            "<p class='warn'>Cet objet est absent du catalogue embarqué.</p>"
         )
     blocks = [
         _identity(item),
@@ -232,14 +232,14 @@ def _raw_cost(game_data: GameData, item: Item) -> str:
     cost = breakdown.raw_cost(game_data, item.class_name)
     if not cost.is_complete:
         return (
-            "<h2>Cout en ressources brutes</h2>"
+            "<h2>Coût en ressources brutes</h2>"
             "<p class='warn'>Calcul abandonné : les recettes standard de cet objet "
             "bouclent sur elles-mêmes.</p>"
             f"<p class='muted'>{escape(cost.cycle_description)}</p>"
         )
     if list(cost.amounts) == [item.class_name]:
         return (
-            "<h2>Cout en ressources brutes</h2><p class='muted'>C'est déjà une ressource brute.</p>"
+            "<h2>Coût en ressources brutes</h2><p class='muted'>C'est déjà une ressource brute.</p>"
         )
     rows = "".join(
         f"<tr><td><a href='{ITEM_SCHEME}:{escape(name)}'>"
@@ -248,7 +248,7 @@ def _raw_cost(game_data: GameData, item: Item) -> str:
         for name, amount in cost.amounts.items()
     )
     return (
-        f"<h2>Cout en ressources brutes</h2>"
+        f"<h2>Coût en ressources brutes</h2>"
         f"<p class='muted'>Pour un(e) {escape(item.display_name_fr)} :</p>"
         f"<table>{rows}</table>"
         f"<p class='muted'><b>Indicatif.</b> Le calcul ne suit que les recettes standard "

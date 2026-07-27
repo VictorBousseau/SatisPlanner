@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
         self.export_pdf_action = _action(
             self, "Exporter en PDF...", QKeySequence.StandardKey.Print, self.export_pdf
         )
-        self.preferences_action = _action(self, "Preferences...", "Ctrl+,", self.edit_preferences)
+        self.preferences_action = _action(self, "Préférences...", "Ctrl+,", self.edit_preferences)
         self.quit_action = _action(self, "Quitter", QKeySequence.StandardKey.Quit, self.close)
 
         menu = self.menuBar().addMenu("&Fichier")
@@ -294,7 +294,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
 
     def _build_edit_actions(self) -> None:
-        toolbar = QToolBar("Edition", self)
+        toolbar = QToolBar("Édition", self)
         toolbar.setObjectName("toolbar_edition")
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
@@ -325,12 +325,12 @@ class MainWindow(QMainWindow):
         self.duplicate_action = _action(self, "Dupliquer", "Ctrl+D", self.scene.duplicate_selection)
         self.adjust_action = _action(self, "Ajuster ce noeud", "Ctrl+E", self._adjust_selection)
         self.adjust_action.setToolTip(
-            "Dimensionne le noeud sélectionné a ce que ses intrants permettent (calcul local)"
+            "Dimensionne le noeud sélectionné à ce que ses intrants permettent (calcul local)"
         )
         toolbar.addAction(self.delete_action)
         toolbar.addAction(self.adjust_action)
 
-        menu = self.menuBar().addMenu("&Edition")
+        menu = self.menuBar().addMenu("&Édition")
         self.menus.append(menu)
         menu.addAction(self.undo_action)
         menu.addAction(self.redo_action)
@@ -533,7 +533,7 @@ class MainWindow(QMainWindow):
         QGuiApplication.clipboard().setText(code)
         dialog = ShareCodeDialog("Code de partage", code, read_only=True, parent=self)
         dialog.exec()
-        self.statusBar().showMessage("Code copie dans le presse-papiers.", 4000)
+        self.statusBar().showMessage("Code copié dans le presse-papiers.", 4000)
         return code
 
     def import_code(self, code: str | None = None) -> bool:
@@ -552,7 +552,7 @@ class MainWindow(QMainWindow):
         warnings = list(loaded.warnings)
         self.document.adopt(loaded.graph, warnings=warnings)
         self.fit_to_factory()
-        self._report_warnings(warnings, "le code importe")
+        self._report_warnings(warnings, "le code importé")
         return True
 
     def _report_warnings(self, warnings: Sequence[str], subject: str) -> None:
@@ -575,7 +575,7 @@ class MainWindow(QMainWindow):
         if not exporters.export_png(self.scene, path):
             QMessageBox.information(self, "Rien a exporter", "L'usine est vide.")
             return False
-        self.statusBar().showMessage(f"Canvas exporte dans {path.name}.", 4000)
+        self.statusBar().showMessage(f"Canvas exporté dans {path.name}.", 4000)
         return True
 
     def export_pdf(self, path: Path | None = None, *, include_totals: bool = True) -> bool:
@@ -636,7 +636,7 @@ class MainWindow(QMainWindow):
         if self.preferences.effective_icon_directory != before:
             self.reload_icons()
         self.apply_preferences()
-        self.statusBar().showMessage("Preferences enregistrées.", 4000)
+        self.statusBar().showMessage("Préférences enregistrées.", 4000)
         return True
 
     def reload_icons(self) -> None:
@@ -652,7 +652,7 @@ class MainWindow(QMainWindow):
         self.palette_widget.set_icons(self.icons)
         self.scene.set_icons(self.icons)
         self._refresh_catalogue_summary()
-        logger.info("%d fichier(s) d'icone indexe(s)", len(self.icons.index))
+        logger.info("%d fichier(s) d'icône indexe(s)", len(self.icons.index))
 
     def _store_transports(self, belt: str, pipe: str) -> None:
         self.preferences.default_belt = belt
@@ -798,7 +798,7 @@ class MainWindow(QMainWindow):
         warnings = len(report.by_severity(Severity.WARNING))
         parts = [f"{len(report.nodes)} noeud(s)", f"{len(report.edges)} ligne(s)"]
         if not report.converged:
-            parts.append("RESOLUTION NON CONVERGEE")
+            parts.append("Résolution NON Convergée")
         if not report.is_sustainable:
             parts.append("débits non tenables : un tampon se vide")
         if errors:
@@ -822,7 +822,7 @@ class MainWindow(QMainWindow):
     def catalogue_summary(self) -> str:
         return (
             f"{len(self.game_data.recipes)} recettes, {len(self.game_data.items)} items — "
-            f"{len(self.icons.index)} icone(s) indexée(s), le reste est dessine"
+            f"{len(self.icons.index)} icône(s) indexée(s), le reste est dessiné"
         )
 
     def _refresh_catalogue_summary(self) -> None:
@@ -835,13 +835,13 @@ class MainWindow(QMainWindow):
             self,
             "A propos de SatisPlanner",
             f"<b>SatisPlanner {__version__}</b><br>"
-            f"Donnees de jeu : Satisfactory {db.GAME_VERSION} "
+            f"Données de jeu : Satisfactory {db.GAME_VERSION} "
             f"(schéma de base {db.SCHEMA_VERSION}, schéma de fichier "
             f"{DOCUMENT_SCHEMA_VERSION})<br><br>"
             "Planificateur d'usines théoriques. L'outil raisonne en <b>débits</b>, pas en "
             "géométrie 3D : ni distances, ni élévations, ni hauteur de refoulement des "
             f"pompes.<br><br>{journal}"
-            "Satisfactory, ses donnees et ses icones sont la propriété de "
+            "Satisfactory, ses données et ses icônes sont la propriété de "
             "Coffee Stain Studios. Aucun logo ni élément de marque du jeu n'est "
             "reproduit dans cette application.",
         )

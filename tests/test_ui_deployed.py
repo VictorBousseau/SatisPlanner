@@ -239,11 +239,11 @@ def test_the_context_menu_offers_the_three_states(window: MainWindow) -> None:
     deployed = next(
         child
         for child in children
-        if isinstance(child, QMenu) and child.title().startswith("Rendu deploye")
+        if isinstance(child, QMenu) and child.title().startswith("Rendu déployé")
     )
     labels = [action.text() for action in deployed.actions()]
-    assert labels == ["Suivre la preference", "Afficher les machines", "Masquer les machines"]
-    assert [a.text() for a in deployed.actions() if a.isChecked()] == ["Suivre la preference"]
+    assert labels == ["Suivre la préférence", "Afficher les machines", "Masquer les machines"]
+    assert [a.text() for a in deployed.actions() if a.isChecked()] == ["Suivre la préférence"]
 
 
 # ------------------------------------------------------- and it changes no number

@@ -267,7 +267,7 @@ def test_a_deficit_is_an_error_and_says_so(game_data: GameData) -> None:
     finding = next(item for item in report.diagnostics if item.code is DiagnosticCode.POWER_DEFICIT)
     assert finding.severity is Severity.ERROR
     assert "37,5 MW manquants" in finding.message
-    assert "ne sont donc pas brides" in finding.message
+    assert "ne sont donc pas bridés" in finding.message
 
 
 def test_a_deficit_brides_absolutely_nothing(game_data: GameData) -> None:
@@ -332,7 +332,7 @@ def test_a_generator_short_of_water_is_short_of_an_input(game_data: GameData) ->
 
     finding = next(item for item in report.diagnostics if item.code is DiagnosticCode.DEFICIT)
     assert finding.node_id == "generators"
-    assert "Le generateur tourne a" in finding.message
+    assert "Le générateur tourne à" in finding.message
     assert "240 m³/min manquants sur 360 m³/min requis" in finding.message
 
 
@@ -359,5 +359,5 @@ def test_a_fuel_the_building_refuses_is_an_error_not_a_crash(game_data: GameData
         item for item in report.diagnostics if item.code is DiagnosticCode.INCOMPATIBLE_RECIPE
     )
     assert finding.node_id == "generators"
-    assert "ne brule pas" in finding.message
+    assert "ne brûle pas" in finding.message
     assert report.node("generators").power_produced_mw == 0.0

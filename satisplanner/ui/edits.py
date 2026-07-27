@@ -83,7 +83,7 @@ def set_quantity(document: FactoryDocument, node_id: str, value: float) -> str |
     node = document.graph.node(node_id)
     quantity = quantity_of(node)
     if quantity is None:
-        return "Ce noeud n'a pas de quantite."
+        return "Ce noeud n'a pas de quantité."
     if math.isnan(value):  # what was typed was not a number at all
         return "Ce n'est pas un nombre."
     if value < quantity.minimum:
@@ -148,7 +148,7 @@ def set_clock_speed(document: FactoryDocument, node_id: str, clock_speed: float)
             node_id,
             "clock_speed",
             clock_speed,
-            f"cadence a {formatting.percent(clock_speed)}",
+            f"cadence à {formatting.percent(clock_speed)}",
         )
     )
     return None
@@ -168,7 +168,7 @@ def set_purity(document: FactoryDocument, node_id: str, purity: Purity | str) ->
     try:
         wanted = Purity(purity)
     except ValueError:
-        return f"Purete inconnue : {purity}"
+        return f"Pureté inconnue : {purity}"
     if node.purity is wanted:
         return None
     document.undo_stack.push(

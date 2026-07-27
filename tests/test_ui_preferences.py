@@ -52,7 +52,7 @@ def place(window: MainWindow, kind: EntryKind, class_name: str) -> str:
 def test_defaults_are_the_documented_ones(store: QSettings) -> None:
     preferences = Preferences(store)
     assert preferences.show_alternates is True
-    assert preferences.show_events is False, "le contenu d'evenement est masque par defaut"
+    assert preferences.show_events is False, "le contenu d'événement est masque par défaut"
     assert preferences.max_recent_files == 8
     assert preferences.icon_directory is None
     assert preferences.effective_icon_directory.name == "icons"

@@ -141,7 +141,7 @@ def test_a_clock_outside_the_range_is_refused_on_the_canvas(window: MainWindow) 
     assert window.scene.set_clock_speed(node_id, 4.0) is False
     node = window.document.graph.node(node_id)
     assert isinstance(node, MachineNode)
-    assert node.clock_speed == 1.0, "la valeur en place n'est pas effacee"
+    assert node.clock_speed == 1.0, "la valeur en place n'est pas effacée"
     assert complaints and "hors domaine" in complaints[-1]
 
 
@@ -236,7 +236,7 @@ def test_the_totals_panel_lists_the_shards(window: MainWindow) -> None:
     window.document.solve_now()
 
     html = window.totals_panel.html()
-    assert "Eclat de charge" in html or "clat de charge" in html
+    assert "Éclat de charge" in html or "clat de charge" in html
     assert "Liste de courses" in html
 
 

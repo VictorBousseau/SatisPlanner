@@ -600,7 +600,7 @@ class FactoryScene(QGraphicsScene):
         node_ids = [item.node.id for item in self.selected_nodes()]
         if not clipboard.write(self.document.graph, node_ids):
             return False
-        self.selectionSummaryChanged.emit(f"{len(node_ids)} noeud(s) copie(s).")
+        self.selectionSummaryChanged.emit(f"{len(node_ids)} noeud(s) copié(s).")
         return True
 
     def cut_selection(self) -> bool:
@@ -638,7 +638,7 @@ class FactoryScene(QGraphicsScene):
         created = command.node_ids
         self.document.undo_stack.push(command)
         self.select_nodes(created)
-        self.selectionSummaryChanged.emit(f"{len(created)} noeud(s) colle(s).")
+        self.selectionSummaryChanged.emit(f"{len(created)} noeud(s) collé(s).")
         return True
 
     # --------------------------------------------------------------- deleting
@@ -701,7 +701,7 @@ class FactoryScene(QGraphicsScene):
             menu.addAction(card)
             menu.addSeparator()
         if isinstance(item.node, MachineNode):
-            adjust = QAction("Ajuster ce noeud a ses intrants", menu)
+            adjust = QAction("Ajuster ce noeud à ses intrants", menu)
             adjust.triggered.connect(lambda: self.adjust_node(item.node.id))
             menu.addAction(adjust)
             count = QAction("Nombre de machines...", menu)
@@ -734,7 +734,7 @@ class FactoryScene(QGraphicsScene):
         by three miners by three purities is a hundred entries -- so it belongs on
         the node that is already on the canvas.
         """
-        menu = QMenu("Purete du gisement", parent)
+        menu = QMenu("Pureté du gisement", parent)
         for purity, label in PURITY_LABELS.items():
             action = QAction(label, menu)
             action.setCheckable(True)
@@ -799,8 +799,8 @@ class FactoryScene(QGraphicsScene):
             return
         label = {
             None: "rendu déployé : préférence",
-            True: "rendu déployé : affiche",
-            False: "rendu déployé : masque",
+            True: "rendu déployé : affiché",
+            False: "rendu déployé : masqué",
         }[deployed]
         self.document.undo_stack.push(
             SetNodeFieldCommand(self.document, node_id, "show_deployed", deployed, label)
@@ -836,7 +836,7 @@ class FactoryScene(QGraphicsScene):
         un-pinnable -- otherwise it refuses the next line without saying why.
         """
         menu = QMenu("Contenu du tampon", parent)
-        deduced = QAction("Deduit des lignes raccordées", menu)
+        deduced = QAction("Déduit des lignes raccordées", menu)
         deduced.setCheckable(True)
         deduced.setChecked(node.item_class is None)
         deduced.triggered.connect(lambda: self.set_storage_item(node.id, None))
@@ -868,7 +868,7 @@ class FactoryScene(QGraphicsScene):
         label = (
             "déduction du contenu"
             if item_class is None
-            else f"contenu fixe a {self.document.game_data.item(item_class).display_name_fr}"
+            else f"contenu fixé à {self.document.game_data.item(item_class).display_name_fr}"
         )
         self.document.undo_stack.push(
             SetNodeFieldCommand(self.document, node_id, "item_class", item_class, label)
@@ -947,7 +947,7 @@ class FactoryScene(QGraphicsScene):
         node = self.document.graph.node(node_id)
         assert isinstance(node, MachineNode)
         if abs(suggestion - node.machine_count) < 1e-9:
-            self.selectionSummaryChanged.emit("Ce noeud est déjà a la bonne taille.")
+            self.selectionSummaryChanged.emit("Ce noeud est déjà à la bonne taille.")
             return
         self.set_quantity(node_id, suggestion)
 

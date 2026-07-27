@@ -59,9 +59,9 @@ logger = logging.getLogger(__name__)
 KIND_LABELS: Final[dict[str, str]] = {
     "resource": "Gisement",
     "water_extractor": "Pompe",
-    "external_source": "Entree",
+    "external_source": "Entrée",
     "machine": "Machine",
-    "generator": "Generateur",
+    "generator": "Générateur",
     "storage": "Tampon",
     "output": "Sortie",
 }
@@ -100,15 +100,15 @@ HEADERS: Final[tuple[str, ...]] = (
     "Noeud",
     "Type",
     "Recette / contenu",
-    "Quantite",
+    "Quantité",
     "Cadence",
-    "Purete",
+    "Pureté",
     "Extracteur",
     "Carburant",
-    "Entrees /min",
+    "Entrées /min",
     "Sorties /min",
     "Facteur limitant",
-    "Etat",
+    "État",
 )
 
 COLUMN_WIDTHS: Final[dict[int, int]] = {

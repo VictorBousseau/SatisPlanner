@@ -49,15 +49,15 @@ def test_the_two_free_families_come_from_the_data_and_are_not_listed(
         for item in shipped.items.values()
         if item.is_raw_resource or item.form.is_fluid
     }
-    assert not (listed & from_data), "une famille deduite des donnees ne doit pas etre listee"
-    assert len(from_data) > 20, "les deux familles gratuites doivent bien venir des donnees"
+    assert not (listed & from_data), "une famille déduite des données ne doit pas être listee"
+    assert len(from_data) > 20, "les deux familles gratuites doivent bien venir des données"
 
 
 def test_a_fluid_that_is_also_a_raw_resource_is_shown_as_a_fluid(shipped: GameData) -> None:
     """Crude oil, water and nitrogen are both. What matters is that they need a pipe."""
     for class_name in ("Desc_LiquidOil_C", "Desc_Water_C", "Desc_NitrogenGas_C"):
         item = shipped.item(class_name)
-        assert item.is_raw_resource, f"{class_name} doit bien etre une ressource brute"
+        assert item.is_raw_resource, f"{class_name} doit bien être une ressource brute"
         assert family_of(item) is ItemFamily.FLUID, class_name
 
 

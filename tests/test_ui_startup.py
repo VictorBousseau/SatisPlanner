@@ -10,12 +10,17 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
 from satisplanner import logging_setup
 from satisplanner.ui import crash, splash
+
+# The exact labels, not a substring of them. Qt puts its own « Montrer les détails… »
+# in this box as soon as the French translations are loaded, and « détails » alone
+# matched that one first -- silently testing Qt's unfold button instead of ours.
+COPY_DETAILS = "Copier les détails"
+COPY_LOG_PATH = "Copier le chemin du journal"
 
 
 def capture(into: list[QMessageBox]) -> Callable[[QMessageBox], int]:
@@ -76,8 +81,8 @@ def test_the_crash_box_shows_a_sentence_and_a_path(
         box = seen[0]
         assert "Traceback" not in box.text(), "jamais de trace brute avant qu'on la demande"
         assert "ValueError : port inconnu" in box.text(), "la ligne doit se lire tout de suite"
-        assert str(tmp_path) in box.text(), "le chemin du journal doit etre donne"
-        assert "Traceback" in box.detailedText(), "« Montrer les details » doit montrer la trace"
+        assert str(tmp_path) in box.text(), "le chemin du journal doit être donne"
+        assert "Traceback" in box.detailedText(), "« Montrer les détails » doit montrer la trace"
         assert "test_ui_startup.py" in box.detailedText()
     finally:
         logging_setup._log_path = None
@@ -86,11 +91,20 @@ def test_the_crash_box_shows_a_sentence_and_a_path(
 def test_the_crash_box_can_hand_over_the_details(
     qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The button that matters: one click, and the whole thing is ready to be pasted."""
+    """The button that matters: one click, and the whole thing is ready to be pasted.
+
+    What is asserted is the **text the button hands over**, taken at the moment it
+    hands it over, rather than what a later read of the system clipboard returns.
+    The clipboard is one object shared by the whole machine: another test in this
+    suite puts a factory on it, and on Windows a ``setText`` that follows can be
+    quietly refused. Testing the wiring instead of the operating system's mood is
+    what makes this test say something about SatisPlanner.
+    """
     del qtbot
     logging_setup.configure(directory=tmp_path)
     try:
-        QGuiApplication.clipboard().setText("")
+        copied: list[str] = []
+        monkeypatch.setattr(crash, "_copy", copied.append)
         boxes: list[QMessageBox] = []
         monkeypatch.setattr(QMessageBox, "exec", capture(boxes))
         try:
@@ -99,14 +113,16 @@ def test_the_crash_box_can_hand_over_the_details(
             crash.show_crash_report(logging_setup.build_report(exc))
 
         copy = next(
-            button for button in boxes[0].buttons() if "details" in button.text().replace("&", "")
+            button
+            for button in boxes[0].buttons()
+            if button.text().replace("&", "") == COPY_DETAILS
         )
         copy.click()
 
-        pasted = QGuiApplication.clipboard().text()
-        assert "RuntimeError : bruit" in pasted
-        assert "Traceback" in pasted
-        assert str(logging_setup.current_log_path()) in pasted
+        assert len(copied) == 1
+        assert "RuntimeError : bruit" in copied[0]
+        assert "Traceback" in copied[0]
+        assert str(logging_setup.current_log_path()) in copied[0]
     finally:
         logging_setup._log_path = None
 
@@ -114,20 +130,27 @@ def test_the_crash_box_can_hand_over_the_details(
 def test_the_crash_box_can_hand_over_the_log_path(
     qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """What the reader is actually going to do with it is send the file."""
+    """What the reader is actually going to do with it is send the file.
+
+    The other button in this box is checked through the same spy and for the same
+    reason: the system clipboard belongs to the machine, not to this test.
+    """
     del qtbot
     logging_setup.configure(directory=tmp_path)
     try:
-        QGuiApplication.clipboard().setText("")
+        copied: list[str] = []
+        monkeypatch.setattr(crash, "_copy", copied.append)
         boxes: list[QMessageBox] = []
         monkeypatch.setattr(QMessageBox, "exec", capture(boxes))
         crash.show_crash_report(logging_setup.build_report(RuntimeError("bruit")))
 
         copy = next(
-            button for button in boxes[0].buttons() if "journal" in button.text().replace("&", "")
+            button
+            for button in boxes[0].buttons()
+            if button.text().replace("&", "") == COPY_LOG_PATH
         )
         copy.click()
-        assert str(logging_setup.current_log_path()) == QGuiApplication.clipboard().text()
+        assert copied == [str(logging_setup.current_log_path())]
     finally:
         logging_setup._log_path = None
 

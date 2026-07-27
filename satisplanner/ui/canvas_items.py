@@ -1064,7 +1064,7 @@ class NodeItem(QGraphicsItem):
                 f"{self.solution.integer_machine_count} a batir"
             )
         if self.solution.power_mw:
-            lines.append(f"{formatting.number(self.solution.power_mw)} MW consommes")
+            lines.append(f"{formatting.number(self.solution.power_mw)} MW consommés")
         if self.solution.power_produced_mw:
             lines.append(f"{formatting.number(self.solution.power_produced_mw)} MW produits")
         return "\n".join(lines)
@@ -1156,7 +1156,7 @@ class EdgeItem(QGraphicsPathItem):
                 else "aucun palier ne suffit, doublez la ligne"
             )
             lines.append(
-                f"SATUREE : {formatting.rate(self.solution.demanded_rate, item)} demandes, "
+                f"Saturée : {formatting.rate(self.solution.demanded_rate, item)} demandes, "
                 f"{formatting.rate(self.solution.blocked_rate, item)} refoules — {advice}"
             )
         return "\n".join(lines)

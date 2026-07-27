@@ -100,7 +100,7 @@ def test_a_shared_row_with_a_pair_keeps_the_item_name_readable(window: MainWindo
     item = smelter(window, supplied=60.0)
 
     assert item.port_rate("Desc_OreIron_C", is_output=False) == "60 / 90/min", (
-        "le noeud doit bien etre sous-alimente, sinon le test ne teste rien"
+        "le noeud doit bien être sous-alimente, sinon le test ne teste rien"
     )
     assert item.width() > NODE_WIDTH, "le noeud doit s'elargir pour contenir la ligne"
     assert name_fits(item, "Desc_OreIron_C", is_output=False, shared=True)
@@ -182,9 +182,9 @@ def test_a_buffer_subtitle_is_cut_into_runs_that_can_wrap(window: MainWindow) ->
     item = buffer_with(window, "Desc_HeavyOilResidue_C", "Build_PipelineMK2_C")
 
     segments = item.subtitle_segments()
-    assert len(segments) > 1, "un sous-titre de tampon doit etre decoupe comme les autres"
+    assert len(segments) > 1, "un sous-titre de tampon doit être decoupe comme les autres"
     longest = max(len(segment.text) for segment in segments)
-    assert longest < 30, f"un segment de {longest} caracteres ne pourra pas passer a la ligne"
+    assert longest < 30, f"un segment de {longest} caractères ne pourra pas passer a la ligne"
 
 
 def test_every_line_of_a_buffer_subtitle_fits_across_the_node(window: MainWindow) -> None:

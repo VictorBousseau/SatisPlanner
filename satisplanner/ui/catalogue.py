@@ -57,11 +57,11 @@ SECTION_LABELS: Final[dict[EntryKind, str]] = {
     EntryKind.RECIPE: "Recettes",
     EntryKind.EXTRACTOR: "Extraction",
     EntryKind.WATER_EXTRACTOR: "Extraction",
-    EntryKind.GENERATOR: "Electricite",
+    EntryKind.GENERATOR: "Électricité",
     EntryKind.STORAGE: "Stockage",
-    EntryKind.EXTERNAL: "Entrees et sorties",
-    EntryKind.OUTPUT: "Entrees et sorties",
-    EntryKind.SINK: "Entrees et sorties",
+    EntryKind.EXTERNAL: "Entrées et sorties",
+    EntryKind.OUTPUT: "Entrées et sorties",
+    EntryKind.SINK: "Entrées et sorties",
 }
 
 
@@ -319,7 +319,7 @@ def _endpoints(game_data: GameData) -> list[PaletteEntry]:
         if item.class_name not in handled:
             continue
         for kind, prefix in (
-            (EntryKind.EXTERNAL, "Entree"),
+            (EntryKind.EXTERNAL, "Entrée"),
             (EntryKind.OUTPUT, "Sortie"),
             (EntryKind.SINK, "Rejet assumé"),
         ):
@@ -340,7 +340,7 @@ def _endpoints(game_data: GameData) -> list[PaletteEntry]:
 def _endpoint_detail(kind: EntryKind) -> str:
     match kind:
         case EntryKind.EXTERNAL:
-            return "apport venu d'ailleurs, débit a saisir"
+            return "apport venu d'ailleurs, débit à saisir"
         case EntryKind.SINK:
             return "torchère ou puits AWESOME, absorbe sans limite"
         case _:

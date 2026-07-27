@@ -229,6 +229,6 @@ def _hint(field: Field) -> str:
     if field is Field.CLOCK:
         return (
             f"Cadence en pourcentage, de {formatting.percent(constants.MIN_CLOCK_SPEED)} "
-            f"a {formatting.percent(constants.MAX_CLOCK_SPEED)}. Entree valide, Echap annule."
+            f"a {formatting.percent(constants.MAX_CLOCK_SPEED)}. Entrée valide, Echap annule."
         )
-    return "Entree valide, Echap annule."
+    return "Entrée valide, Echap annule."

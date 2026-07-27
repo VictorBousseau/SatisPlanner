@@ -175,7 +175,7 @@ def test_the_totals_panel_shows_the_three_categories(window: MainWindow) -> None
     html = window.totals_panel.html()
     assert "Solides bruts" in html
     assert "Fluides et sous-produits" in html
-    assert "Electricite" in html
+    assert "Électricité" in html
     assert "Liste de courses" in html
     assert "Minerai de fer" in html
 
@@ -184,8 +184,8 @@ def test_a_draining_factory_shouts_about_it_in_the_totals(window: MainWindow) ->
     """The block that stops the panel from lying by omission."""
     window.document.reset(load_graph("buffer_draining"))
     html = window.totals_panel.html()
-    assert "CES DEBITS NE SONT PAS TENABLES" in html
-    assert "Regime etabli" in html
+    assert "CES DÉBITS NE SONT PAS TENABLES" in html
+    assert "Régime établi" in html
     assert "Avec les stocks" in html
     assert "Tampons en cours de vidage" in html
     assert "13,333 min" in html
@@ -199,7 +199,7 @@ def test_a_sustainable_factory_shows_no_banner(window: MainWindow) -> None:
 def test_the_shopping_list_counts_the_splitters(window: MainWindow) -> None:
     window.document.reset(load_graph("recycling_loop"))
     html = window.totals_panel.html()
-    assert "Répartiteur de convoyeurs" in html, "le libelle du jeu, accent compris"
+    assert "Répartiteur de convoyeurs" in html, "le libellé du jeu, accent compris"
     assert "Jonction de pipeline" in html
 
 
@@ -319,7 +319,7 @@ def test_saving_records_a_thumbnail(window: MainWindow, tmp_path: Path) -> None:
 def test_the_title_says_when_the_document_is_modified(window: MainWindow) -> None:
     assert "•" not in window.windowTitle()
     place(window, EntryKind.RECIPE, "Recipe_IngotIron_C")
-    assert "•" in window.windowTitle(), "une usine modifiee doit se voir"
+    assert "•" in window.windowTitle(), "une usine modifiée doit se voir"
     assert "Usine sans titre" in window.windowTitle()
 
 
@@ -354,8 +354,8 @@ def test_closing_a_modified_document_asks_first(
     place(window, EntryKind.RECIPE, "Recipe_IngotIron_C")
 
     assert window.confirm_discard() is True
-    assert asked, "l'utilisateur doit etre prevenu avant de perdre son travail"
-    assert "modifiee" in asked[0]
+    assert asked, "l'utilisateur doit être prevenu avant de perdre son travail"
+    assert "modifiée" in asked[0]
 
 
 def test_cancelling_the_close_keeps_the_document(
@@ -366,7 +366,7 @@ def test_cancelling_the_close_keeps_the_document(
     )
     place(window, EntryKind.RECIPE, "Recipe_IngotIron_C")
     assert window.confirm_discard() is False
-    assert window.document.graph.nodes, "rien n'a ete jete"
+    assert window.document.graph.nodes, "rien n'a été jete"
 
 
 def test_a_share_code_goes_out_and_comes_back_in(
@@ -488,8 +488,8 @@ def test_saving_a_partly_opened_factory_does_not_silently_overwrite_it(
     monkeypatch.setattr(QMessageBox, "exec", remember_then_cancel)
     window.save_action.trigger()
 
-    assert asked, "l'utilisateur doit etre averti"
-    assert "Recipe_Supprimee_C" in asked[0], "on lui rappelle ce qui a ete retire"
+    assert asked, "l'utilisateur doit être averti"
+    assert "Recipe_Supprimee_C" in asked[0], "on lui rappelle ce qui a été retire"
     assert path.read_bytes() == before, "le fichier d'origine est intact"
     assert window.document.is_partial, "et le document reste marque"
 
@@ -509,7 +509,7 @@ def test_the_partial_warning_offers_save_as_first(
     assert elsewhere.is_file()
     assert path.read_bytes() != elsewhere.read_bytes() or True  # l'original n'a pas ete touche
     assert window.document.path == elsewhere
-    assert not window.document.is_partial, "ecrit sciemment ailleurs : plus rien a signaler"
+    assert not window.document.is_partial, "écrit sciemment ailleurs : plus rien a signaler"
     assert "PARTIELLE" not in window.windowTitle()
 
 
@@ -531,7 +531,7 @@ def test_overwriting_is_possible_but_never_the_default(
     window.save_action.trigger()
 
     assert defaults and defaults[0].startswith("Enregistrer sous")
-    assert path.read_bytes() != before, "l'utilisateur a explicitement demande l'ecrasement"
+    assert path.read_bytes() != before, "l'utilisateur a explicitement demande l'écrasement"
     assert not window.document.is_partial
 
 
@@ -540,7 +540,7 @@ def test_a_whole_factory_saves_without_being_asked_anything(
 ) -> None:
     """The guard must not turn every ordinary save into a question."""
     monkeypatch.setattr(
-        QMessageBox, "exec", lambda _box: pytest.fail("aucune question ne doit etre posee")
+        QMessageBox, "exec", lambda _box: pytest.fail("aucune question ne doit être posee")
     )
     iron_chain(window)
     path = tmp_path / "complete.sfp"
@@ -560,7 +560,7 @@ def test_a_broken_file_is_refused_with_a_sentence(
     path = tmp_path / "casse.sfp"
     path.write_bytes(b"pas une archive")
     assert window.open_file(path) is False
-    assert complaints and "endommage" in complaints[0]
+    assert complaints and "endommagé" in complaints[0]
 
 
 def test_recent_files_are_remembered_most_recent_first(window: MainWindow, tmp_path: Path) -> None:

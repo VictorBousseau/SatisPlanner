@@ -45,7 +45,7 @@ def test_every_bound_shortcut_reaches_the_page(window: MainWindow) -> None:
         for action in window.documented_actions()
         if not action.shortcut().isEmpty()
     }
-    assert bound, "la fenetre doit lier des raccourcis"
+    assert bound, "la fenêtre doit lier des raccourcis"
 
     page = help_html(shortcut_rows(window.documented_actions()))
     missing = [keys for keys in bound if keys not in page]
@@ -57,7 +57,7 @@ def test_the_usual_suspects_are_bound(window: MainWindow) -> None:
     assert rows["Enregistrer"] == "Ctrl+S"
     assert rows["Ouvrir"] == "Ctrl+O"
     assert rows["Annuler"] == "Ctrl+Z"
-    assert rows["Preferences"] == "Ctrl+,"
+    assert rows["Préférences"] == "Ctrl+,"
     assert rows["Gestes et raccourcis"] == "F1"
 
 
@@ -82,7 +82,7 @@ def test_the_modelling_rules_are_stated_where_a_user_looks(window: MainWindow) -
     page = help_html(shortcut_rows(window.documented_actions()))
     for note in MODELLING_NOTES:
         assert note in page
-    assert "purete d'un gisement s'applique" in page
+    assert "pureté d'un gisement s'applique" in page
     assert "deux noeuds" in page
 
 

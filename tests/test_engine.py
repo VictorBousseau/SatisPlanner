@@ -216,15 +216,15 @@ def test_a_byproduct_with_nowhere_to_go_stops_the_machine_dead(game_data: GameDa
     assert refinery.ratio == 0.0
     assert refinery.blocked_products == ("Desc_HeavyOilResidue_C",)
     assert refinery.limiting is LimitingFactor.BLOCKED
-    assert refinery.outputs == {}, "une machine bloquee ne produit rien, pas meme son produit"
+    assert refinery.outputs == {}, "une machine bloquée ne produit rien, pas même son produit"
 
     assert report.final_outputs == {}, "aucun plastique ne sort"
-    assert report.raw_fluids == {}, "et le petrole n'est meme pas consomme"
+    assert report.raw_fluids == {}, "et le petrole n'est même pas consomme"
 
     assert DiagnosticCode.BLOCKED_BYPRODUCT in codes(report)
     blocking = message_for(report, DiagnosticCode.BLOCKED_BYPRODUCT)
     assert "Résidus de pétrole lourd" in blocking
-    assert "rejet assume" in blocking
+    assert "rejet assumé" in blocking
     assert report.has_errors()
 
 

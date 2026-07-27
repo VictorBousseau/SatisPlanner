@@ -77,7 +77,7 @@ class IconProvider:
     ) -> "IconProvider":
         """The provider the application runs with: embedded icons, then the user's."""
         provider = cls(IconIndex(default_icon_roots(user_directory)), size)
-        logger.debug("%d fichier(s) d'icone indexe(s)", len(provider.index))
+        logger.debug("%d fichier(s) d'icône indexé(s)", len(provider.index))
         return provider
 
     # ------------------------------------------------------------------ public
@@ -114,7 +114,7 @@ class IconProvider:
             pixmap = QPixmap(str(path))
             if not pixmap.isNull():
                 return QIcon(pixmap)
-            logger.debug("icone illisible, repli genere : %s", path)
+            logger.debug("icône illisible, repli généré : %s", path)
         self._generated.add(class_name)
         return QIcon(self.generate(class_name, label))
 

@@ -50,7 +50,7 @@ class Check:
     detail: str
 
     def __str__(self) -> str:
-        return f"[{'OK   ' if self.passed else 'ECHEC'}] {self.title} — {self.detail}"
+        return f"[{'OK   ' if self.passed else 'ÉCHEC'}] {self.title} — {self.detail}"
 
 
 class SelfCheck:
@@ -67,9 +67,9 @@ class SelfCheck:
         paths.ensure_directory(self.directory)
         self._step("Base de recettes chargée", self._catalogue)
         self._step("Palette peuplée", self._palette)
-        self._step("Icones", self._icons)
+        self._step("Icônes", self._icons)
         self._step("Interface en français", self._french)
-        self._step("Conception, enregistrement, reouverture", self._round_trip)
+        self._step("Conception, enregistrement, réouverture", self._round_trip)
         self._step("Code de partage", self._share_code)
         self._step("Export PNG", self._png)
         self._step("Export PDF", self._pdf)
@@ -91,7 +91,7 @@ class SelfCheck:
         assert game_data.items, "aucun item"
         return (
             f"{len(game_data.recipes)} recettes, {len(game_data.items)} items, "
-            f"donnees de jeu {db.GAME_VERSION}"
+            f"données de jeu {db.GAME_VERSION}"
         )
 
     def _palette(self) -> str:
@@ -102,12 +102,12 @@ class SelfCheck:
     def _icons(self) -> str:
         """Both backends: files if there are any, and the drawing that never fails."""
         provider = self.window.icons
-        drawn = provider.generate("Desc_Verification_C", "Verification")
-        assert not drawn.isNull(), "le repli genere ne dessine rien"
+        drawn = provider.generate("Desc_Verification_C", "Vérification")
+        assert not drawn.isNull(), "le repli généré ne dessine rien"
         indexed = len(provider.index)
         if indexed:
-            return f"{indexed} fichier(s) indexe(s), repli genere opérationnel"
-        return "aucun fichier d'icone (variante publiable) : tout est dessine, ce qui est normal"
+            return f"{indexed} fichier(s) indexé(s), repli généré opérationnel"
+        return "aucun fichier d'icône (variante publiable) : tout est dessiné, ce qui est normal"
 
     def _french(self) -> str:
         """Qt's own strings, which live in a file the packaging can quietly drop.
@@ -132,12 +132,12 @@ class SelfCheck:
 
         self.window.document.reset()
         assert not self.window.document.graph.nodes
-        assert self.window.open_file(path), "la reouverture a échoué"
+        assert self.window.open_file(path), "la réouverture a échoué"
         reopened = {node.id for node in self.window.document.graph.nodes}
         assert reopened == chain, f"noeuds perdus : {chain - reopened}"
 
         outputs = self.window.document.solve_now().final_outputs
-        assert outputs == report.final_outputs, "les débits ont change en passant par le disque"
+        assert outputs == report.final_outputs, "les débits ont changé en passant par le disque"
         return f"{len(chain)} noeuds, {path.name} ({path.stat().st_size} octets), débits identiques"
 
     def _share_code(self) -> str:
@@ -189,8 +189,8 @@ def report_text(checks: list[Check], directory: Path, elapsed: float) -> str:
     """The whole checklist as one block of text, for the log and for the box."""
     lines = [
         f"SatisPlanner {__version__} — vérification de l'exécutable",
-        f"Donnees de jeu : Satisfactory {db.GAME_VERSION}",
-        f"Execution {'depuis les sources' if not paths.is_frozen() else 'empaquetee'}"
+        f"Données de jeu : Satisfactory {db.GAME_VERSION}",
+        f"Exécution {'depuis les sources' if not paths.is_frozen() else 'empaquetée'}"
         f" — ressources : {paths.resource_directory()}",
         "",
         *[str(check) for check in checks],

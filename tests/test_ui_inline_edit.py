@@ -178,7 +178,7 @@ def test_escape_cancels_and_writes_nothing(window: MainWindow) -> None:
     node = window.document.graph.node(node_id)
     assert isinstance(node, MachineNode)
     assert node.machine_count == 1.0
-    assert window.document.undo_stack.count() == depth, "rien n'a ete empile"
+    assert window.document.undo_stack.count() == depth, "rien n'a été empile"
     assert not window.view.inline.is_open()
 
 
@@ -200,7 +200,7 @@ def test_an_out_of_domain_value_is_refused_without_erasing_it(window: MainWindow
     QTest.keyClick(editor, Qt.Key.Key_Return)
 
     assert window.view.inline.is_open(), "l'editeur reste ouvert"
-    assert editor.text() == "400", "ce qui a ete tape est toujours la"
+    assert editor.text() == "400", "ce qui a été tape est toujours la"
     node = window.document.graph.node(node_id)
     assert isinstance(node, MachineNode)
     assert node.clock_speed == 2.0, "la valeur precedente n'a pas bouge"
@@ -233,7 +233,7 @@ def test_a_discrete_field_opens_a_list_not_a_text_box(window: MainWindow) -> Non
     combo = window.view.inline.widget
     assert isinstance(combo, QComboBox)
     assert [combo.itemText(index) for index in range(combo.count())] == ["Impur", "Normal", "Pur"]
-    assert combo.currentData() == "normal", "l'etat courant est selectionne"
+    assert combo.currentData() == "normal", "l'état courant est selectionne"
 
 
 def test_the_extractor_list_is_the_one_the_table_offers(window: MainWindow) -> None:
@@ -365,7 +365,7 @@ def test_the_three_doors_push_the_same_command(window: MainWindow) -> None:
 
     stack = window.document.undo_stack
     labels = [stack.command(stack.count() - index).text() for index in (3, 2, 1)]
-    assert len(set(labels)) == 1, f"trois libelles differents : {labels}"
+    assert len(set(labels)) == 1, f"trois libellés différents : {labels}"
     for node_id in (first, second, third):
         node = window.document.graph.node(node_id)
         assert isinstance(node, ResourceNode)

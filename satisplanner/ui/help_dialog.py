@@ -29,14 +29,14 @@ logger = logging.getLogger(__name__)
 GESTURES: Final[tuple[tuple[str, str], ...]] = (
     (
         "Glisser une entrée de la palette sur le canvas",
-        "pose le noeud a l'endroit lache, aligné sur la grille",
+        "pose le noeud à l'endroit lâché, aligné sur la grille",
     ),
     (
         "Double-clic dans la palette",
         "ouvre la fiche de l'objet : recettes, machines, débits, coût en minerai",
     ),
     (
-        "Dans une fiche, clic sur un ingredient",
+        "Dans une fiche, clic sur un ingrédient",
         "ouvre sa fiche. Alt+Gauche et Alt+Droite reviennent en arrière et en avant",
     ),
     (
@@ -49,12 +49,12 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "avec la raison en infobulle pendant le tirage",
     ),
     (
-        "Lacher n'importe ou sur un tampon vide",
-        "le raccordé : un tampon sans contenu accepte le premier item qui arrive",
+        "Lâcher n'importe où sur un tampon vide",
+        "le raccorde : un tampon sans contenu accepte le premier item qui arrive",
     ),
-    ("Glisser un noeud", "le déplacé. Un glissement continu vaut une seule annulation"),
+    ("Glisser un noeud", "le déplace. Un glissement continu vaut une seule annulation"),
     ("Glisser sur le fond", "sélection rectangulaire"),
-    ("Clic milieu maintenu", "déplacé la vue"),
+    ("Clic milieu maintenu", "déplace la vue"),
     ("Molette", "zoom avant et arrière autour du curseur"),
     (
         "Clic droit sur un noeud",
@@ -63,13 +63,13 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "tampon, supprimer",
     ),
     (
-        "Entree dans la palette",
+        "Entrée dans la palette",
         "pose l'entrée surlignée au centre de la vue",
     ),
     (
         "Double-clic sur une valeur d'un noeud",
         "l'édite sur place : nombre de machines, cadence, pureté, extracteur, "
-        "carburant, débit d'un apport, stock d'un tampon. Entree valide, Echap "
+        "carburant, débit d'un apport, stock d'un tampon. Entrée valide, Échap "
         "annule, une valeur hors domaine est refusée sans être effacée",
     ),
     (
@@ -92,11 +92,11 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     ),
     (
         "Clic sur une ligne du tableau",
-        "sélectionné le noeud sur le canvas, et réciproquement",
+        "sélectionne le noeud sur le canvas, et réciproquement",
     ),
     (
         "Clic sur un diagnostic",
-        "sélectionné et centre le noeud ou la ligne concernée",
+        "sélectionne et centre le noeud ou la ligne concernée",
     ),
 )
 
@@ -104,29 +104,29 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
 # Rules a user cannot deduce from the interface and will otherwise assume wrongly.
 # Each one is a modelling choice, not a limitation to be worked around.
 MODELLING_NOTES: Final[tuple[str, ...]] = (
-    "La pureté d'un gisement s'applique a <b>tous</b> les extracteurs de ce noeud : "
-    "un noeud est un gisement. Deux gisements de puretés differentes, ce sont deux "
-    "noeuds, et c'est la seule façon de les representer.",
-    "La cadence multiplie le débit a l'identique et l'électricité en loi de "
-    "puissance : a 250 %, une machine produit 2,5 fois plus et consomme environ "
+    "La pureté d'un gisement s'applique à <b>tous</b> les extracteurs de ce noeud : "
+    "un noeud est un gisement. Deux gisements de puretés différentes, ce sont deux "
+    "noeuds, et c'est la seule façon de les représenter.",
+    "La cadence multiplie le débit à l'identique et l'électricité en loi de "
+    "puissance : à 250 %, une machine produit 2,5 fois plus et consomme environ "
     "3,36 fois plus.",
     "Les répartiteurs, groupeurs et jonctions ne sont jamais des noeuds. Ils sont "
-    "déduits des lignes qui partagent un noeud et comptes dans la liste de courses.",
+    "déduits des lignes qui partagent un noeud et comptés dans la liste de courses.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
     "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",
     "Rien ici n'est de la géométrie : ni distance, ni élévation, ni hauteur de "
     "refoulement des pompes.",
     "L'électricité est un <b>compteur, pas une contrainte</b> : consommation et "
-    "production sont affichées cote a cote, et un déficit ne bride aucun débit. "
+    "production sont affichées côte à côte, et un déficit ne bride aucun débit. "
     "En jeu, manquer de courant ne ralentit pas l'usine, cela disjoncte tout le "
-    "réseau jusqu'a intervention manuelle ; afficher tout a zéro n'apprendrait "
+    "réseau jusqu'à intervention manuelle ; afficher tout à zéro n'apprendrait "
     "rien et un bridage partiel serait une invention. Les générateurs, eux, "
-    "tournent a 100 % : leur surcadençage suit un exposant different de celui des "
-    "machines et fera l'objet d'un travail a part.",
-    "La consommation compte les machines <b>a l'arrêt</b> : elles sont construites et "
+    "tournent à 100 % : leur surcadençage suit un exposant différent de celui des "
+    "machines et fera l'objet d'un travail à part.",
+    "La consommation compte les machines <b>à l'arrêt</b> : elles sont construites et "
     "branchées. C'est un dimensionnement au pire cas, pas une mesure du jeu — les "
-    "fichiers ne declarent aucune consommation de veille, seulement une consommation "
+    "fichiers ne déclarent aucune consommation de veille, seulement une consommation "
     "nominale, et inventer une valeur réduite serait pire que compter au maximum. La "
     "production, elle, ne compte que ce qui brûle réellement : un générateur sans "
     "carburant ne produit rien.",
@@ -176,7 +176,7 @@ def help_html(shortcuts: Sequence[tuple[str, str]]) -> str:
     <table>{keys}</table>
     <p class="note">La touche Suppr efface la sélection, noeuds et lignes confondus.
     Tout passe par la pile d'annulation, déplacements compris.</p>
-    <h2>Ce que l'outil modelise, et comment</h2>
+    <h2>Ce que l'outil modélise, et comment</h2>
     <ul>{notes}</ul>
     """
 

@@ -55,7 +55,7 @@ def test_search_matches_every_word_independently(entries: list[PaletteEntry]) ->
 
 def test_every_entry_kind_is_offered(entries: list[PaletteEntry]) -> None:
     kinds = {entry.kind for entry in entries}
-    assert kinds == set(EntryKind), "chaque type de noeud doit etre posable"
+    assert kinds == set(EntryKind), "chaque type de noeud doit être posable"
 
 
 def _made(entries: list[PaletteEntry], kind: EntryKind, class_name: str) -> Node:
@@ -71,7 +71,7 @@ def test_an_entry_builds_the_node_it_stands_for(entries: list[PaletteEntry]) -> 
 
     flare = _made(entries, EntryKind.SINK, "Desc_HeavyOilResidue_C")
     assert isinstance(flare, OutputNode)
-    assert flare.is_sink is True, "un rejet assume absorbe sans compter dans la production"
+    assert flare.is_sink is True, "un rejet assumé absorbe sans compter dans la production"
 
 
 def test_a_miner_is_offered_once_per_ore(entries: list[PaletteEntry]) -> None:

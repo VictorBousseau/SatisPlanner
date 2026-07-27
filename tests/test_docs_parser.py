@@ -55,7 +55,7 @@ def test_read_text_file_also_accepts_utf8(tmp_path: Path) -> None:
 def test_undecodable_file_raises_a_clear_error(tmp_path: Path) -> None:
     path = tmp_path / "broken.json"
     path.write_bytes(b"\x81\x82\x83")
-    with pytest.raises(DocsFileError, match="impossible de decoder"):
+    with pytest.raises(DocsFileError, match="impossible de décoder"):
         read_text_file(path)
 
 
@@ -83,7 +83,7 @@ def test_docs_directory_can_also_be_passed_directly(tmp_path: Path) -> None:
 
 
 def test_missing_docs_directory_is_reported(tmp_path: Path) -> None:
-    with pytest.raises(DocsFileError, match="verifiez --game-dir"):
+    with pytest.raises(DocsFileError, match="vérifiez --game-dir"):
         locate_docs_directory(tmp_path)
 
 
@@ -109,7 +109,7 @@ def test_last_resort_falls_back_and_flags_it(tmp_path: Path) -> None:
     docs = _docs_dir(tmp_path, "ja.json", "zh-Hans.json")
     path, preferred = select_reference_file(docs)
     assert path.name == "ja.json"
-    assert preferred is False, "un choix par defaut doit etre signale a l'utilisateur"
+    assert preferred is False, "un choix par défaut doit être signale a l'utilisateur"
 
 
 # --------------------------------------------------------------------------- #
@@ -276,7 +276,7 @@ def test_recycling_loop_recipes_are_present_and_marked_alternate(
 
 def test_out_of_scope_recipes_are_dropped(recipes: dict[str, Recipe]) -> None:
     # Present in the fixture on purpose: a Blender recipe and a build gun recipe.
-    assert "Recipe_NitricAcid_C" not in recipes, "le Melangeur est hors perimetre V1"
+    assert "Recipe_NitricAcid_C" not in recipes, "le Melangeur est hors périmètre V1"
     assert "Recipe_Wall_8x4_01_C" not in recipes, "le pistolet n'est pas une machine"
 
 
@@ -313,9 +313,9 @@ def test_extractors_carry_their_rate_and_purity_flag(dataset: GameDataset) -> No
     water = extractors["Build_WaterPump_C"]
     assert water.rate_per_minute == 120
     assert water.item_class == "Desc_Water_C"
-    assert water.has_purity is False, "l'extracteur d'eau a un debit fixe"
+    assert water.has_purity is False, "l'extracteur d'eau a un débit fixe"
 
-    assert "Build_FrackingExtractor_C" not in extractors, "les puits sont hors perimetre V1"
+    assert "Build_FrackingExtractor_C" not in extractors, "les puits sont hors périmètre V1"
 
 
 def test_storages_expose_slots_for_solids_and_volume_for_fluids(dataset: GameDataset) -> None:
@@ -363,7 +363,7 @@ def test_machine_power_draw(dataset: GameDataset) -> None:
     assert power["Build_FoundryMk1_C"] == 16
     assert power["Build_OilRefinery_C"] == 30
     assert power["Build_ManufacturerMk1_C"] == 55
-    assert "Build_Blender_C" not in power, "le Melangeur est hors perimetre V1"
+    assert "Build_Blender_C" not in power, "le Melangeur est hors périmètre V1"
 
 
 # --------------------------------------------------------------------------- #
@@ -476,7 +476,7 @@ def test_the_minimum_clock_matches_what_the_game_declares() -> None:
         for cls in classes
         if "mMinPotential" in cls
     }
-    assert declared, "la fixture doit contenir des batiments cadencables"
+    assert declared, "la fixture doit contenir des bâtiments cadencables"
     assert {float(value) for value in declared} == {constants.MIN_CLOCK_SPEED}
 
 

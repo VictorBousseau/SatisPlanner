@@ -128,7 +128,7 @@ def test_a_water_pump_follows_its_clock_too(game_data: GameData) -> None:
 def test_power_follows_the_exponent_read_from_the_data(game_data: GameData) -> None:
     """Not proportional: the draw is raised to the building's own exponent."""
     building = game_data.building("Build_MinerMk3_C")
-    assert building.power_exponent > 1.0, "l'exposant doit venir des donnees, pas valoir 1"
+    assert building.power_exponent > 1.0, "l'exposant doit venir des données, pas valoir 1"
 
     graph = connected(deposit_graph(2.5), game_data, "Build_ConveyorBeltMk6_C")
     solution = engine.solve(graph, game_data).node("gisement")
@@ -177,7 +177,7 @@ def test_an_idle_overclocked_machine_still_draws_its_power(game_data: GameData) 
 )
 def test_shards_needed_per_machine(game_data: GameData, clock_speed: float, expected: int) -> None:
     shard = game_data.overclock_shard()
-    assert shard is not None, "le catalogue doit porter l'eclat de surcadencage"
+    assert shard is not None, "le catalogue doit porter l'éclat de surcadençage"
     assert shard.shards_for(clock_speed) == expected
 
 

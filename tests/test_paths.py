@@ -15,7 +15,7 @@ from satisplanner.data import db, icons
 
 def test_resources_sit_next_to_the_package_when_running_from_sources() -> None:
     assert paths.resource_directory() == Path(paths.__file__).resolve().parent / "resources"
-    assert db.default_database_path().is_file(), "la base livree doit etre presente"
+    assert db.default_database_path().is_file(), "la base livree doit être presente"
 
 
 def test_a_frozen_run_reads_the_unpacked_copy(monkeypatch: pytest.MonkeyPatch) -> None:

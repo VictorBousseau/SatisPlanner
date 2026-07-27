@@ -43,7 +43,7 @@ def test_the_report_shows_diagnostics_when_there_are_any(
     with caplog.at_level(logging.INFO):
         show_report.show(report, game_data)
     assert "ERREUR" in caplog.text
-    assert "totalement bloquee" in caplog.text
+    assert "totalement bloquée" in caplog.text
 
 
 def test_the_cli_needs_a_database(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:

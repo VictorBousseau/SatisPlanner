@@ -430,5 +430,5 @@ def _get[T](mapping: dict[str, T], class_name: str, label: str) -> T:
     try:
         return mapping[class_name]
     except KeyError:
-        msg = f"{label} inconnu(e) dans les donnees du jeu : {class_name}"
+        msg = f"{label} inconnu(e) dans les données du jeu : {class_name}"
         raise UnknownClassError(msg) from None

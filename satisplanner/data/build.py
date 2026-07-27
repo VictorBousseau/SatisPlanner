@@ -35,7 +35,7 @@ FORM_LABELS_FR: Final[dict[ItemForm, str]] = {
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m satisplanner.data.build",
-        description="Genere la base de donnees de jeu depuis le dossier d'installation.",
+        description="Génère la base de données de jeu depuis le dossier d'installation.",
     )
     parser.add_argument(
         "--game-dir",
@@ -47,13 +47,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help=f"fichier SQLite a produire (défaut : {DEFAULT_OUTPUT})",
+        help=f"fichier SQLite à produire (défaut : {DEFAULT_OUTPUT})",
     )
     parser.add_argument(
         "--icons-dir",
         type=Path,
         default=embedded_icon_directory(),
-        help="dossier d'icones a confronter aux donnees (défaut : icones embarquées)",
+        help="dossier d'icônes à confronter aux données (défaut : icônes embarquées)",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="trace détaillée")
     return parser.parse_args(argv)
@@ -91,7 +91,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
         logger.warning(
             "  ATTENTION : aucun fichier de locale connu, choix par défaut sur le premier .json"
         )
-    log("Libelles français       : %s", dataset.french_file or "ABSENT (repli sur l'anglais)")
+    log("Libellés français       : %s", dataset.french_file or "ABSENT (repli sur l'anglais)")
 
     forms = Counter(item.form for item in dataset.items)
     detail = ", ".join(f"{FORM_LABELS_FR[form]} {forms[form]}" for form in ItemForm)
@@ -105,7 +105,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
     byproducts = sum(1 for recipe in dataset.recipes if recipe.product_count > 1)
     event_recipes = sum(1 for recipe in dataset.recipes if recipe.is_event)
     log(
-        "Recettes                : %d  (alternatives %d, fluides %d, a sous-produit %d,"
+        "Recettes                : %d  (alternatives %d, fluides %d, à sous-produit %d,"
         " événement %d)",
         len(dataset.recipes),
         alternates,
@@ -122,7 +122,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
 
     kinds = Counter(building.kind for building in dataset.buildings)
     log(
-        "Batiments               : %d  (%s)",
+        "Bâtiments               : %d  (%s)",
         len(dataset.buildings),
         ", ".join(f"{kind.value} {kinds[kind]}" for kind in BuildingKind if kinds[kind]),
     )
@@ -190,7 +190,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
 def _report_icons(dataset: GameDataset, icons: IconIndex) -> None:
     log = logger.info
     log(
-        "Icones indexées         : %d fichier(s) dans %s",
+        "Icônes indexées         : %d fichier(s) dans %s",
         len(icons),
         ", ".join(str(root) for root in icons.roots) or "aucun dossier",
     )
@@ -198,14 +198,14 @@ def _report_icons(dataset: GameDataset, icons: IconIndex) -> None:
     in_scope = scoped_items(dataset)
     missing_items = [item for item in in_scope if icons.resolve(item.icon_file) is None]
     log(
-        "Items du périmètre V1   : %d, dont %d sans icone",
+        "Items du périmètre V1   : %d, dont %d sans icône",
         len(in_scope),
         len(missing_items),
     )
     if missing_items:
         for item in missing_items[:MAX_LISTED_MISSING]:
             logger.warning(
-                "    sans icone : %-30s %s", item.class_name, item.icon_file or "(aucune déclarée)"
+                "    sans icône : %-30s %s", item.class_name, item.icon_file or "(aucune déclarée)"
             )
         if len(missing_items) > MAX_LISTED_MISSING:
             logger.warning("    ... et %d autre(s)", len(missing_items) - MAX_LISTED_MISSING)
@@ -214,7 +214,7 @@ def _report_icons(dataset: GameDataset, icons: IconIndex) -> None:
         1 for building in dataset.buildings if icons.resolve(building.icon_file) is None
     )
     log(
-        "Batiments               : %d, dont %d sans icone "
+        "Bâtiments               : %d, dont %d sans icône "
         "(attendu : l'export ne couvre que Resource/)",
         len(dataset.buildings),
         missing_buildings,
@@ -232,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         dataset = load_dataset(args.game_dir)
     except DocsFileError as exc:
-        logger.error("Echec : %s", exc)
+        logger.error("Échec : %s", exc)
         return 2
 
     db.build_database(dataset, args.output)

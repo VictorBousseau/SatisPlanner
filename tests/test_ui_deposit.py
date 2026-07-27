@@ -143,7 +143,7 @@ def test_a_fresh_deposit_says_its_purity_without_a_click(window: MainWindow) -> 
     node_id = place_deposit(window)
     subtitle = window.scene.nodes[node_id].subtitle()
     assert "Foreuse Mk.3" in subtitle
-    assert "gisement normal" in subtitle, "la purete par defaut est lisible d'emblee"
+    assert "gisement normal" in subtitle, "la pureté par défaut est lisible d'emblee"
 
 
 def test_changing_the_purity_shows_on_the_node(window: MainWindow) -> None:
@@ -167,10 +167,10 @@ def test_the_context_menu_offers_the_three_purities(window: MainWindow) -> None:
     menu = window.scene.build_context_menu(item.sceneBoundingRect().center(), window)
     assert menu is not None
 
-    purities = submenu(menu, "Purete")
+    purities = submenu(menu, "Pureté")
     assert [action.text() for action in purities.actions()] == ["Impur", "Normal", "Pur"]
     checked = [action.text() for action in purities.actions() if action.isChecked()]
-    assert checked == ["Normal"], "l'etat courant se lit dans le menu"
+    assert checked == ["Normal"], "l'état courant se lit dans le menu"
 
     next(a for a in purities.actions() if a.text() == "Pur").trigger()
     node = window.document.graph.node(node_id)
@@ -286,7 +286,7 @@ def test_the_two_doors_push_the_same_command(window: MainWindow) -> None:
     table_step = window.document.undo_stack.command(window.document.undo_stack.count() - 1)
     assert canvas_step is not None
     assert table_step is not None
-    assert canvas_step.text() == table_step.text(), "la meme commande, au meme libelle"
+    assert canvas_step.text() == table_step.text(), "la même commande, au même libellé"
 
 
 def test_a_machine_row_offers_no_purity(window: MainWindow) -> None:
@@ -347,4 +347,4 @@ def test_enter_places_the_highlighted_entry(window: MainWindow) -> None:
     QTest.keyClick(palette.list, Qt.Key.Key_Return)
 
     assert len(window.document.graph.nodes) == 1
-    assert window.item_card is None, "Entree pose, elle n'ouvre pas la fiche"
+    assert window.item_card is None, "Entrée pose, elle n'ouvre pas la fiche"

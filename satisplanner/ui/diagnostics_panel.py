@@ -164,7 +164,7 @@ def _row_for(finding: Diagnostic) -> QListWidgetItem:
 
 def _empty_row(report: FactoryReport | None) -> QListWidgetItem:
     if report is None or not report.nodes:
-        text = "Rien a signaler : l'usine est vide."
+        text = "Rien à signaler : l'usine est vide."
     elif not report.diagnostics:
         text = "Aucun diagnostic : l'usine est nominale."
     else:

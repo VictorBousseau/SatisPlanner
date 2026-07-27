@@ -126,7 +126,7 @@ def test_moving_a_node_never_runs_the_engine(window: MainWindow, qtbot: QtBot) -
     window.scene.end_move()
     qtbot.wait(SOLVE_DELAY_MS * 3)
 
-    assert reports == [], "un deplacement ne doit declencher aucune resolution"
+    assert reports == [], "un déplacement ne doit declencher aucune résolution"
 
 
 def test_moving_a_node_never_resets_the_table(window: MainWindow, qtbot: QtBot) -> None:
@@ -142,7 +142,7 @@ def test_moving_a_node_never_resets_the_table(window: MainWindow, qtbot: QtBot) 
     window.scene.end_move()
     qtbot.wait(SOLVE_DELAY_MS * 3)
 
-    assert resets == [], "un deplacement ne doit pas reinitialiser le tableau"
+    assert resets == [], "un déplacement ne doit pas reinitialiser le tableau"
 
 
 def test_a_move_is_still_undoable_and_still_moves_the_item(window: MainWindow) -> None:
@@ -334,7 +334,7 @@ def test_a_saturated_line_still_gets_its_companion(
     assert _fixed_points(load_graph("belt_saturation"), game_data, monkeypatch) == 2
     report = engine.solve(load_graph("belt_saturation"), game_data)
     saturated = [edge for edge in report.edges if edge.is_saturated]
-    assert saturated, "cette fixture existe pour sa ligne saturee"
+    assert saturated, "cette fixture existe pour sa ligne saturée"
     assert saturated[0].desired_rate_per_minute is not None
 
 
@@ -377,7 +377,7 @@ def test_a_resolution_stays_within_its_ceiling(game_data: GameData, size: int) -
     elapsed = _median(lambda: engine.solve(graph, game_data), repeats=3)
     ceiling = MEASURED_SOLVE_MS[size] * MARGIN
     assert elapsed < ceiling, (
-        f"resolution de {size} noeuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
+        f"résolution de {size} noeuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
         f"(banc version {BENCHMARK_VERSION})"
     )
 
@@ -402,7 +402,7 @@ def test_an_edit_stays_within_its_ceiling(window: MainWindow, size: int) -> None
     elapsed = _median(one_edit, repeats=3)
     ceiling = MEASURED_EDIT_MS[size] * MARGIN
     assert elapsed < ceiling, (
-        f"edition sur {size} noeuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
+        f"édition sur {size} noeuds en {elapsed:.0f} ms, plafond {ceiling:.0f} ms "
         f"(banc version {BENCHMARK_VERSION})"
     )
 
@@ -427,7 +427,7 @@ def test_a_move_stays_within_its_ceiling(window: MainWindow, size: int) -> None:
     elapsed = _median(one_move)
     ceiling = MEASURED_MOVE_MS[size] * MARGIN
     assert elapsed < ceiling, (
-        f"deplacement sur {size} noeuds en {elapsed:.1f} ms, plafond {ceiling:.1f} ms "
+        f"déplacement sur {size} noeuds en {elapsed:.1f} ms, plafond {ceiling:.1f} ms "
         f"(banc version {BENCHMARK_VERSION})"
     )
 
@@ -460,7 +460,7 @@ def test_a_move_does_not_grow_with_the_size_of_the_factory(window: MainWindow) -
     # Ten times the nodes. Three times the cost is already far more slack than a
     # constant-time operation needs, and a hundredth of what proportional would be.
     assert large < small * 3.0 + 1.0, (
-        f"un deplacement coute {small:.1f} ms a 50 noeuds et {large:.1f} ms a 500 : "
+        f"un déplacement coute {small:.1f} ms a 50 noeuds et {large:.1f} ms a 500 : "
         f"il suit la taille de l'usine, ce qu'il ne doit pas faire"
     )
 
@@ -492,4 +492,4 @@ def test_the_generated_factories_are_what_the_thresholds_were_measured_on(
     assert report.converged
     assert report.sustained is not None, "il faut un tampon qui se vide"
     assert len([edge for edge in report.edges if edge.is_saturated]) == 1
-    assert benchmark_graph(50) == graph, "le generateur doit etre deterministe"
+    assert benchmark_graph(50) == graph, "le générateur doit être deterministe"

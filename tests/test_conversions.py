@@ -34,7 +34,7 @@ def test_stack_sizes() -> None:
 
 
 def test_a_zero_cycle_time_is_refused_rather_than_dividing_by_zero() -> None:
-    with pytest.raises(ValueError, match="duree de cycle"):
+    with pytest.raises(ValueError, match="durée de cycle"):
         conversions.rate_per_minute(1, 0, ItemForm.SOLID)
 
 

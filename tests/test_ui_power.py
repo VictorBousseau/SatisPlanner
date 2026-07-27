@@ -110,7 +110,7 @@ def test_the_node_shows_the_fuel_and_the_water_as_two_input_ports(
     item = window.scene.nodes[node_id]
     ports = item.ports()
     assert [port.item_class for port in ports] == ["Desc_Coal_C", "Desc_Water_C"]
-    assert not any(port.is_output for port in ports), "l'electricite n'est pas une ligne"
+    assert not any(port.is_output for port in ports), "l'électricité n'est pas une ligne"
 
 
 def test_a_fuel_generator_has_no_water_port(window: MainWindow) -> None:
@@ -159,7 +159,7 @@ def test_a_fuel_the_building_refuses_is_refused_out_loud(window: MainWindow) -> 
     node = window.document.graph.node(node_id)
     assert isinstance(node, GeneratorNode)
     assert node.fuel_class == "Desc_Coal_C", "rien n'a bouge"
-    assert complaints and "ne brule pas ce carburant" in complaints[-1]
+    assert complaints and "ne brûle pas ce carburant" in complaints[-1]
 
 
 def test_the_table_shows_and_edits_the_fuel(window: MainWindow) -> None:
@@ -168,7 +168,7 @@ def test_the_table_shows_and_edits_the_fuel(window: MainWindow) -> None:
     row = model.row_of(node_id)
     assert row is not None
     assert model.index(row, COLUMN_FUEL).data() == "Charbon"
-    assert model.index(row, COLUMN_QUANTITY).data() == "1 generateur(s)"
+    assert model.index(row, COLUMN_QUANTITY).data() == "1 générateur(s)"
 
     assert model.setData(model.index(row, COLUMN_FUEL), "Desc_CompactedCoal_C")
     assert model.index(row, COLUMN_FUEL).data() == "Charbon compacté"
@@ -254,7 +254,7 @@ def test_the_report_shows_both_numbers_side_by_side(window: MainWindow) -> None:
     place_generator(window)
     window.document.solve_now()
     html = window.totals_panel.html()
-    assert "MW consommes" in html
+    assert "MW consommés" in html
     assert "MW produits" in html
 
 
@@ -278,8 +278,8 @@ def test_the_report_names_the_deficit_and_says_it_brides_nothing(
     assert report.has_power_deficit
     html = window.totals_panel.html()
     assert "MW manquants" in html
-    assert "ne bride aucun debit" in html
-    assert "coupe tout le reseau" in html
+    assert "ne bride aucun débit" in html
+    assert "coupe tout le réseau" in html
 
 
 def test_the_help_states_that_electricity_is_a_counter(window: MainWindow) -> None:
@@ -287,7 +287,7 @@ def test_the_help_states_that_electricity_is_a_counter(window: MainWindow) -> No
     del window
     joined = " ".join(MODELLING_NOTES)
     assert "compteur, pas une contrainte" in joined
-    assert "disjoncte" in joined or "reseau" in joined
+    assert "disjoncte" in joined or "réseau" in joined
 
 
 def test_the_help_owns_up_to_counting_idle_machines(window: MainWindow) -> None:

@@ -72,7 +72,7 @@ def test_the_visible_part_of_the_report_stays_short(tmp_path: Path) -> None:
 
     assert "Traceback" not in report.full_message
     assert "ValueError : un tampon inconnu" in report.full_message, (
-        "la ligne de l'exception doit etre lisible sans deplier quoi que ce soit"
+        "la ligne de l'exception doit être lisible sans deplier quoi que ce soit"
     )
     assert str(logging_setup.current_log_path()) in report.full_message
     assert "enregistrez-la sous un autre nom" in report.message
@@ -138,7 +138,7 @@ def test_an_uncaught_exception_is_logged_and_shown(tmp_path: Path) -> None:
 
     logging.shutdown()
     written = path.read_text(encoding="utf-8")
-    assert "exception non rattrapee" in written
+    assert "exception non rattrapée" in written
     # The traceback belongs in the file, so that it survives the box being closed...
     assert "Traceback" in written
     # ...and behind the button, so that it can be read without going to look for it.
@@ -165,7 +165,7 @@ def test_a_reporter_that_fails_does_not_take_the_process_with_it(tmp_path: Path)
     assert path is not None
 
     def broken(_report: logging_setup.CrashReport) -> None:
-        msg = "la fenetre est deja detruite"
+        msg = "la fenêtre est déjà detruite"
         raise RuntimeError(msg)
 
     logging_setup.install_excepthook(broken)
@@ -189,5 +189,5 @@ def test_the_exit_code_is_always_recorded(tmp_path: Path) -> None:
     logging_setup.log_exit(3)
     logging.shutdown()
     written = path.read_text(encoding="utf-8")
-    assert "arret normal" in written
-    assert "arret avec le code 3" in written
+    assert "arrêt normal" in written
+    assert "arrêt avec le code 3" in written

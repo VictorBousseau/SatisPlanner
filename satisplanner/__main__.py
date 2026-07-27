@@ -121,7 +121,7 @@ def _show_self_check(window: object, passed: bool, text: str) -> None:
 
     box = QMessageBox(window if isinstance(window, QWidget) else None)
     box.setIcon(QMessageBox.Icon.Information if passed else QMessageBox.Icon.Critical)
-    box.setWindowTitle("Verification de l'exécutable")
+    box.setWindowTitle("Vérification de l'exécutable")
     box.setText(
         "Toutes les vérifications sont passées." if passed else "Une vérification a échoué."
     )

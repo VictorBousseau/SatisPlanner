@@ -135,7 +135,7 @@ def test_a_solid_on_a_pipe_is_refused_before_the_line_exists(scene: FactoryScene
     reason = can_connect(scene.document, mine, smelter, "Desc_OreIron_C", PIPE_MK1)
     assert reason is not None
     assert "convoyeur" in reason
-    assert len(scene.document.graph.edges) == before, "rien ne doit avoir ete cree"
+    assert len(scene.document.graph.edges) == before, "rien ne doit avoir été créé"
 
 
 def test_a_fluid_on_a_belt_is_refused(scene: FactoryScene) -> None:
@@ -158,7 +158,7 @@ def test_the_same_line_cannot_be_drawn_twice(scene: FactoryScene) -> None:
     mine, smelter = iron_chain(scene)
     scene.connect_nodes(mine, smelter, "Desc_OreIron_C")
     reason = can_connect(scene.document, mine, smelter, "Desc_OreIron_C", BELT_MK1)
-    assert reason == "cette ligne existe deja"
+    assert reason == "cette ligne existe déjà"
 
 
 def test_connecting_is_undoable(scene: FactoryScene) -> None:

@@ -182,7 +182,7 @@ def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any
         msg = (
             f"ce fichier a été écrit par une version plus récente de SatisPlanner "
             f"(schéma {schema_version}, cette version lit jusqu'au {SCHEMA_VERSION}). "
-            f"Mettez l'application a jour pour l'ouvrir."
+            f"Mettez l'application à jour pour l'ouvrir."
         )
         raise FactoryFileError(msg)
 
@@ -286,7 +286,7 @@ def _document_from(raw_graph: str, raw_manifest: str) -> LoadedFactory:
 
     if manifest.game_version not in ("?", GAME_VERSION):
         warnings.append(
-            f"ce fichier a été enregistré avec les donnees du jeu {manifest.game_version}, "
+            f"ce fichier a été enregistré avec les données du jeu {manifest.game_version}, "
             f"alors que cette version embarque celles de la {GAME_VERSION} : "
             f"les recettes ont pu changer, verifiez les débits."
         )
@@ -387,12 +387,12 @@ def describe_unknown(missing: Sequence[str], removed: Sequence[str] = ()) -> str
     listed = ", ".join(missing[:8])
     more = f" et {len(missing) - 8} autre(s)" if len(missing) > 8 else ""
     sentence = (
-        f"{len(missing)} classe(s) de cette usine sont absentes du catalogue embarque : "
+        f"{len(missing)} classe(s) de cette usine sont absentes du catalogue embarqué : "
         f"{listed}{more}."
     )
     if removed:
         sentence += (
-            f" Les {len(removed)} noeud(s) concerne(s) ont été retire(s) "
+            f" Les {len(removed)} noeud(s) concerné(s) ont été retiré(s) "
             f"({', '.join(removed[:8])}) ; le reste de l'usine est intact."
         )
     return sentence
@@ -432,7 +432,7 @@ def decode_share_code(code: str) -> LoadedFactory:
         )
         raise FactoryFileError(msg)
     if len(cleaned) > MAX_SHARE_CODE_LENGTH:
-        msg = "ce code est trop long pour être une usine : il a probablement été mal colle."
+        msg = "ce code est trop long pour être une usine : il a probablement été mal collé."
         raise FactoryFileError(msg)
 
     body = cleaned[len(SHARE_PREFIX) :]
@@ -445,7 +445,7 @@ def decode_share_code(code: str) -> LoadedFactory:
     try:
         raw = _decompress(compressed)
     except zlib.error as exc:
-        msg = "ce code est tronqué ou corrompu : les donnees compressées sont incompletes."
+        msg = "ce code est tronqué ou corrompu : les données compressées sont incomplètes."
         raise FactoryFileError(msg) from exc
 
     try:
@@ -470,7 +470,7 @@ def _decompress(compressed: bytes) -> bytes:
     machine = zlib.decompressobj()
     raw = machine.decompress(compressed, MAX_DECOMPRESSED_BYTES)
     if machine.unconsumed_tail:
-        msg = "donnees décompressées au-delà de la limite acceptée"
+        msg = "données décompressées au-delà de la limite acceptée"
         raise zlib.error(msg)
     if not machine.eof:
         msg = "flux compresse incomplet"

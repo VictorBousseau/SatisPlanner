@@ -65,7 +65,7 @@ def test_main_window_builds_and_shows(qtbot: QtBot) -> None:
     assert built.isVisible()
     assert "SatisPlanner" in built.windowTitle()
     assert built.centralWidget() is built.view
-    assert built.game_data.recipes, "le catalogue embarque doit etre lisible sans le jeu"
+    assert built.game_data.recipes, "le catalogue embarque doit être lisible sans le jeu"
     assert built.document.is_modified is False
     built.scene.dispose()
     built.close()

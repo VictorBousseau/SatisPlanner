@@ -95,8 +95,8 @@ def test_a_recipe_shows_its_machine_its_cycle_and_its_power(game_data: GameData)
     assert "Constructeur" in page
     assert "cycle de" in page
     assert "MW" in page
-    assert "/ cycle" in page, "les quantites par cycle"
-    assert "/min" in page, "et les debits"
+    assert "/ cycle" in page, "les quantités par cycle"
+    assert "/min" in page, "et les débits"
 
 
 def test_a_byproduct_is_named_as_one(game_data: GameData) -> None:
@@ -122,7 +122,7 @@ def test_the_used_in_section_names_the_machine_and_the_quantity(game_data: GameD
 
 def test_the_raw_cost_is_shown_and_labelled_indicative(game_data: GameData) -> None:
     page = card_html(game_data, "Desc_IronPlate_C")
-    cost = page[page.index("Cout en ressources brutes") :]
+    cost = page[page.index("Coût en ressources brutes") :]
     assert "Minerai de fer" in cost
     assert "1,5" in cost
     assert "Indicatif" in cost
@@ -228,7 +228,7 @@ def test_the_card_is_hidden_rather_than_destroyed(window: MainWindow) -> None:
     card.close()
 
     window.show_item_card("Desc_IronPlate_C")
-    assert window.item_card is card, "la meme fenetre est reutilisee"
+    assert window.item_card is card, "la même fenêtre est reutilisee"
     assert card.back_button.isEnabled() is True
 
 
