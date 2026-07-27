@@ -170,8 +170,8 @@ def build_report(exception: BaseException) -> CrashReport:
         title="Erreur inattendue",
         message=(
             "SatisPlanner a rencontre une erreur inattendue.\n\n"
-            "L'usine en cours n'a pas ete modifiee par cette erreur ; si elle contient "
-            "du travail non enregistre, enregistrez-la sous un autre nom avant de "
+            "L'usine en cours n'a pas été modifiée par cette erreur ; si elle contient "
+            "du travail non enregistré, enregistrez-la sous un autre nom avant de "
             "continuer."
         ),
         summary=f"{name} : {text}" if text else name,
@@ -203,7 +203,7 @@ def install_excepthook(show: Callable[[CrashReport], None] | None = None) -> Non
             sys.__excepthook__(exc_type, exception, traceback)
             return
         logging.getLogger("satisplanner").critical(
-            "exception non rattrapee", exc_info=(exc_type, exception, traceback)
+            "exception non rattrapée", exc_info=(exc_type, exception, traceback)
         )
         if show is None:
             return
@@ -218,6 +218,6 @@ def install_excepthook(show: Callable[[CrashReport], None] | None = None) -> Non
 def log_exit(code: int) -> None:
     """Record how the run ended, so a log that stops is never ambiguous."""
     if code == 0:
-        logger.info("arret normal")
+        logger.info("arrêt normal")
     else:
-        logger.warning("arret avec le code %d", code)
+        logger.warning("arrêt avec le code %d", code)

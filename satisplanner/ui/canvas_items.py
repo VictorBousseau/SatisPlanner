@@ -100,7 +100,7 @@ EDGE_LABEL_WIDTH: Final = 130.0
 # Port item class of a buffer whose content is not decided yet: it accepts whatever
 # arrives first, and the graph infers the item from that line.
 ANY_ITEM: Final = ""
-ANY_ITEM_LABEL: Final = "contenu indetermine"
+ANY_ITEM_LABEL: Final = "contenu indéterminé"
 
 
 @dataclass(frozen=True)
@@ -600,8 +600,8 @@ class NodeItem(QGraphicsItem):
                 ]
             case WaterExtractorNode() as pump:
                 return [
-                    Segment(f"{formatting.number(pump.count)} unite(s)", Field.QUANTITY),
-                    Segment(" — debit fixe"),
+                    Segment(f"{formatting.number(pump.count)} unité(s)", Field.QUANTITY),
+                    Segment(" — débit fixe"),
                     *_clock_segments(pump.clock_speed),
                 ]
             case GeneratorNode() as generator:
@@ -611,7 +611,7 @@ class NodeItem(QGraphicsItem):
                 power = self.game_data.generators[generator.generator_class].power_mw
                 total = formatting.number(power * generator.count)
                 return [
-                    Segment(f"{formatting.number(generator.count)} unite(s)", Field.QUANTITY),
+                    Segment(f"{formatting.number(generator.count)} unité(s)", Field.QUANTITY),
                     Segment(" — "),
                     Segment(self.game_data.item(generator.fuel_class).display_name_fr, Field.FUEL),
                     Segment(f" — {total} MW produits"),
@@ -625,7 +625,7 @@ class NodeItem(QGraphicsItem):
             case StorageNode() as storage:
                 return self._storage_segments(storage)
             case OutputNode() as output:
-                return [Segment("rejet assume" if output.is_sink else "sortie de l'usine")]
+                return [Segment("rejet assumé" if output.is_sink else "sortie de l'usine")]
 
     def subtitle_layout(self) -> SubtitleLayout:
         """The measured subtitle, from the cache when the text has not changed.
@@ -730,9 +730,9 @@ class NodeItem(QGraphicsItem):
         nothing a reader needed and makes the line fit; the cuts do the rest.
         """
         if self.content_item is None:
-            return [Segment("tampon — contenu indetermine")]
+            return [Segment("tampon — contenu indéterminé")]
         name = self.game_data.item(self.content_item).display_name_fr
-        origin = "fixe" if storage.item_class else "deduit"
+        origin = "fixe" if storage.item_class else "déduit"
         return [
             Segment("tampon — "),
             Segment(name),
@@ -1045,10 +1045,10 @@ class NodeItem(QGraphicsItem):
         if port is None:
             self.setToolTip(self._node_tooltip())
         elif port.item_class == ANY_ITEM:
-            self.setToolTip("entree : n'importe quel item, le tampon prend celui qui arrive")
+            self.setToolTip("entrée : n'importe quel item, le tampon prend celui qui arrive")
         else:
             item = self.game_data.item(port.item_class)
-            side = "sortie" if port.is_output else "entree"
+            side = "sortie" if port.is_output else "entrée"
             self.setToolTip(f"{side} : {item.display_name_fr} ({formatting.unit(item)})")
         super().hoverMoveEvent(event)
 

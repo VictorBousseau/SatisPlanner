@@ -44,9 +44,9 @@ def install_french_translations() -> bool:
     translator = QTranslator(app)
     directory = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
     if not translator.load(TRANSLATION_NAME, directory):
-        logger.warning("traductions Qt francaises absentes de %s", directory)
+        logger.warning("traductions Qt françaises absentes de %s", directory)
         return False
     app.installTranslator(translator)
     _translator = translator
-    logger.debug("traductions Qt francaises installees")
+    logger.debug("traductions Qt françaises installees")
     return True

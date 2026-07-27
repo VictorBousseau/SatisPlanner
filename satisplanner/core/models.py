@@ -348,13 +348,13 @@ class GameData(BaseModel):
         return _get(self.recipes, class_name, "recette")
 
     def building(self, class_name: str) -> Building:
-        return _get(self.buildings, class_name, "batiment")
+        return _get(self.buildings, class_name, "bâtiment")
 
     def extractor(self, class_name: str) -> Extractor:
         return _get(self.extractors, class_name, "extracteur")
 
     def generator(self, class_name: str) -> Generator:
-        return _get(self.generators, class_name, "generateur")
+        return _get(self.generators, class_name, "générateur")
 
     def storage(self, class_name: str) -> Storage:
         return _get(self.storages, class_name, "stockage")

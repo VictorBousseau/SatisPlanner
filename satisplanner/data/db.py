@@ -237,7 +237,7 @@ def build_database(dataset: GameDataset, path: Path) -> None:
         # database whose recipes point at nothing.
         violations = connection.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
-            msg = f"integrite referentielle violee : {violations[:5]}"
+            msg = f"intégrité référentielle violée : {violations[:5]}"
             raise RuntimeError(msg)
 
 

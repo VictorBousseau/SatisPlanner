@@ -188,7 +188,7 @@ class ItemPalette:
         try:
             payload = json.loads(text)
         except (TypeError, ValueError):
-            logger.debug("palette illisible, retour aux couleurs par defaut")
+            logger.debug("palette illisible, retour aux couleurs par défaut")
             return cls()
         if not isinstance(payload, dict):
             return cls()

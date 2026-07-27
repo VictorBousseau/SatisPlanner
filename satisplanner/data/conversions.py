@@ -60,7 +60,7 @@ def rate_per_minute(raw_amount: float, cycle_seconds: float, form: ItemForm) -> 
     -> 20 items/min; 1000 L of heavy oil residue over 6 s -> 10 m3/min.
     """
     if cycle_seconds <= 0:
-        msg = f"duree de cycle invalide : {cycle_seconds}"
+        msg = f"durée de cycle invalide : {cycle_seconds}"
         raise ValueError(msg)
     return normalise_amount(raw_amount, form) * SECONDS_PER_MINUTE / cycle_seconds
 

@@ -324,7 +324,7 @@ class PreferencesDialog(QDialog):
         self.max_recent.setRange(0, MAX_RECENT_LIMIT)
 
         self.alternates = QCheckBox("Afficher les recettes alternatives", self)
-        self.events = QCheckBox("Afficher les objets d'evenement (FICSMAS)", self)
+        self.events = QCheckBox("Afficher les objets d'événement (FICSMAS)", self)
         self.deployed = QCheckBox("Dessiner les machines une par une sur les noeuds", self)
         self.deployed_ceiling = QSpinBox(self)
         self.deployed_ceiling.setRange(*DEPLOYED_CEILING_RANGE)
@@ -339,7 +339,7 @@ class PreferencesDialog(QDialog):
         self.export_palette.clicked.connect(self._export_palette)
         self.import_palette = QPushButton("Importer...", self)
         self.import_palette.clicked.connect(self._import_palette)
-        self.reset_palette = QPushButton("Tout remettre par defaut", self)
+        self.reset_palette = QPushButton("Tout remettre par défaut", self)
         self.reset_palette.clicked.connect(self._reset_palette)
         palette_buttons = QHBoxLayout()
         palette_buttons.setContentsMargins(0, 0, 0, 0)
@@ -355,10 +355,10 @@ class PreferencesDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         form = QFormLayout()
-        form.addRow("Convoyeur par defaut", self.belt)
-        form.addRow("Tuyauterie par defaut", self.pipe)
+        form.addRow("Convoyeur par défaut", self.belt)
+        form.addRow("Tuyauterie par défaut", self.pipe)
         form.addRow("Dossier d'icones", icon_row)
-        form.addRow("Fichiers recents conserves", self.max_recent)
+        form.addRow("Fichiers récents conserves", self.max_recent)
         form.addRow(self.alternates)
         form.addRow(self.events)
         form.addRow(self.deployed)
@@ -369,7 +369,7 @@ class PreferencesDialog(QDialog):
 
         hint = QLabel(
             f"{indexed_icons} fichier(s) d'icone indexe(s). Les classes sans fichier sont "
-            "dessinees par l'application ; un dossier d'icones est facultatif.\n"
+            "dessinées par l'application ; un dossier d'icones est facultatif.\n"
             "Le changement de dossier est pris en compte immediatement.",
             self,
         )
@@ -468,7 +468,7 @@ class PreferencesDialog(QDialog):
         self.preferences.deployed_rendering = self.deployed.isChecked()
         self.preferences.deployed_ceiling = self.deployed_ceiling.value()
         self.preferences.item_palette = self.colours
-        logger.debug("preferences enregistrees")
+        logger.debug("préférences enregistrées")
         super().accept()
 
 

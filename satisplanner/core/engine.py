@@ -362,7 +362,7 @@ class _Solver:
                 break
         else:
             logger.warning(
-                "point fixe non convergent apres %d iterations", constants.MAX_ITERATIONS
+                "point fixe non convergent après %d itérations", constants.MAX_ITERATIONS
             )
 
     def _step(self, *, damped: bool) -> float:

@@ -321,7 +321,7 @@ def _endpoints(game_data: GameData) -> list[PaletteEntry]:
         for kind, prefix in (
             (EntryKind.EXTERNAL, "Entree"),
             (EntryKind.OUTPUT, "Sortie"),
-            (EntryKind.SINK, "Rejet assume"),
+            (EntryKind.SINK, "Rejet assumé"),
         ):
             entries.append(
                 PaletteEntry(
@@ -340,9 +340,9 @@ def _endpoints(game_data: GameData) -> list[PaletteEntry]:
 def _endpoint_detail(kind: EntryKind) -> str:
     match kind:
         case EntryKind.EXTERNAL:
-            return "apport venu d'ailleurs, debit a saisir"
+            return "apport venu d'ailleurs, débit a saisir"
         case EntryKind.SINK:
-            return "torchere ou puits AWESOME, absorbe sans limite"
+            return "torchère ou puits AWESOME, absorbe sans limite"
         case _:
             return "ce qui sort de l'usine"
 

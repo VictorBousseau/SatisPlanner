@@ -31,28 +31,28 @@ ICON_FILENAME: Final = "satisplanner.ico"
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="satisplanner",
-        description="Planificateur d'usines theoriques pour Satisfactory.",
+        description="Planificateur d'usines théoriques pour Satisfactory.",
     )
     parser.add_argument("--version", action="version", version=f"SatisPlanner {__version__}")
-    parser.add_argument("--verbose", "-v", action="store_true", help="journalisation detaillee")
+    parser.add_argument("--verbose", "-v", action="store_true", help="journalisation détaillée")
     parser.add_argument(
         "--startup-probe",
         action="store_true",
-        help="afficher la fenetre, mesurer le temps de demarrage, puis quitter",
+        help="afficher la fenêtre, mesurer le temps de démarrage, puis quitter",
     )
     parser.add_argument(
-        "--no-splash", action="store_true", help="ne pas afficher l'ecran de demarrage"
+        "--no-splash", action="store_true", help="ne pas afficher l'écran de démarrage"
     )
     parser.add_argument(
         "--self-check",
         action="store_true",
-        help="derouler la liste de verification de l'executable, puis quitter",
+        help="dérouler la liste de vérification de l'exécutable, puis quitter",
     )
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="avec --self-check : n'afficher aucune fenetre, se contenter du rapport "
-        "ecrit et du code de sortie",
+        help="avec --self-check : n'afficher aucune fenêtre, se contenter du rapport "
+        "écrit et du code de sortie",
     )
     return parser.parse_args(argv)
 
@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     level = logging.DEBUG if args.verbose else logging.INFO
     log_path = logging_setup.configure(level=level)
-    logger.info("SatisPlanner %s - demarrage (journal : %s)", __version__, log_path)
+    logger.info("SatisPlanner %s - démarrage (journal : %s)", __version__, log_path)
 
     from PySide6.QtCore import QTimer
     from PySide6.QtGui import QIcon
@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     window = MainWindow()
     window.show()
     finish_splash(splash, window)
-    logger.info("interface prete en %.2f s", time.perf_counter() - _IMPORTED_AT)
+    logger.info("interface prête en %.2f s", time.perf_counter() - _IMPORTED_AT)
 
     if args.self_check:
         from satisplanner.ui.self_check import run_self_check
@@ -121,9 +121,9 @@ def _show_self_check(window: object, passed: bool, text: str) -> None:
 
     box = QMessageBox(window if isinstance(window, QWidget) else None)
     box.setIcon(QMessageBox.Icon.Information if passed else QMessageBox.Icon.Critical)
-    box.setWindowTitle("Verification de l'executable")
+    box.setWindowTitle("Verification de l'exécutable")
     box.setText(
-        "Toutes les verifications sont passees." if passed else "Une verification a echoue."
+        "Toutes les vérifications sont passées." if passed else "Une vérification a échoué."
     )
     box.setDetailedText(text)
     box.exec()

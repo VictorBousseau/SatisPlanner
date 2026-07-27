@@ -104,7 +104,7 @@ class Manifest:
         try:
             version = int(raw.get("schema_version", SCHEMA_VERSION))
         except (TypeError, ValueError) as exc:
-            msg = f"version de schema illisible dans le manifeste : {raw.get('schema_version')!r}"
+            msg = f"version de schéma illisible dans le manifeste : {raw.get('schema_version')!r}"
             raise FactoryFileError(msg) from exc
         return cls(
             application_version=str(raw.get("application_version", "?")),
@@ -180,8 +180,8 @@ def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any
     """
     if schema_version > SCHEMA_VERSION:
         msg = (
-            f"ce fichier a ete ecrit par une version plus recente de SatisPlanner "
-            f"(schema {schema_version}, cette version lit jusqu'au {SCHEMA_VERSION}). "
+            f"ce fichier a été écrit par une version plus récente de SatisPlanner "
+            f"(schéma {schema_version}, cette version lit jusqu'au {SCHEMA_VERSION}). "
             f"Mettez l'application a jour pour l'ouvrir."
         )
         raise FactoryFileError(msg)
@@ -192,12 +192,12 @@ def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any
         step = MIGRATIONS.get(current)
         if step is None:  # pragma: no cover - unreachable while MIGRATIONS is empty
             msg = (
-                f"aucune migration connue depuis le schema {current} : "
-                f"le fichier ne peut pas etre converti."
+                f"aucune migration connue depuis le schéma {current} : "
+                f"le fichier ne peut pas être converti."
             )
             raise FactoryFileError(msg)
         payload = step(payload)
-        notes.append(f"document converti du schema {current} au schema {current + 1}")
+        notes.append(f"document converti du schéma {current} au schéma {current + 1}")
         current += 1
     return payload, notes
 
@@ -223,7 +223,7 @@ def save(path: Path, graph: FactoryGraph, thumbnail: bytes | None = None) -> Man
         )
         if thumbnail:
             archive.writestr(THUMBNAIL_MEMBER, thumbnail)
-    logger.info("usine enregistree : %s", path)
+    logger.info("usine enregistrée : %s", path)
     return manifest
 
 
@@ -251,7 +251,7 @@ def load(path: Path) -> LoadedFactory:
             )
             thumbnail = archive.read(THUMBNAIL_MEMBER) if THUMBNAIL_MEMBER in members else None
     except (zipfile.BadZipFile, OSError) as exc:
-        msg = f"{path.name} est illisible ou endommage : {exc}"
+        msg = f"{path.name} est illisible ou endommagé : {exc}"
         raise FactoryFileError(msg) from exc
     except UnicodeDecodeError as exc:
         msg = f"{path.name} contient du texte qui n'est pas de l'UTF-8."
@@ -271,24 +271,24 @@ def _document_from(raw_graph: str, raw_manifest: str) -> LoadedFactory:
         msg = f"le contenu n'est pas du JSON valide : {exc.msg} (ligne {exc.lineno})"
         raise FactoryFileError(msg) from exc
     if not isinstance(payload, dict):
-        msg = "le contenu ne decrit pas une usine : un objet JSON etait attendu."
+        msg = "le contenu ne décrit pas une usine : un objet JSON était attendu."
         raise FactoryFileError(msg)
 
     payload, warnings = migrate(payload, manifest.schema_version)
     try:
         graph = FactoryGraph.model_validate(payload)
     except GraphError as exc:
-        msg = f"l'usine decrite est incoherente : {exc}"
+        msg = f"l'usine décrite est incohérente : {exc}"
         raise FactoryFileError(msg) from exc
     except ValueError as exc:
-        msg = f"l'usine decrite ne respecte pas le format attendu : {_first_line(exc)}"
+        msg = f"l'usine décrite ne respecte pas le format attendu : {_first_line(exc)}"
         raise FactoryFileError(msg) from exc
 
     if manifest.game_version not in ("?", GAME_VERSION):
         warnings.append(
-            f"ce fichier a ete enregistre avec les donnees du jeu {manifest.game_version}, "
+            f"ce fichier a été enregistré avec les donnees du jeu {manifest.game_version}, "
             f"alors que cette version embarque celles de la {GAME_VERSION} : "
-            f"les recettes ont pu changer, verifiez les debits."
+            f"les recettes ont pu changer, verifiez les débits."
         )
     return LoadedFactory(graph=graph, manifest=manifest, warnings=warnings)
 
@@ -392,7 +392,7 @@ def describe_unknown(missing: Sequence[str], removed: Sequence[str] = ()) -> str
     )
     if removed:
         sentence += (
-            f" Les {len(removed)} noeud(s) concerne(s) ont ete retire(s) "
+            f" Les {len(removed)} noeud(s) concerne(s) ont été retire(s) "
             f"({', '.join(removed[:8])}) ; le reste de l'usine est intact."
         )
     return sentence
@@ -423,7 +423,7 @@ def decode_share_code(code: str) -> LoadedFactory:
     """Read a share code back. Every failure mode is a French sentence."""
     cleaned = "".join(code.split())
     if not cleaned:
-        msg = "aucun code n'a ete fourni."
+        msg = "aucun code n'a été fourni."
         raise FactoryFileError(msg)
     if not cleaned.startswith(SHARE_PREFIX):
         msg = (
@@ -432,20 +432,20 @@ def decode_share_code(code: str) -> LoadedFactory:
         )
         raise FactoryFileError(msg)
     if len(cleaned) > MAX_SHARE_CODE_LENGTH:
-        msg = "ce code est trop long pour etre une usine : il a probablement ete mal colle."
+        msg = "ce code est trop long pour être une usine : il a probablement été mal colle."
         raise FactoryFileError(msg)
 
     body = cleaned[len(SHARE_PREFIX) :]
     try:
         compressed = base64.urlsafe_b64decode(_padded(body))
     except (binascii.Error, ValueError) as exc:
-        msg = "ce code est incomplet ou abime : la partie codee n'a pas pu etre relue."
+        msg = "ce code est incomplet ou abîmé : la partie codée n'a pas pu être relue."
         raise FactoryFileError(msg) from exc
 
     try:
         raw = _decompress(compressed)
     except zlib.error as exc:
-        msg = "ce code est tronque ou corrompu : les donnees compressees sont incompletes."
+        msg = "ce code est tronqué ou corrompu : les donnees compressées sont incompletes."
         raise FactoryFileError(msg) from exc
 
     try:
@@ -470,7 +470,7 @@ def _decompress(compressed: bytes) -> bytes:
     machine = zlib.decompressobj()
     raw = machine.decompress(compressed, MAX_DECOMPRESSED_BYTES)
     if machine.unconsumed_tail:
-        msg = "donnees decompressees au-dela de la limite acceptee"
+        msg = "donnees décompressées au-delà de la limite acceptée"
         raise zlib.error(msg)
     if not machine.eof:
         msg = "flux compresse incomplet"

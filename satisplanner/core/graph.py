@@ -282,15 +282,15 @@ class FactoryGraph(BaseModel):
         edge_ids: set[str] = set()
         for edge in self.edges:
             if edge.id in edge_ids:
-                msg = f"identifiant d'arete en doublon : {edge.id}"
+                msg = f"identifiant d'arête en doublon : {edge.id}"
                 raise GraphError(msg)
             edge_ids.add(edge.id)
             for endpoint in (edge.source, edge.target):
                 if endpoint not in seen:
-                    msg = f"l'arete {edge.id} reference un noeud inconnu : {endpoint}"
+                    msg = f"l'arête {edge.id} référence un noeud inconnu : {endpoint}"
                     raise GraphError(msg)
             if edge.source == edge.target:
-                msg = f"l'arete {edge.id} boucle sur le noeud {edge.source}"
+                msg = f"l'arête {edge.id} boucle sur le noeud {edge.source}"
                 raise GraphError(msg)
         return self
 
@@ -316,7 +316,7 @@ class FactoryGraph(BaseModel):
     def edge(self, edge_id: str) -> Edge:
         found = self._edges_by_id().get(edge_id)
         if found is None:
-            msg = f"arete inconnue : {edge_id}"
+            msg = f"arête inconnue : {edge_id}"
             raise GraphError(msg)
         return found
 
@@ -384,7 +384,7 @@ class FactoryGraph(BaseModel):
         )
         check_edge(self, edge, game_data)
         if edge.id in self._edges_by_id():
-            msg = f"identifiant d'arete en doublon : {edge.id}"
+            msg = f"identifiant d'arête en doublon : {edge.id}"
             raise GraphError(msg)
         self.edges.append(edge)
         return edge
@@ -487,14 +487,14 @@ def _check_port_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> 
     if isinstance(target, MachineNode):
         items = {other.item_class for other in graph.incoming(target.id)} | {edge.item_class}
         if len(items) > MAX_MACHINE_INPUTS:
-            msg = f"le noeud {target.id} depasse {MAX_MACHINE_INPUTS} entrees distinctes"
+            msg = f"le noeud {target.id} dépassé {MAX_MACHINE_INPUTS} entrées distinctes"
             raise GraphError(msg)
 
     source = graph.node(edge.source)
     if isinstance(source, MachineNode):
         items = {other.item_class for other in graph.outgoing(source.id)} | {edge.item_class}
         if len(items) > MAX_MACHINE_OUTPUTS:
-            msg = f"le noeud {source.id} depasse {MAX_MACHINE_OUTPUTS} sorties distinctes"
+            msg = f"le noeud {source.id} dépassé {MAX_MACHINE_OUTPUTS} sorties distinctes"
             raise GraphError(msg)
     _ = game_data  # kept for symmetry with check_edge's signature
 
@@ -616,7 +616,7 @@ def condensation_order(graph: FactoryGraph) -> list[tuple[str, ...]]:
         ready.sort(key=lambda index: components[index])
 
     if len(order) != len(components):  # pragma: no cover - Tarjan makes this impossible
-        msg = "le graphe condense contient un cycle, ce qui est impossible"
+        msg = "le graphe condensé contient un cycle, ce qui est impossible"
         raise GraphError(msg)
     return order
 

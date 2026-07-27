@@ -131,7 +131,7 @@ def _recipes(game_data: GameData, item: Item) -> str:
         note = (
             "Ressource brute : elle s'extrait, elle ne se fabrique pas."
             if item.is_raw_resource
-            else "Aucune recette connue dans le perimetre V1."
+            else "Aucune recette connue dans le périmètre V1."
         )
         return f"<h2>Fabrication</h2><p class='muted'>{note}</p>"
     return "<h2>Fabrication</h2>" + "".join(
@@ -205,7 +205,7 @@ def _used_in(game_data: GameData, item: Item) -> str:
     if not used:
         return (
             "<h2>Recettes qui le consomment</h2>"
-            "<p class='muted'>Aucune recette du perimetre V1 ne consomme cet objet.</p>"
+            "<p class='muted'>Aucune recette du périmètre V1 ne consomme cet objet.</p>"
         )
     rows = []
     for recipe in used:
@@ -233,13 +233,13 @@ def _raw_cost(game_data: GameData, item: Item) -> str:
     if not cost.is_complete:
         return (
             "<h2>Cout en ressources brutes</h2>"
-            "<p class='warn'>Calcul abandonne : les recettes standard de cet objet "
-            "bouclent sur elles-memes.</p>"
+            "<p class='warn'>Calcul abandonné : les recettes standard de cet objet "
+            "bouclent sur elles-mêmes.</p>"
             f"<p class='muted'>{escape(cost.cycle_description)}</p>"
         )
     if list(cost.amounts) == [item.class_name]:
         return (
-            "<h2>Cout en ressources brutes</h2><p class='muted'>C'est deja une ressource brute.</p>"
+            "<h2>Cout en ressources brutes</h2><p class='muted'>C'est déjà une ressource brute.</p>"
         )
     rows = "".join(
         f"<tr><td><a href='{ITEM_SCHEME}:{escape(name)}'>"
@@ -252,8 +252,8 @@ def _raw_cost(game_data: GameData, item: Item) -> str:
         f"<p class='muted'>Pour un(e) {escape(item.display_name_fr)} :</p>"
         f"<table>{rows}</table>"
         f"<p class='muted'><b>Indicatif.</b> Le calcul ne suit que les recettes standard "
-        f"et ne credite pas les sous-produits : une recette alternative ou un sous-produit "
-        f"revendu changent le resultat. Pour un chiffre juste, posez l'usine.</p>"
+        f"et ne crédité pas les sous-produits : une recette alternative ou un sous-produit "
+        f"revendu changent le résultat. Pour un chiffre juste, posez l'usine.</p>"
     )
 
 

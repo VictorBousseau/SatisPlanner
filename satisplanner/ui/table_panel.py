@@ -68,7 +68,7 @@ KIND_LABELS: Final[dict[str, str]] = {
 
 LIMITING_LABELS: Final[dict[LimitingFactor, str]] = {
     LimitingFactor.NONE: "—",
-    LimitingFactor.INPUTS: "deficit d'intrants",
+    LimitingFactor.INPUTS: "déficit d'intrants",
     LimitingFactor.OUTPUTS: "contre-pression",
     LimitingFactor.LINE: "ligne trop petite",
     LimitingFactor.BLOCKED: "sous-produit bloque",
@@ -349,7 +349,7 @@ class NodeTableModel(QAbstractTableModel):
         if solution.clock_speed != 1.0:
             lines.append(
                 f"cadence {formatting.percent(solution.clock_speed)}"
-                + (f", {solution.power_shards} eclat(s)" if solution.power_shards else "")
+                + (f", {solution.power_shards} éclat(s)" if solution.power_shards else "")
             )
         for prefix, items in (
             ("manque", solution.starved_items),
@@ -385,7 +385,7 @@ class NodeTableModel(QAbstractTableModel):
     def _through(self, problem: str | None) -> bool:
         """Report what the shared editor said. A refusal leaves the cell as it was."""
         if problem is not None:
-            logger.debug("edition refusee dans le tableau : %s", problem)
+            logger.debug("édition refusée dans le tableau : %s", problem)
             return False
         return True
 

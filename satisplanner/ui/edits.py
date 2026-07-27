@@ -64,7 +64,7 @@ def quantity_of(node: Node) -> Quantity | None:
             # Strictly positive in the model: zero extractors is a deleted node.
             return Quantity("count", "extracteur(s)", minimum=1e-9)
         case GeneratorNode():
-            return Quantity("count", "generateur(s)", minimum=1e-9)
+            return Quantity("count", "générateur(s)", minimum=1e-9)
         case ExternalSourceNode():
             return Quantity("rate_per_minute", "/min")
         case StorageNode():
@@ -164,7 +164,7 @@ def set_purity(document: FactoryDocument, node_id: str, purity: Purity | str) ->
     """
     node = document.graph.node(node_id)
     if not isinstance(node, ResourceNode):
-        return "Seul un gisement a une purete."
+        return "Seul un gisement a une pureté."
     try:
         wanted = Purity(purity)
     except ValueError:
@@ -218,12 +218,12 @@ def set_fuel(document: FactoryDocument, node_id: str, fuel_class: str) -> str | 
     """
     node = document.graph.node(node_id)
     if not isinstance(node, GeneratorNode):
-        return "Seul un generateur a un carburant."
+        return "Seul un générateur a un carburant."
     allowed = dict(fuel_choices(document.game_data, node.generator_class))
     if fuel_class not in allowed:
         building = document.game_data.buildings.get(node.generator_class)
         name = building.display_name_fr if building else node.generator_class
-        return f"{name} ne brule pas ce carburant."
+        return f"{name} ne brûle pas ce carburant."
     if node.fuel_class == fuel_class:
         return None
     document.undo_stack.push(

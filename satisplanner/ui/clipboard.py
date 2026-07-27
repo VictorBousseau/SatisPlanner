@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # Private to the application, so a paste can tell "a SatisPlanner selection" from
 # "some text that happens to look like one".
-CLIPBOARD_MIME: Final = "application/x-satisplanner-selection"
+CLIPBOARD_MIME: Final = "application/x-satisplanner-sélection"
 
 # How far a pasted copy is offset from the original, in scene units. Two grid steps:
 # far enough that the copy is visibly a second object, near enough to stay in view.
@@ -99,5 +99,5 @@ def decode(code: str) -> FactoryGraph | None:
     try:
         return factory_file.decode_share_code(code).graph
     except factory_file.FactoryFileError as exc:
-        logger.debug("presse-papiers refuse : %s", exc)
+        logger.debug("presse-papiers refusé : %s", exc)
         return None

@@ -27,7 +27,7 @@ SEVERITY_LABELS: Final[dict[Severity, str]] = {
 }
 
 # An empty table still needs a row, or it renders as a gap with no explanation.
-_NOTHING: Final = "<tr><td class='muted'>Aucun batiment concerne.</td></tr>"
+_NOTHING: Final = "<tr><td class='muted'>Aucun bâtiment concerne.</td></tr>"
 
 SEVERITY_COLOURS: Final[dict[Severity, str]] = {
     Severity.ERROR: theme.STATE_BLOCKED,
@@ -55,7 +55,7 @@ def stylesheet() -> str:
 def document(report: FactoryReport | None, game_data: GameData) -> str:
     """The whole totals document, ready to hand to a QTextBrowser or a QTextDocument."""
     if report is None or not report.nodes:
-        return _page("<p class='muted'>Aucune usine a resumer pour l'instant.</p>")
+        return _page("<p class='muted'>Aucune usine a résumer pour l'instant.</p>")
     blocks = [
         _sustainability(report, game_data),
         _solids(report, game_data),
@@ -86,10 +86,10 @@ def _sustainability(report: FactoryReport, game_data: GameData) -> str:
     if report.is_sustainable:
         return ""
     autonomy = report.shortest_autonomy_minutes
-    deadline = formatting.duration(autonomy) if autonomy is not None else "un temps indetermine"
+    deadline = formatting.duration(autonomy) if autonomy is not None else "un temps indéterminé"
     rows = [
         "<tr><td></td><td class='value'><b>Avec les stocks</b></td>"
-        "<td class='value'><b>Regime etabli</b></td></tr>"
+        "<td class='value'><b>Regime établi</b></td></tr>"
     ]
     established = report.sustained
     for label, values in (
@@ -195,8 +195,8 @@ def _power(report: FactoryReport, game_data: GameData) -> str:
     if report.has_power_deficit:
         balance = (
             f"<p class='warn'><b>{formatting.number(abs(report.power_balance_mw))} MW manquants."
-            f"</b> Ce deficit ne bride aucun debit ci-dessus : en jeu, manquer de courant ne "
-            f"ralentit pas l'usine, cela coupe tout le reseau jusqu'a intervention manuelle.</p>"
+            f"</b> Ce déficit ne bride aucun débit ci-dessus : en jeu, manquer de courant ne "
+            f"ralentit pas l'usine, cela coupe tout le réseau jusqu'a intervention manuelle.</p>"
         )
     elif report.has_generators:
         balance = (
@@ -209,7 +209,7 @@ def _power(report: FactoryReport, game_data: GameData) -> str:
         f"<td class='value'><b>{formatting.number(report.power_production_mw)} MW produits"
         f"</b></td></tr></table>"
         f"{balance}"
-        f"<h3>Consommation, machines a l'arret comprises : elles sont construites</h3>"
+        f"<h3>Consommation, machines a l'arrêt comprises : elles sont construites</h3>"
         f"<table>{consumed or _NOTHING}</table>"
         f"<h3>Production</h3>"
         f"<table>{produced or _NOTHING}</table>"
@@ -219,7 +219,7 @@ def _power(report: FactoryReport, game_data: GameData) -> str:
 def _outputs(report: FactoryReport, game_data: GameData) -> str:
     parts = [f"<h2>Production</h2>{_rate_table(report.final_outputs, game_data)}"]
     if report.discarded_outputs:
-        parts.append("<h3>Rejets assumes</h3>")
+        parts.append("<h3>Rejets assumés</h3>")
         parts.append(_rate_table(report.discarded_outputs, game_data))
     return "".join(parts)
 
@@ -251,12 +251,12 @@ def _shopping_list(report: FactoryReport, game_data: GameData) -> str:
         for class_name, count in sorted(shopping.power_shards.items())
     ]
     note = (
-        f"<p class='muted'>{shopping.total_buildings} batiment(s) au total. Les repartiteurs et "
-        f"groupeurs sont deduits des lignes qui partagent un noeud."
+        f"<p class='muted'>{shopping.total_buildings} bâtiment(s) au total. Les répartiteurs et "
+        f"groupeurs sont déduits des lignes qui partagent un noeud."
     )
     if shard_rows:
-        note += " Les eclats ne se construisent pas : ils se fabriquent et se glissent dans"
-        note += " les machines surcadencees."
+        note += " Les éclats ne se construisent pas : ils se fabriquent et se glissent dans"
+        note += " les machines surcadencées."
     return (
         f"<h2>Liste de courses</h2><table>{''.join(rows) + ''.join(shard_rows)}</table>{note}</p>"
     )

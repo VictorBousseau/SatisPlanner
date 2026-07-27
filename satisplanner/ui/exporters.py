@@ -78,7 +78,7 @@ def export_png(scene: QGraphicsScene, path: Path) -> bool:
     # bytes, and the runtime rejects bytes. Not passing it avoids having to be wrong
     # for one of the two.
     written = bool(image.save(str(path)))
-    logger.info("export PNG %s : %s", path, "ok" if written else "echec")
+    logger.info("export PNG %s : %s", path, "ok" if written else "échec")
     return written
 
 
@@ -99,7 +99,7 @@ def thumbnail_bytes(scene: QGraphicsScene) -> bytes | None:
     try:
         # See export_png: the stubs and the runtime disagree about this argument.
         if not small.save(buffer, "PNG"):  # type: ignore[call-overload]
-            logger.debug("vignette non generee")
+            logger.debug("vignette non générée")
             return None
     finally:
         buffer.close()
@@ -123,7 +123,7 @@ def export_pdf(
 
     painter = QPainter()
     if not painter.begin(writer):
-        logger.warning("impossible d'ouvrir %s en ecriture", path)
+        logger.warning("impossible d'ouvrir %s en écriture", path)
         return False
     try:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

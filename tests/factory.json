@@ -1,0 +1,1454 @@
+{
+  "schema_version": 4,
+  "nodes": [
+    {
+      "id": "gisement1",
+      "label": null,
+      "position": [
+        -2320.0,
+        -40.0
+      ],
+      "show_deployed": null,
+      "kind": "resource",
+      "item_class": "Desc_OreIron_C",
+      "extractor_class": "Build_MinerMk2_C",
+      "purity": "pure",
+      "count": 1.0,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine1",
+      "label": null,
+      "position": [
+        -1880.0,
+        -280.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine8",
+      "label": null,
+      "position": [
+        -1840.0,
+        -120.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine12",
+      "label": null,
+      "position": [
+        -1880.0,
+        -580.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine13",
+      "label": null,
+      "position": [
+        -1880.0,
+        160.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine14",
+      "label": null,
+      "position": [
+        -1880.0,
+        260.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine3",
+      "label": null,
+      "position": [
+        -1360.0,
+        -300.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine17",
+      "label": null,
+      "position": [
+        -1360.0,
+        -200.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronRod_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine18",
+      "label": null,
+      "position": [
+        -560.0,
+        -180.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Screw_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine19",
+      "label": null,
+      "position": [
+        260.0,
+        -140.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronPlateReinforced_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon3",
+      "label": null,
+      "position": [
+        680.0,
+        -300.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine21",
+      "label": null,
+      "position": [
+        -1360.0,
+        -60.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronRod_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine23",
+      "label": null,
+      "position": [
+        -560.0,
+        40.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Screw_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon4",
+      "label": null,
+      "position": [
+        -980.0,
+        -120.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine2",
+      "label": null,
+      "position": [
+        -560.0,
+        -60.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Screw_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon1",
+      "label": null,
+      "position": [
+        -960.0,
+        -320.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine4",
+      "label": null,
+      "position": [
+        -1880.0,
+        -420.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IngotIron_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine5",
+      "label": null,
+      "position": [
+        -1360.0,
+        -440.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon5",
+      "label": null,
+      "position": [
+        -140.0,
+        -60.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine6",
+      "label": null,
+      "position": [
+        100.0,
+        -460.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronPlateReinforced_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine7",
+      "label": null,
+      "position": [
+        -1360.0,
+        -560.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronPlate_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine9",
+      "label": null,
+      "position": [
+        1180.0,
+        -240.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_ModularFrame_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine10",
+      "label": null,
+      "position": [
+        1180.0,
+        -60.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_ModularFrame_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon6",
+      "label": null,
+      "position": [
+        1560.0,
+        -140.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine11",
+      "label": null,
+      "position": [
+        1180.0,
+        80.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_ModularFrame_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon7",
+      "label": null,
+      "position": [
+        1200.0,
+        -420.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine20",
+      "label": null,
+      "position": [
+        -1360.0,
+        100.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronRod_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine22",
+      "label": null,
+      "position": [
+        -1320.0,
+        200.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronRod_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine24",
+      "label": null,
+      "position": [
+        -1340.0,
+        300.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronRod_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine25",
+      "label": null,
+      "position": [
+        -1340.0,
+        400.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_IronRod_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon8",
+      "label": null,
+      "position": [
+        400.0,
+        220.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine26",
+      "label": null,
+      "position": [
+        2080.0,
+        60.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_ModularFrameHeavy_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine27",
+      "label": null,
+      "position": [
+        1200.0,
+        260.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Screw_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon9",
+      "label": null,
+      "position": [
+        2420.0,
+        40.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine28",
+      "label": null,
+      "position": [
+        500.0,
+        820.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Concrete_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "gisement2",
+      "label": null,
+      "position": [
+        140.0,
+        880.0
+      ],
+      "show_deployed": null,
+      "kind": "resource",
+      "item_class": "Desc_Stone_C",
+      "extractor_class": "Build_MinerMk2_C",
+      "purity": "normal",
+      "count": 1.0,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine30",
+      "label": null,
+      "position": [
+        220.0,
+        520.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_SteelPipe_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon10",
+      "label": null,
+      "position": [
+        -160.0,
+        660.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine16",
+      "label": null,
+      "position": [
+        1240.0,
+        560.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Alternate_EncasedIndustrialBeam_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine29",
+      "label": null,
+      "position": [
+        220.0,
+        620.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_SteelPipe_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon11",
+      "label": null,
+      "position": [
+        700.0,
+        480.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "gisement5",
+      "label": null,
+      "position": [
+        -2600.0,
+        800.0
+      ],
+      "show_deployed": null,
+      "kind": "resource",
+      "item_class": "Desc_LiquidOil_C",
+      "extractor_class": "Build_OilPump_C",
+      "purity": "normal",
+      "count": 1.0,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine33",
+      "label": null,
+      "position": [
+        -1840.0,
+        860.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_PetroleumCoke_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine34",
+      "label": null,
+      "position": [
+        -1000.0,
+        660.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Alternate_CokeSteelIngot_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine15",
+      "label": null,
+      "position": [
+        -1000.0,
+        780.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Alternate_CokeSteelIngot_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine35",
+      "label": null,
+      "position": [
+        -2220.0,
+        780.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Rubber_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon12",
+      "label": null,
+      "position": [
+        -1820.0,
+        1180.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine36",
+      "label": null,
+      "position": [
+        -2220.0,
+        880.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Rubber_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine37",
+      "label": null,
+      "position": [
+        -2220.0,
+        1000.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Rubber_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon13",
+      "label": null,
+      "position": [
+        -1500.0,
+        880.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine38",
+      "label": null,
+      "position": [
+        -1840.0,
+        980.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_PetroleumCoke_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine39",
+      "label": null,
+      "position": [
+        -2220.0,
+        1120.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Rubber_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine31",
+      "label": null,
+      "position": [
+        220.0,
+        720.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_SteelPipe_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "tampon2",
+      "label": null,
+      "position": [
+        940.0,
+        880.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk1_C",
+      "item_class": null,
+      "initial_content": 0.0
+    },
+    {
+      "id": "machine32",
+      "label": null,
+      "position": [
+        500.0,
+        920.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Concrete_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "gisement3",
+      "label": null,
+      "position": [
+        -3220.0,
+        560.0
+      ],
+      "show_deployed": null,
+      "kind": "resource",
+      "item_class": "Desc_OreIron_C",
+      "extractor_class": "Build_MinerMk2_C",
+      "purity": "pure",
+      "count": 1.0,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine40",
+      "label": null,
+      "position": [
+        220.0,
+        420.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_SteelPipe_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine41",
+      "label": null,
+      "position": [
+        220.0,
+        320.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_SteelPipe_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "machine42",
+      "label": null,
+      "position": [
+        500.0,
+        1020.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_Concrete_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    }
+  ],
+  "edges": [
+    {
+      "id": "e3",
+      "source": "gisement1",
+      "target": "machine1",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e11",
+      "source": "gisement1",
+      "target": "machine8",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e21",
+      "source": "gisement1",
+      "target": "machine12",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e22",
+      "source": "gisement1",
+      "target": "machine13",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e23",
+      "source": "gisement1",
+      "target": "machine14",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e12",
+      "source": "machine8",
+      "target": "machine17",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e15",
+      "source": "machine1",
+      "target": "machine3",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e29",
+      "source": "machine19",
+      "target": "tampon3",
+      "item_class": "Desc_IronPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e31",
+      "source": "machine8",
+      "target": "machine21",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e8",
+      "source": "gisement1",
+      "target": "machine4",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e9",
+      "source": "machine4",
+      "target": "machine5",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e7",
+      "source": "machine3",
+      "target": "tampon1",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e10",
+      "source": "machine5",
+      "target": "tampon1",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e13",
+      "source": "tampon1",
+      "target": "machine19",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e1",
+      "source": "machine17",
+      "target": "tampon4",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e4",
+      "source": "machine21",
+      "target": "tampon4",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e5",
+      "source": "tampon4",
+      "target": "machine18",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e14",
+      "source": "tampon4",
+      "target": "machine2",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e16",
+      "source": "tampon4",
+      "target": "machine23",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e2",
+      "source": "machine18",
+      "target": "tampon5",
+      "item_class": "Desc_IronScrew_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e6",
+      "source": "machine2",
+      "target": "tampon5",
+      "item_class": "Desc_IronScrew_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e18",
+      "source": "machine23",
+      "target": "tampon5",
+      "item_class": "Desc_IronScrew_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e17",
+      "source": "machine12",
+      "target": "machine7",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e20",
+      "source": "machine7",
+      "target": "tampon1",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e30",
+      "source": "tampon1",
+      "target": "machine6",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e32",
+      "source": "machine6",
+      "target": "tampon3",
+      "item_class": "Desc_IronPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e33",
+      "source": "tampon5",
+      "target": "machine19",
+      "item_class": "Desc_IronScrew_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e34",
+      "source": "tampon5",
+      "target": "machine6",
+      "item_class": "Desc_IronScrew_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e35",
+      "source": "tampon3",
+      "target": "machine9",
+      "item_class": "Desc_IronPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e36",
+      "source": "tampon3",
+      "target": "machine10",
+      "item_class": "Desc_IronPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e37",
+      "source": "machine9",
+      "target": "tampon6",
+      "item_class": "Desc_ModularFrame_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e38",
+      "source": "machine10",
+      "target": "tampon6",
+      "item_class": "Desc_ModularFrame_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e39",
+      "source": "machine11",
+      "target": "tampon6",
+      "item_class": "Desc_ModularFrame_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e40",
+      "source": "tampon3",
+      "target": "machine11",
+      "item_class": "Desc_IronPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e41",
+      "source": "tampon3",
+      "target": "tampon7",
+      "item_class": "Desc_IronPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e19",
+      "source": "machine13",
+      "target": "machine20",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e42",
+      "source": "machine13",
+      "target": "machine22",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e26",
+      "source": "machine14",
+      "target": "machine24",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e43",
+      "source": "machine14",
+      "target": "machine25",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e44",
+      "source": "machine20",
+      "target": "tampon8",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e45",
+      "source": "machine22",
+      "target": "tampon8",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e46",
+      "source": "machine24",
+      "target": "tampon8",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e47",
+      "source": "machine25",
+      "target": "tampon8",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e48",
+      "source": "tampon8",
+      "target": "machine9",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e49",
+      "source": "tampon8",
+      "target": "machine10",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e50",
+      "source": "tampon8",
+      "target": "machine11",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e52",
+      "source": "tampon6",
+      "target": "machine26",
+      "item_class": "Desc_ModularFrame_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e51",
+      "source": "tampon8",
+      "target": "machine27",
+      "item_class": "Desc_IronRod_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e53",
+      "source": "machine27",
+      "target": "machine26",
+      "item_class": "Desc_IronScrew_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e54",
+      "source": "machine26",
+      "target": "tampon9",
+      "item_class": "Desc_ModularFrameHeavy_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e56",
+      "source": "gisement2",
+      "target": "machine28",
+      "item_class": "Desc_Stone_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e55",
+      "source": "machine16",
+      "target": "machine26",
+      "item_class": "Desc_SteelPlateReinforced_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e57",
+      "source": "tampon10",
+      "target": "machine30",
+      "item_class": "Desc_SteelIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e61",
+      "source": "tampon10",
+      "target": "machine29",
+      "item_class": "Desc_SteelIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e25",
+      "source": "machine30",
+      "target": "tampon11",
+      "item_class": "Desc_SteelPipe_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e27",
+      "source": "machine29",
+      "target": "tampon11",
+      "item_class": "Desc_SteelPipe_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e64",
+      "source": "tampon11",
+      "target": "machine16",
+      "item_class": "Desc_SteelPipe_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e65",
+      "source": "tampon11",
+      "target": "machine26",
+      "item_class": "Desc_SteelPipe_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e62",
+      "source": "machine34",
+      "target": "tampon10",
+      "item_class": "Desc_SteelIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e66",
+      "source": "machine15",
+      "target": "tampon10",
+      "item_class": "Desc_SteelIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e68",
+      "source": "gisement1",
+      "target": "machine34",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e72",
+      "source": "gisement5",
+      "target": "machine35",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e73",
+      "source": "machine35",
+      "target": "machine33",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e74",
+      "source": "machine35",
+      "target": "tampon12",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e75",
+      "source": "machine36",
+      "target": "machine33",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e77",
+      "source": "gisement5",
+      "target": "machine36",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e78",
+      "source": "gisement5",
+      "target": "machine37",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e24",
+      "source": "machine36",
+      "target": "tampon12",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e58",
+      "source": "machine37",
+      "target": "tampon12",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e59",
+      "source": "machine33",
+      "target": "tampon13",
+      "item_class": "Desc_PetroleumCoke_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e60",
+      "source": "machine37",
+      "target": "machine38",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e76",
+      "source": "gisement5",
+      "target": "machine39",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e79",
+      "source": "machine39",
+      "target": "machine38",
+      "item_class": "Desc_HeavyOilResidue_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e80",
+      "source": "machine39",
+      "target": "tampon12",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e81",
+      "source": "tampon13",
+      "target": "machine34",
+      "item_class": "Desc_PetroleumCoke_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e82",
+      "source": "tampon13",
+      "target": "machine15",
+      "item_class": "Desc_PetroleumCoke_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e63",
+      "source": "machine38",
+      "target": "tampon13",
+      "item_class": "Desc_PetroleumCoke_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e67",
+      "source": "tampon10",
+      "target": "machine31",
+      "item_class": "Desc_SteelIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e70",
+      "source": "machine31",
+      "target": "tampon11",
+      "item_class": "Desc_SteelPipe_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e28",
+      "source": "machine28",
+      "target": "tampon2",
+      "item_class": "Desc_Cement_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e71",
+      "source": "tampon2",
+      "target": "machine16",
+      "item_class": "Desc_Cement_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e83",
+      "source": "gisement2",
+      "target": "machine32",
+      "item_class": "Desc_Stone_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e84",
+      "source": "machine32",
+      "target": "tampon2",
+      "item_class": "Desc_Cement_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e69",
+      "source": "gisement3",
+      "target": "machine15",
+      "item_class": "Desc_OreIron_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e85",
+      "source": "tampon10",
+      "target": "machine40",
+      "item_class": "Desc_SteelIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e86",
+      "source": "tampon10",
+      "target": "machine41",
+      "item_class": "Desc_SteelIngot_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e87",
+      "source": "machine40",
+      "target": "tampon11",
+      "item_class": "Desc_SteelPipe_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e88",
+      "source": "machine41",
+      "target": "tampon11",
+      "item_class": "Desc_SteelPipe_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e89",
+      "source": "gisement2",
+      "target": "machine42",
+      "item_class": "Desc_Stone_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e90",
+      "source": "machine42",
+      "target": "tampon2",
+      "item_class": "Desc_Cement_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    }
+  ]
+}

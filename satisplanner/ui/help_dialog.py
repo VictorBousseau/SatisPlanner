@@ -28,63 +28,63 @@ logger = logging.getLogger(__name__)
 # guess, so it comes first and gets the room.
 GESTURES: Final[tuple[tuple[str, str], ...]] = (
     (
-        "Glisser une entree de la palette sur le canvas",
-        "pose le noeud a l'endroit lache, aligne sur la grille",
+        "Glisser une entrée de la palette sur le canvas",
+        "pose le noeud a l'endroit lache, aligné sur la grille",
     ),
     (
         "Double-clic dans la palette",
-        "ouvre la fiche de l'objet : recettes, machines, debits, cout en minerai",
+        "ouvre la fiche de l'objet : recettes, machines, débits, coût en minerai",
     ),
     (
         "Dans une fiche, clic sur un ingredient",
-        "ouvre sa fiche. Alt+Gauche et Alt+Droite reviennent en arriere et en avant",
+        "ouvre sa fiche. Alt+Gauche et Alt+Droite reviennent en arrière et en avant",
     ),
     (
         "Dans une fiche, [poser sur le canvas]",
         "pose cette recette au centre de la vue",
     ),
     (
-        "Glisser d'un port de sortie vers un port d'entree",
+        "Glisser d'un port de sortie vers un port d'entrée",
         "tire une ligne. Le trait est vert si elle peut exister, rouge sinon, "
         "avec la raison en infobulle pendant le tirage",
     ),
     (
         "Lacher n'importe ou sur un tampon vide",
-        "le raccorde : un tampon sans contenu accepte le premier item qui arrive",
+        "le raccordé : un tampon sans contenu accepte le premier item qui arrive",
     ),
-    ("Glisser un noeud", "le deplace. Un glissement continu vaut une seule annulation"),
-    ("Glisser sur le fond", "selection rectangulaire"),
-    ("Clic milieu maintenu", "deplace la vue"),
-    ("Molette", "zoom avant et arriere autour du curseur"),
+    ("Glisser un noeud", "le déplacé. Un glissement continu vaut une seule annulation"),
+    ("Glisser sur le fond", "sélection rectangulaire"),
+    ("Clic milieu maintenu", "déplacé la vue"),
+    ("Molette", "zoom avant et arrière autour du curseur"),
     (
         "Clic droit sur un noeud",
         "fiche de l'objet, ajuster aux intrants, nombre de machines, cadence, "
-        "purete du gisement, extracteur, carburant du generateur, contenu du "
+        "pureté du gisement, extracteur, carburant du générateur, contenu du "
         "tampon, supprimer",
     ),
     (
         "Entree dans la palette",
-        "pose l'entree surlignee au centre de la vue",
+        "pose l'entrée surlignée au centre de la vue",
     ),
     (
         "Double-clic sur une valeur d'un noeud",
-        "l'edite sur place : nombre de machines, cadence, purete, extracteur, "
-        "carburant, debit d'un apport, stock d'un tampon. Entree valide, Echap "
-        "annule, une valeur hors domaine est refusee sans etre effacee",
+        "l'édite sur place : nombre de machines, cadence, pureté, extracteur, "
+        "carburant, débit d'un apport, stock d'un tampon. Entree valide, Echap "
+        "annule, une valeur hors domaine est refusée sans être effacée",
     ),
     (
         "Double-clic sur une ligne",
-        "change son tier, dans la meme liste que le menu contextuel",
+        "change son tier, dans la même liste que le menu contextuel",
     ),
     (
-        "Copier une selection",
+        "Copier une sélection",
         "emporte les noeuds et les lignes qui les relient entre eux ; une ligne qui "
-        "sortait de la selection n'a plus de quoi s'accrocher et n'est pas copiee",
+        "sortait de la sélection n'a plus de quoi s'accrocher et n'est pas copiée",
     ),
     (
-        "Affichage ▸ Machines deployees",
-        "dessine une vignette par machine batie sur chaque noeud. Clic droit sur un "
-        "noeud pour y deroger. Purement visuel : aucun chiffre ne change",
+        "Affichage ▸ Machines déployées",
+        "dessine une vignette par machine bâtie sur chaque noeud. Clic droit sur un "
+        "noeud pour y déroger. Purement visuel : aucun chiffre ne change",
     ),
     (
         "Clic droit sur une ligne",
@@ -92,11 +92,11 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
     ),
     (
         "Clic sur une ligne du tableau",
-        "selectionne le noeud sur le canvas, et reciproquement",
+        "sélectionné le noeud sur le canvas, et réciproquement",
     ),
     (
         "Clic sur un diagnostic",
-        "selectionne et centre le noeud ou la ligne concernee",
+        "sélectionné et centre le noeud ou la ligne concernée",
     ),
 )
 
@@ -104,31 +104,31 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
 # Rules a user cannot deduce from the interface and will otherwise assume wrongly.
 # Each one is a modelling choice, not a limitation to be worked around.
 MODELLING_NOTES: Final[tuple[str, ...]] = (
-    "La purete d'un gisement s'applique a <b>tous</b> les extracteurs de ce noeud : "
-    "un noeud est un gisement. Deux gisements de puretes differentes, ce sont deux "
-    "noeuds, et c'est la seule facon de les representer.",
-    "La cadence multiplie le debit a l'identique et l'electricite en loi de "
+    "La pureté d'un gisement s'applique a <b>tous</b> les extracteurs de ce noeud : "
+    "un noeud est un gisement. Deux gisements de puretés differentes, ce sont deux "
+    "noeuds, et c'est la seule façon de les representer.",
+    "La cadence multiplie le débit a l'identique et l'électricité en loi de "
     "puissance : a 250 %, une machine produit 2,5 fois plus et consomme environ "
     "3,36 fois plus.",
-    "Les repartiteurs, groupeurs et jonctions ne sont jamais des noeuds. Ils sont "
-    "deduits des lignes qui partagent un noeud et comptes dans la liste de courses.",
+    "Les répartiteurs, groupeurs et jonctions ne sont jamais des noeuds. Ils sont "
+    "déduits des lignes qui partagent un noeud et comptes dans la liste de courses.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
-    "debits sont tenables et en combien de temps un stock se vide, mais ne simule "
+    "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",
-    "Rien ici n'est de la geometrie : ni distance, ni elevation, ni hauteur de "
+    "Rien ici n'est de la géométrie : ni distance, ni élévation, ni hauteur de "
     "refoulement des pompes.",
-    "L'electricite est un <b>compteur, pas une contrainte</b> : consommation et "
-    "production sont affichees cote a cote, et un deficit ne bride aucun debit. "
+    "L'électricité est un <b>compteur, pas une contrainte</b> : consommation et "
+    "production sont affichées cote a cote, et un déficit ne bride aucun débit. "
     "En jeu, manquer de courant ne ralentit pas l'usine, cela disjoncte tout le "
-    "reseau jusqu'a intervention manuelle ; afficher tout a zero n'apprendrait "
-    "rien et un bridage partiel serait une invention. Les generateurs, eux, "
-    "tournent a 100 % : leur surcadencage suit un exposant different de celui des "
+    "réseau jusqu'a intervention manuelle ; afficher tout a zéro n'apprendrait "
+    "rien et un bridage partiel serait une invention. Les générateurs, eux, "
+    "tournent a 100 % : leur surcadençage suit un exposant different de celui des "
     "machines et fera l'objet d'un travail a part.",
-    "La consommation compte les machines <b>a l'arret</b> : elles sont construites et "
-    "branchees. C'est un dimensionnement au pire cas, pas une mesure du jeu — les "
+    "La consommation compte les machines <b>a l'arrêt</b> : elles sont construites et "
+    "branchées. C'est un dimensionnement au pire cas, pas une mesure du jeu — les "
     "fichiers ne declarent aucune consommation de veille, seulement une consommation "
-    "nominale, et inventer une valeur reduite serait pire que compter au maximum. La "
-    "production, elle, ne compte que ce qui brule reellement : un generateur sans "
+    "nominale, et inventer une valeur réduite serait pire que compter au maximum. La "
+    "production, elle, ne compte que ce qui brûle réellement : un générateur sans "
     "carburant ne produit rien.",
 )
 
@@ -174,8 +174,8 @@ def help_html(shortcuts: Sequence[tuple[str, str]]) -> str:
     <table>{gestures}</table>
     <h2>Raccourcis</h2>
     <table>{keys}</table>
-    <p class="note">La touche Suppr efface la selection, noeuds et lignes confondus.
-    Tout passe par la pile d'annulation, deplacements compris.</p>
+    <p class="note">La touche Suppr efface la sélection, noeuds et lignes confondus.
+    Tout passe par la pile d'annulation, déplacements compris.</p>
     <h2>Ce que l'outil modelise, et comment</h2>
     <ul>{notes}</ul>
     """

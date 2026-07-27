@@ -47,15 +47,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help=f"fichier SQLite a produire (defaut : {DEFAULT_OUTPUT})",
+        help=f"fichier SQLite a produire (défaut : {DEFAULT_OUTPUT})",
     )
     parser.add_argument(
         "--icons-dir",
         type=Path,
         default=embedded_icon_directory(),
-        help="dossier d'icones a confronter aux donnees (defaut : icones embarquees)",
+        help="dossier d'icones a confronter aux donnees (défaut : icones embarquées)",
     )
-    parser.add_argument("--verbose", "-v", action="store_true", help="trace detaillee")
+    parser.add_argument("--verbose", "-v", action="store_true", help="trace détaillée")
     return parser.parse_args(argv)
 
 
@@ -85,20 +85,20 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
     """Print the end-of-run summary required by the specification."""
     log = logger.info
 
-    log("Base generee            : %s (%.1f Ko)", output, output.stat().st_size / 1024)
-    log("Fichier de reference    : %s", dataset.source_file)
+    log("Base générée            : %s (%.1f Ko)", output, output.stat().st_size / 1024)
+    log("Fichier de référence    : %s", dataset.source_file)
     if not dataset.reference_was_preferred:
         logger.warning(
-            "  ATTENTION : aucun fichier de locale connu, choix par defaut sur le premier .json"
+            "  ATTENTION : aucun fichier de locale connu, choix par défaut sur le premier .json"
         )
-    log("Libelles francais       : %s", dataset.french_file or "ABSENT (repli sur l'anglais)")
+    log("Libelles français       : %s", dataset.french_file or "ABSENT (repli sur l'anglais)")
 
     forms = Counter(item.form for item in dataset.items)
     detail = ", ".join(f"{FORM_LABELS_FR[form]} {forms[form]}" for form in ItemForm)
     log("Items                   : %d  (%s)", len(dataset.items), detail)
 
     events = sum(1 for item in dataset.items if item.is_event)
-    log("    dont evenement (FICSMAS) : %d, masques par defaut dans la palette", events)
+    log("    dont événement (FICSMAS) : %d, masqués par défaut dans la palette", events)
 
     alternates = sum(1 for recipe in dataset.recipes if recipe.is_alternate)
     fluids = sum(1 for recipe in dataset.recipes if recipe.involves_fluid)
@@ -106,7 +106,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
     event_recipes = sum(1 for recipe in dataset.recipes if recipe.is_event)
     log(
         "Recettes                : %d  (alternatives %d, fluides %d, a sous-produit %d,"
-        " evenement %d)",
+        " événement %d)",
         len(dataset.recipes),
         alternates,
         fluids,
@@ -137,7 +137,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
             names.get(extractor.class_name, extractor.class_name),
             extractor.rate_per_minute,
             unit,
-            "" if extractor.has_purity else " (debit fixe, sans purete)",
+            "" if extractor.has_purity else " (débit fixe, sans pureté)",
         )
     item_forms = {item.class_name: item.form for item in dataset.items}
     for generator in sorted(dataset.generators, key=lambda g: g.class_name):
@@ -190,7 +190,7 @@ def report(dataset: GameDataset, output: Path, icons: IconIndex) -> None:
 def _report_icons(dataset: GameDataset, icons: IconIndex) -> None:
     log = logger.info
     log(
-        "Icones indexees         : %d fichier(s) dans %s",
+        "Icones indexées         : %d fichier(s) dans %s",
         len(icons),
         ", ".join(str(root) for root in icons.roots) or "aucun dossier",
     )
@@ -198,14 +198,14 @@ def _report_icons(dataset: GameDataset, icons: IconIndex) -> None:
     in_scope = scoped_items(dataset)
     missing_items = [item for item in in_scope if icons.resolve(item.icon_file) is None]
     log(
-        "Items du perimetre V1   : %d, dont %d sans icone",
+        "Items du périmètre V1   : %d, dont %d sans icone",
         len(in_scope),
         len(missing_items),
     )
     if missing_items:
         for item in missing_items[:MAX_LISTED_MISSING]:
             logger.warning(
-                "    sans icone : %-30s %s", item.class_name, item.icon_file or "(aucune declaree)"
+                "    sans icone : %-30s %s", item.class_name, item.icon_file or "(aucune déclarée)"
             )
         if len(missing_items) > MAX_LISTED_MISSING:
             logger.warning("    ... et %d autre(s)", len(missing_items) - MAX_LISTED_MISSING)

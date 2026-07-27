@@ -128,9 +128,9 @@ def ask_partial_save(parent: QWidget, name: str, description: str) -> PartialSav
     """
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
-    box.setWindowTitle("Cette usine n'a pas ete ouverte en entier")
+    box.setWindowTitle("Cette usine n'a pas été ouverte en entier")
     box.setText(
-        f"« {name} » contenait des elements que ce catalogue ne connait pas.\n"
+        f"« {name} » contenait des éléments que ce catalogue ne connait pas.\n"
         "Enregistrer par-dessus le fichier d'origine les supprimerait definitivement."
     )
     box.setInformativeText(description)
@@ -270,7 +270,7 @@ class MainWindow(QMainWindow):
         self.menus.append(menu)
         menu.addAction(self.new_action)
         menu.addAction(self.open_action)
-        self.recent_menu = menu.addMenu("Fichiers recents")
+        self.recent_menu = menu.addMenu("Fichiers récents")
         menu.addSeparator()
         menu.addAction(self.save_action)
         menu.addAction(self.save_as_action)
@@ -311,7 +311,7 @@ class MainWindow(QMainWindow):
             self, "Supprimer", QKeySequence.StandardKey.Delete, self.scene.delete_selection
         )
         self.select_all_action = _action(
-            self, "Tout selectionner", QKeySequence.StandardKey.SelectAll, self.scene.select_all
+            self, "Tout sélectionner", QKeySequence.StandardKey.SelectAll, self.scene.select_all
         )
         self.copy_action = _action(
             self, "Copier", QKeySequence.StandardKey.Copy, self.scene.copy_selection
@@ -325,7 +325,7 @@ class MainWindow(QMainWindow):
         self.duplicate_action = _action(self, "Dupliquer", "Ctrl+D", self.scene.duplicate_selection)
         self.adjust_action = _action(self, "Ajuster ce noeud", "Ctrl+E", self._adjust_selection)
         self.adjust_action.setToolTip(
-            "Dimensionne le noeud selectionne a ce que ses intrants permettent (calcul local)"
+            "Dimensionne le noeud sélectionné a ce que ses intrants permettent (calcul local)"
         )
         toolbar.addAction(self.delete_action)
         toolbar.addAction(self.adjust_action)
@@ -349,7 +349,7 @@ class MainWindow(QMainWindow):
             self, "Zoom avant", QKeySequence.StandardKey.ZoomIn, self.view.zoom_in
         )
         self.zoom_out_action = _action(
-            self, "Zoom arriere", QKeySequence.StandardKey.ZoomOut, self.view.zoom_out
+            self, "Zoom arrière", QKeySequence.StandardKey.ZoomOut, self.view.zoom_out
         )
         self.reset_zoom_action = _action(self, "Zoom 100 %", "Ctrl+0", self.view.reset_zoom)
         self.fit_action = _action(self, "Tout afficher", "Ctrl+Shift+F", self.fit_to_factory)
@@ -357,7 +357,7 @@ class MainWindow(QMainWindow):
             self, "Rechercher dans la palette", "Ctrl+F", self.focus_search
         )
         self.deployed_action = _action(
-            self, "Machines deployees", "Ctrl+M", self.toggle_deployed_rendering
+            self, "Machines déployées", "Ctrl+M", self.toggle_deployed_rendering
         )
         self.deployed_action.setCheckable(True)
 
@@ -480,7 +480,7 @@ class MainWindow(QMainWindow):
                 return False
             if choice is PartialSaveChoice.SAVE_AS:
                 return self.save_as()
-            logger.warning("ecrasement demande d'un fichier ouvert partiellement")
+            logger.warning("écrasement demande d'un fichier ouvert partiellement")
         return self._write(self.document.path)
 
     def save_as(self) -> bool:
@@ -500,7 +500,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Enregistrement impossible", f"{path.name} : {exc.strerror}")
             return False
         self.remember_recent(path)
-        self.statusBar().showMessage(f"Usine enregistree dans {path.name}.", 4000)
+        self.statusBar().showMessage(f"Usine enregistrée dans {path.name}.", 4000)
         return True
 
     def confirm_discard(self) -> bool:
@@ -509,8 +509,8 @@ class MainWindow(QMainWindow):
             return True
         answer = QMessageBox.question(
             self,
-            "Modifications non enregistrees",
-            f"« {self.document.display_name} » a ete modifiee. Enregistrer avant de continuer ?",
+            "Modifications non enregistrées",
+            f"« {self.document.display_name} » a été modifiée. Enregistrer avant de continuer ?",
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel,
@@ -547,7 +547,7 @@ class MainWindow(QMainWindow):
         try:
             loaded = factory_file.decode_share_code(code)
         except FactoryFileError as exc:
-            QMessageBox.warning(self, "Code refuse", str(exc))
+            QMessageBox.warning(self, "Code refusé", str(exc))
             return False
         warnings = list(loaded.warnings)
         self.document.adopt(loaded.graph, warnings=warnings)
@@ -559,7 +559,7 @@ class MainWindow(QMainWindow):
         if not warnings:
             return
         QMessageBox.information(
-            self, "Usine ouverte avec des reserves", f"{subject} :\n\n" + "\n\n".join(warnings)
+            self, "Usine ouverte avec des réserves", f"{subject} :\n\n" + "\n\n".join(warnings)
         )
 
     # --------------------------------------------------------------- exports
@@ -598,7 +598,7 @@ class MainWindow(QMainWindow):
             include_totals=include_totals,
         )
         if written:
-            self.statusBar().showMessage(f"Usine exportee dans {path.name}.", 4000)
+            self.statusBar().showMessage(f"Usine exportée dans {path.name}.", 4000)
         return written
 
     # ----------------------------------------------------------- preferences
@@ -636,7 +636,7 @@ class MainWindow(QMainWindow):
         if self.preferences.effective_icon_directory != before:
             self.reload_icons()
         self.apply_preferences()
-        self.statusBar().showMessage("Preferences enregistrees.", 4000)
+        self.statusBar().showMessage("Preferences enregistrées.", 4000)
         return True
 
     def reload_icons(self) -> None:
@@ -696,7 +696,7 @@ class MainWindow(QMainWindow):
         self.recent_menu.clear()
         entries = self.recent_files()
         if not entries:
-            empty = self.recent_menu.addAction("Aucun fichier recent")
+            empty = self.recent_menu.addAction("Aucun fichier récent")
             empty.setEnabled(False)
             return
         for path in entries:
@@ -800,7 +800,7 @@ class MainWindow(QMainWindow):
         if not report.converged:
             parts.append("RESOLUTION NON CONVERGEE")
         if not report.is_sustainable:
-            parts.append("debits non tenables : un tampon se vide")
+            parts.append("débits non tenables : un tampon se vide")
         if errors:
             parts.append(f"{errors} erreur(s)")
         if warnings:
@@ -822,7 +822,7 @@ class MainWindow(QMainWindow):
     def catalogue_summary(self) -> str:
         return (
             f"{len(self.game_data.recipes)} recettes, {len(self.game_data.items)} items — "
-            f"{len(self.icons.index)} icone(s) indexee(s), le reste est dessine"
+            f"{len(self.icons.index)} icone(s) indexée(s), le reste est dessine"
         )
 
     def _refresh_catalogue_summary(self) -> None:
@@ -836,13 +836,13 @@ class MainWindow(QMainWindow):
             "A propos de SatisPlanner",
             f"<b>SatisPlanner {__version__}</b><br>"
             f"Donnees de jeu : Satisfactory {db.GAME_VERSION} "
-            f"(schema de base {db.SCHEMA_VERSION}, schema de fichier "
+            f"(schéma de base {db.SCHEMA_VERSION}, schéma de fichier "
             f"{DOCUMENT_SCHEMA_VERSION})<br><br>"
-            "Planificateur d'usines theoriques. L'outil raisonne en <b>debits</b>, pas en "
-            "geometrie 3D : ni distances, ni elevations, ni hauteur de refoulement des "
+            "Planificateur d'usines théoriques. L'outil raisonne en <b>débits</b>, pas en "
+            "géométrie 3D : ni distances, ni élévations, ni hauteur de refoulement des "
             f"pompes.<br><br>{journal}"
-            "Satisfactory, ses donnees et ses icones sont la propriete de "
-            "Coffee Stain Studios. Aucun logo ni element de marque du jeu n'est "
+            "Satisfactory, ses donnees et ses icones sont la propriété de "
+            "Coffee Stain Studios. Aucun logo ni élément de marque du jeu n'est "
             "reproduit dans cette application.",
         )
 

@@ -86,7 +86,7 @@ def decode_entry(payload: bytes, entries: Sequence[PaletteEntry]) -> PaletteEntr
     try:
         kind, class_name, extractor = payload.decode("utf-8").split("\t")
     except (UnicodeDecodeError, ValueError):
-        logger.debug("charge utile de glisser-deposer illisible")
+        logger.debug("charge utile de glisser-déposer illisible")
         return None
     for entry in entries:
         if (
@@ -290,7 +290,7 @@ class PaletteWidget(QWidget):
 
         self.alternates = QCheckBox("Inclure les recettes alternatives", self)
         self.alternates.setChecked(True)
-        self.events = QCheckBox("Afficher les objets d'evenement (FICSMAS)", self)
+        self.events = QCheckBox("Afficher les objets d'événement (FICSMAS)", self)
         self.events.setChecked(False)
 
         self.belt_tier = QComboBox(self)
@@ -312,8 +312,8 @@ class PaletteWidget(QWidget):
     def _build_layout(self) -> None:
         tiers = QFormLayout()
         tiers.setContentsMargins(0, 0, 0, 0)
-        tiers.addRow("Convoyeur par defaut", self.belt_tier)
-        tiers.addRow("Tuyauterie par defaut", self.pipe_tier)
+        tiers.addRow("Convoyeur par défaut", self.belt_tier)
+        tiers.addRow("Tuyauterie par défaut", self.pipe_tier)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
@@ -423,5 +423,5 @@ class PaletteWidget(QWidget):
 
 def _count_text(total: int) -> str:
     if total > MAX_VISIBLE_ENTRIES:
-        return f"{total} resultats, {MAX_VISIBLE_ENTRIES} affiches — affinez la recherche"
-    return f"{total} resultat(s)"
+        return f"{total} résultats, {MAX_VISIBLE_ENTRIES} affichés — affinez la recherche"
+    return f"{total} résultat(s)"

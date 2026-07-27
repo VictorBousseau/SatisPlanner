@@ -65,10 +65,10 @@ class SelfCheck:
 
     def run(self) -> list[Check]:
         paths.ensure_directory(self.directory)
-        self._step("Base de recettes chargee", self._catalogue)
-        self._step("Palette peuplee", self._palette)
+        self._step("Base de recettes chargée", self._catalogue)
+        self._step("Palette peuplée", self._palette)
         self._step("Icones", self._icons)
-        self._step("Interface en francais", self._french)
+        self._step("Interface en français", self._french)
         self._step("Conception, enregistrement, reouverture", self._round_trip)
         self._step("Code de partage", self._share_code)
         self._step("Export PNG", self._png)
@@ -80,14 +80,14 @@ class SelfCheck:
         try:
             self.checks.append(Check(title, passed=True, detail=action()))
         except Exception as exc:
-            logger.exception("verification en echec : %s", title)
+            logger.exception("vérification en échec : %s", title)
             self.checks.append(Check(title, passed=False, detail=f"{type(exc).__name__} : {exc}"))
 
     # ------------------------------------------------------------------ checks
 
     def _catalogue(self) -> str:
         game_data = self.window.game_data
-        assert game_data.recipes, "aucune recette : la base n'a pas ete embarquee"
+        assert game_data.recipes, "aucune recette : la base n'a pas été embarquée"
         assert game_data.items, "aucun item"
         return (
             f"{len(game_data.recipes)} recettes, {len(game_data.items)} items, "
@@ -97,7 +97,7 @@ class SelfCheck:
     def _palette(self) -> str:
         entries = self.window.palette_widget.visible_entries()
         assert entries, "la palette est vide"
-        return f"{len(entries)} entree(s) affichee(s) sur {len(self.window.entries)}"
+        return f"{len(entries)} entrée(s) affichée(s) sur {len(self.window.entries)}"
 
     def _icons(self) -> str:
         """Both backends: files if there are any, and the drawing that never fails."""
@@ -106,7 +106,7 @@ class SelfCheck:
         assert not drawn.isNull(), "le repli genere ne dessine rien"
         indexed = len(provider.index)
         if indexed:
-            return f"{indexed} fichier(s) indexe(s), repli genere operationnel"
+            return f"{indexed} fichier(s) indexe(s), repli genere opérationnel"
         return "aucun fichier d'icone (variante publiable) : tout est dessine, ce qui est normal"
 
     def _french(self) -> str:
@@ -127,18 +127,18 @@ class SelfCheck:
         assert report.final_outputs, "l'usine ne produit rien"
 
         path = self.directory / "verification.sfp"
-        assert self.window._write(path), "l'enregistrement a echoue"
+        assert self.window._write(path), "l'enregistrement a échoué"
         assert path.is_file()
 
         self.window.document.reset()
         assert not self.window.document.graph.nodes
-        assert self.window.open_file(path), "la reouverture a echoue"
+        assert self.window.open_file(path), "la reouverture a échoué"
         reopened = {node.id for node in self.window.document.graph.nodes}
         assert reopened == chain, f"noeuds perdus : {chain - reopened}"
 
         outputs = self.window.document.solve_now().final_outputs
-        assert outputs == report.final_outputs, "les debits ont change en passant par le disque"
-        return f"{len(chain)} noeuds, {path.name} ({path.stat().st_size} octets), debits identiques"
+        assert outputs == report.final_outputs, "les débits ont change en passant par le disque"
+        return f"{len(chain)} noeuds, {path.name} ({path.stat().st_size} octets), débits identiques"
 
     def _share_code(self) -> str:
         code = self.window.document.share_code()
@@ -148,16 +148,16 @@ class SelfCheck:
             node.id for node in self.window.document.graph.nodes
         }
         (self.directory / "code_de_partage.txt").write_text(code, encoding="utf-8")
-        return f"{len(code)} caracteres, relu sans perte"
+        return f"{len(code)} caractères, relu sans perte"
 
     def _png(self) -> str:
         path = self.directory / "verification.png"
-        assert self.window.export_png(path), "l'export PNG a echoue"
+        assert self.window.export_png(path), "l'export PNG a échoué"
         return f"{path.name} ({path.stat().st_size} octets)"
 
     def _pdf(self) -> str:
         path = self.directory / "verification.pdf"
-        assert self.window.export_pdf(path, include_totals=True), "l'export PDF a echoue"
+        assert self.window.export_pdf(path, include_totals=True), "l'export PDF a échoué"
         return f"{path.name} ({path.stat().st_size} octets)"
 
     # ------------------------------------------------------------------ helper
@@ -188,14 +188,14 @@ class SelfCheck:
 def report_text(checks: list[Check], directory: Path, elapsed: float) -> str:
     """The whole checklist as one block of text, for the log and for the box."""
     lines = [
-        f"SatisPlanner {__version__} — verification de l'executable",
+        f"SatisPlanner {__version__} — vérification de l'exécutable",
         f"Donnees de jeu : Satisfactory {db.GAME_VERSION}",
         f"Execution {'depuis les sources' if not paths.is_frozen() else 'empaquetee'}"
         f" — ressources : {paths.resource_directory()}",
         "",
         *[str(check) for check in checks],
         "",
-        f"{sum(check.passed for check in checks)} / {len(checks)} verifications reussies"
+        f"{sum(check.passed for check in checks)} / {len(checks)} vérifications réussies"
         f" en {elapsed:.2f} s",
         f"Fichiers produits : {directory}",
     ]
@@ -215,9 +215,9 @@ def run_self_check(window: MainWindow, directory: Path | None = None) -> tuple[b
     checker = SelfCheck(window, directory)
     checks = checker.run()
     text = report_text(checks, checker.directory, time.perf_counter() - started)
-    logger.info("verification de l'executable :\n%s", text)
+    logger.info("vérification de l'exécutable :\n%s", text)
     try:
         (checker.directory / REPORT_FILENAME).write_text(text, encoding="utf-8")
     except OSError:
-        logger.warning("rapport de verification non ecrit dans %s", checker.directory)
+        logger.warning("rapport de vérification non écrit dans %s", checker.directory)
     return all(check.passed for check in checks), text

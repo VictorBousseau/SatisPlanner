@@ -124,7 +124,7 @@ def read_text_file(path: Path) -> str:
         # A stray BOM survives 'utf-16-le' and would break json.loads.
         return text.lstrip("﻿")
     detail = " | ".join(errors)
-    msg = f"impossible de decoder {path} ({detail})"
+    msg = f"impossible de décoder {path} ({detail})"
     raise DocsFileError(msg)
 
 
@@ -485,7 +485,7 @@ def parse_recipes(
         class_name = cls["ClassName"]
         cycle_seconds = parse_float(cls.get("mManufactoringDuration"))
         if cycle_seconds <= 0:
-            warnings.append(f"{class_name} : duree de cycle nulle, recette ignoree")
+            warnings.append(f"{class_name} : durée de cycle nulle, recette ignorée")
             continue
 
         slots: dict[str, tuple[RecipeSlot, ...]] = {}
@@ -510,7 +510,7 @@ def parse_recipes(
             slots[key] = tuple(parsed)
 
         if unresolved or not slots["products"]:
-            warnings.append(f"{class_name} : item inconnu ou aucun produit, recette ignoree")
+            warnings.append(f"{class_name} : item inconnu ou aucun produit, recette ignorée")
             continue
 
         display_name = cls.get("mDisplayName") or class_name
@@ -539,7 +539,7 @@ def parse_recipes(
 
     if missing_items:
         warnings.append(
-            f"{len(missing_items)} item(s) reference(s) par une recette mais absent(s) des "
+            f"{len(missing_items)} item(s) référence(s) par une recette mais absent(s) des "
             f"descripteurs : {', '.join(sorted(missing_items)[:5])}"
         )
     return sorted(recipes, key=lambda recipe: recipe.class_name)
@@ -643,11 +643,11 @@ def parse_generators(
         class_name = cls["ClassName"]
         if class_name not in GENERATORS:
             if class_name not in EXCLUDED_GENERATORS:
-                warnings.append(f"{class_name} : generateur inconnu, hors perimetre par defaut")
+                warnings.append(f"{class_name} : générateur inconnu, hors périmètre par défaut")
             continue
         power = parse_float(cls.get("mPowerProduction"))
         if power <= 0:
-            warnings.append(f"{class_name} : puissance produite nulle, generateur ignore")
+            warnings.append(f"{class_name} : puissance produite nulle, générateur ignore")
             continue
         ratio = parse_float(cls.get("mSupplementalToPowerRatio"))
         supplemental_rate = conversions.supplemental_rate_per_minute(ratio, power)
@@ -671,7 +671,7 @@ def parse_generators(
         if unknown:
             logger.debug("%s : carburant(s) hors catalogue ignore(s) : %s", class_name, unknown)
         if not fuels:
-            warnings.append(f"{class_name} : aucun carburant exploitable, generateur ignore")
+            warnings.append(f"{class_name} : aucun carburant exploitable, générateur ignore")
             continue
 
         buildings.append(_building(cls, BuildingKind.GENERATOR, labels, descriptors))
@@ -681,7 +681,7 @@ def parse_generators(
         for cls in grouped.get(native, []):
             if cls.get("ClassName") not in EXCLUDED_GENERATORS:
                 warnings.append(
-                    f"{cls.get('ClassName')} : generateur inconnu sous {native}, hors perimetre"
+                    f"{cls.get('ClassName')} : générateur inconnu sous {native}, hors périmètre"
                 )
 
     buildings.sort(key=lambda building: building.class_name)
@@ -721,7 +721,7 @@ def parse_buildings(
             buildings.append(_building(cls, BuildingKind.MANUFACTURER, labels, descriptors))
         elif class_name not in EXCLUDED_MACHINES:
             warnings.append(
-                f"{class_name} : machine de production inconnue, hors perimetre par defaut"
+                f"{class_name} : machine de production inconnue, hors périmètre par défaut"
             )
 
     # Extractors: solid miners and the oil pump, plus the water extractor which
@@ -774,7 +774,7 @@ def parse_buildings(
         class_name = cls["ClassName"]
         match = _PIPE_TIER_RE.search(class_name)
         if match is None:
-            logger.debug("tuyauterie ignoree (variante cosmetique) : %s", class_name)
+            logger.debug("tuyauterie ignorée (variante cosmétique) : %s", class_name)
             continue
         buildings.append(_building(cls, BuildingKind.PIPE, labels, descriptors))
         pipes.append(
@@ -835,7 +835,7 @@ def parse_buildings(
     missing_icons = [b.class_name for b in buildings if b.icon_file is None]
     if missing_icons:
         warnings.append(
-            f"{len(missing_icons)} batiment(s) sans nom d'icone dans les donnees : "
+            f"{len(missing_icons)} bâtiment(s) sans nom d'icone dans les donnees : "
             f"{', '.join(sorted(missing_icons)[:5])}"
         )
 
@@ -868,7 +868,7 @@ def parse_dataset(
     known_buildings = {building.class_name for building in buildings}
     orphans = sorted({r.building_class for r in recipes} - known_buildings)
     if orphans:
-        warnings.append(f"recettes rattachees a un batiment absent : {', '.join(orphans)}")
+        warnings.append(f"recettes rattachees a un bâtiment absent : {', '.join(orphans)}")
 
     return GameDataset(
         source_file=source_file,
@@ -902,7 +902,7 @@ def load_dataset(game_dir: Path) -> GameDataset:
         labels = french_labels(french)
         descriptions = french_descriptions(french)
     else:
-        logger.warning("%s absent : les libelles resteront en anglais", FRENCH_FILENAME)
+        logger.warning("%s absent : les libellés resteront en anglais", FRENCH_FILENAME)
 
     return parse_dataset(
         reference,

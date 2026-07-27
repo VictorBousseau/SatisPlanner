@@ -112,7 +112,7 @@ def raw_cost(game_data: GameData, item_class: str) -> RawCost:
     try:
         amounts = _expand(game_data, item_class, 1.0, ())
     except _CycleError as found:
-        logger.debug("cout brut abandonne, cycle : %s", found)
+        logger.debug("coût brut abandonné, cycle : %s", found)
         return RawCost(item_class=item_class, cycle=found.chain)
     return RawCost(
         item_class=item_class,

@@ -37,7 +37,7 @@ FAMILY_LABELS: dict[ItemFamily, str] = {
     ItemFamily.RAW: "Ressources brutes",
     ItemFamily.INGOT: "Lingots",
     ItemFamily.SPACE_ELEVATOR: "Produits finis",
-    ItemFamily.OTHER: "Pieces intermediaires",
+    ItemFamily.OTHER: "Pieces intermédiaires",
 }
 
 

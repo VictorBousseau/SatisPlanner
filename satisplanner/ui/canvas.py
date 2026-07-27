@@ -428,7 +428,7 @@ class FactoryScene(QGraphicsScene):
         pen = QPen(colour, 2.0, Qt.PenStyle.DashLine)
         self._band.setPen(pen)
         self._band.setToolTip(reason)
-        self.selectionSummaryChanged.emit(reason or "Relachez sur une entree compatible.")
+        self.selectionSummaryChanged.emit(reason or "Relachez sur une entrée compatible.")
 
     def _finish_band(self, at: QPointF) -> None:
         assert self._band is not None and self._band_origin is not None
@@ -445,7 +445,7 @@ class FactoryScene(QGraphicsScene):
         target_id, item_class = landing
         problem = self.connect_nodes(node_id, target_id, item_class)
         self.selectionSummaryChanged.emit(
-            f"Raccordement refuse : {problem}" if problem is not None else ""
+            f"Raccordement refusé : {problem}" if problem is not None else ""
         )
 
     def connect_nodes(self, source: str, target: str, item_class: str) -> str | None:
@@ -591,7 +591,7 @@ class FactoryScene(QGraphicsScene):
             parts.append(f"{nodes} noeud(s)")
         if edges:
             parts.append(f"{edges} ligne(s)")
-        self.selectionSummaryChanged.emit(" et ".join(parts) + " selectionne(s)")
+        self.selectionSummaryChanged.emit(" et ".join(parts) + " sélectionné(s)")
 
     # -------------------------------------------------------------- clipboard
 
@@ -777,9 +777,9 @@ class FactoryScene(QGraphicsScene):
         A plain toggle would silently turn "follow the global setting" into a fixed
         choice the first time it was clicked, and the user would have no way back.
         """
-        menu = QMenu("Rendu deploye", parent)
+        menu = QMenu("Rendu déployé", parent)
         for value, label in (
-            (None, "Suivre la preference"),
+            (None, "Suivre la préférence"),
             (True, "Afficher les machines"),
             (False, "Masquer les machines"),
         ):
@@ -798,9 +798,9 @@ class FactoryScene(QGraphicsScene):
         if node.show_deployed is deployed:
             return
         label = {
-            None: "rendu deploye : preference",
-            True: "rendu deploye : affiche",
-            False: "rendu deploye : masque",
+            None: "rendu déployé : préférence",
+            True: "rendu déployé : affiche",
+            False: "rendu déployé : masque",
         }[deployed]
         self.document.undo_stack.push(
             SetNodeFieldCommand(self.document, node_id, "show_deployed", deployed, label)
@@ -836,7 +836,7 @@ class FactoryScene(QGraphicsScene):
         un-pinnable -- otherwise it refuses the next line without saying why.
         """
         menu = QMenu("Contenu du tampon", parent)
-        deduced = QAction("Deduit des lignes raccordees", menu)
+        deduced = QAction("Deduit des lignes raccordées", menu)
         deduced.setCheckable(True)
         deduced.setChecked(node.item_class is None)
         deduced.triggered.connect(lambda: self.set_storage_item(node.id, None))
@@ -866,7 +866,7 @@ class FactoryScene(QGraphicsScene):
         if node.item_class == item_class:
             return
         label = (
-            "deduction du contenu"
+            "déduction du contenu"
             if item_class is None
             else f"contenu fixe a {self.document.game_data.item(item_class).display_name_fr}"
         )
@@ -947,7 +947,7 @@ class FactoryScene(QGraphicsScene):
         node = self.document.graph.node(node_id)
         assert isinstance(node, MachineNode)
         if abs(suggestion - node.machine_count) < 1e-9:
-            self.selectionSummaryChanged.emit("Ce noeud est deja a la bonne taille.")
+            self.selectionSummaryChanged.emit("Ce noeud est déjà a la bonne taille.")
             return
         self.set_quantity(node_id, suggestion)
 
@@ -962,7 +962,7 @@ class FactoryScene(QGraphicsScene):
         hint = ""
         if shard is not None:
             name = self.document.game_data.item(shard.class_name).display_name_fr
-            hint = f"\nAu-dela de 100 %, chaque machine consomme des {name}."
+            hint = f"\nAu-delà de 100 %, chaque machine consomme des {name}."
         value, accepted = QInputDialog.getDouble(
             parent,
             "Cadence",
@@ -982,7 +982,7 @@ class FactoryScene(QGraphicsScene):
         value, accepted = QInputDialog.getDouble(
             parent,
             "Nombre de machines",
-            "Machines construites (les decimales sont admises) :",
+            "Machines construites (les décimales sont admises) :",
             node.machine_count,
             0.0,
             10_000.0,

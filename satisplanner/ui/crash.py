@@ -42,7 +42,7 @@ def show_crash_report(report: CrashReport) -> None:
     # order to be helped. The log path is in it too, so this button is a superset
     # of the other and the other is kept only for the reader who wants to open the
     # file rather than send its contents.
-    copy_details = box.addButton("Copier les details", QMessageBox.ButtonRole.ActionRole)
+    copy_details = box.addButton("Copier les détails", QMessageBox.ButtonRole.ActionRole)
     copy_details.clicked.connect(lambda: _copy(report.clipboard_text))
     _keep_open(box, copy_details)
 

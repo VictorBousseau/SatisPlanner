@@ -44,7 +44,7 @@ class _DocumentCommand(QUndoCommand):
     def document(self) -> FactoryDocument:
         document = self._document()
         if document is None:
-            msg = "commande rejouee apres la fermeture de son document"
+            msg = "commande rejouée après la fermeture de son document"
             raise DeadDocumentError(msg)
         return document
 
@@ -241,7 +241,7 @@ class MoveNodesCommand(_DocumentCommand):
         after: dict[str, tuple[float, float]],
     ) -> None:
         plural = "s" if len(after) > 1 else ""
-        super().__init__(document, f"deplacement de {len(after)} noeud{plural}")
+        super().__init__(document, f"déplacement de {len(after)} noeud{plural}")
         self.before = before
         self.after = after
 
@@ -345,12 +345,12 @@ def can_connect(
         transport_class=transport_class,
     )
     if source == target:
-        return "une ligne ne peut pas boucler sur le meme noeud"
+        return "une ligne ne peut pas boucler sur le même noeud"
     if any(
         edge.source == source and edge.target == target and edge.item_class == item_class
         for edge in document.graph.edges
     ):
-        return "cette ligne existe deja"
+        return "cette ligne existe déjà"
     try:
         check_edge(document.graph, candidate, document.game_data)
     except GraphError as exc:
