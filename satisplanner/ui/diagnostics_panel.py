@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from satisplanner.core.results import Diagnostic, DiagnosticCode, FactoryReport, Severity
 from satisplanner.ui import theme
+from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.report_html import SEVERITY_COLOURS, SEVERITY_LABELS
 
@@ -49,7 +50,6 @@ class DiagnosticsPanel(QWidget):
 
     def __init__(self, document: FactoryDocument, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.document = document
         self._report: FactoryReport | None = None
 
         self.errors = QCheckBox("Erreurs", self)
@@ -80,13 +80,23 @@ class DiagnosticsPanel(QWidget):
         layout.addWidget(self.list, 1)
         layout.addWidget(self.fix_button)
 
-        document.reportChanged.connect(self.show_report)
-        if document.report is not None:
-            self.show_report(document.report)
+        self._binding = DocumentBinding()
+        self.set_document(document)
 
     # ------------------------------------------------------------------ data
 
-    def show_report(self, report: FactoryReport) -> None:
+    def set_document(self, document: FactoryDocument) -> None:
+        """Show another factory's findings, and stop listening to the previous one.
+
+        The report is read off the document rather than asked of the engine:
+        looking at a factory again does not change it.
+        """
+        self._binding.unbind()
+        self.document = document
+        self._binding.bind(document.reportChanged, self.show_report)
+        self.show_report(document.report)
+
+    def show_report(self, report: FactoryReport | None) -> None:
         self._report = report
         self.refresh()
 

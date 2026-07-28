@@ -44,8 +44,7 @@ def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWi
     built.show()
     yield built
     built.view.inline.close()
-    built.document.undo_stack.setClean()
-    built.scene.dispose()
+    built.dispose()
     built.close()
     built.deleteLater()
 

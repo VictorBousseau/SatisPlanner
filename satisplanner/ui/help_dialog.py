@@ -136,13 +136,20 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
 def shortcut_rows(actions: Iterable[QAction]) -> list[tuple[str, str]]:
     """``(label, keys)`` for every action that carries a shortcut, in order.
 
+    **All** of an action's shortcuts, not merely its first: "Nouvel onglet" answers
+    to Ctrl+N and to Ctrl+T, and a help page that mentioned one of them would be
+    read as saying the other does not work.
+
     Ampersands are stripped: they are menu mnemonics, not part of the name, and
     "&Fichier" in a help page looks like a typo.
     """
     rows: list[tuple[str, str]] = []
     seen: set[str] = set()
     for action in actions:
-        keys = action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        keys = " ou ".join(
+            sequence.toString(QKeySequence.SequenceFormat.NativeText)
+            for sequence in action.shortcuts()
+        )
         label = action.text().replace("&", "").removesuffix("...")
         if not keys or not label or keys in seen:
             continue

@@ -230,6 +230,11 @@ class FactoryScene(QGraphicsScene):
         self.document.graphChanged.disconnect(self.rebuild)
         self.document.nodesMoved.disconnect(self.apply_positions)
         self.document.reportChanged.disconnect(self.apply_report)
+        # While the scene is still whole. Taking the items away below drops the
+        # selection anyway, but it does so item by item, emitting
+        # ``selectionChanged`` at each step to listeners that would then ask this
+        # scene what is selected -- in the middle of the answer changing.
+        self.clearSelection()
         self._band = None
         self._band_origin = None
         # Take the items back from C++ one by one. Calling ``clear()`` first would

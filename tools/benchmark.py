@@ -2,6 +2,7 @@
 
     py -3.12 tools/benchmark.py
     py -3.12 tools/benchmark.py --profile 500
+    py -3.12 tools/benchmark.py --tabs
 
 Three figures per size, each one a whole gesture rather than a function call:
 
@@ -11,6 +12,12 @@ Three figures per size, each one a whole gesture rather than a function call:
 * **deplacement** -- from grabbing a node to letting it go, with everything that
   follows.
 
+``--tabs`` answers a different question: what opening five more factories costs
+the sixth. It measures one edit with a single tab open and the same edit with
+six, and it reports the process's memory before and after those six are loaded --
+because the benchmark measures time and six scenes' worth of graphics items are a
+size, not a duration.
+
 The deliberate 120 ms quiet period before the engine runs is **not** counted. It
 is a design decision, not a cost, and including it would hide whatever the work
 underneath actually takes.
@@ -19,12 +26,15 @@ The window is rendered offscreen so that two runs are comparable and no window
 flashes up. That makes these numbers a fair measure of the CPU work and of the
 raster painting, and not a measure of the compositor.
 
-No dependency beyond the standard library: ``time.perf_counter`` for the timing
-and ``cProfile`` for the ``--profile`` mode.
+No dependency beyond the standard library: ``time.perf_counter`` for the timing,
+``cProfile`` for the ``--profile`` mode, and ``ctypes`` against the API Windows
+already exposes for the memory figure -- adding ``psutil`` to read one number
+would be a dependency for the whole project's sake of one line here.
 """
 
 import argparse
 import cProfile
+import ctypes
 import io
 import os
 import pstats
@@ -189,6 +199,83 @@ def run(sizes: tuple[int, ...]) -> None:
         )
 
 
+class _MemoryCounters(ctypes.Structure):
+    """``PROCESS_MEMORY_COUNTERS``, enough of it to read the working set."""
+
+    _fields_ = (
+        ("cb", ctypes.c_uint32),
+        ("PageFaultCount", ctypes.c_uint32),
+        ("PeakWorkingSetSize", ctypes.c_size_t),
+        ("WorkingSetSize", ctypes.c_size_t),
+        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+        ("PagefileUsage", ctypes.c_size_t),
+        ("PeakPagefileUsage", ctypes.c_size_t),
+    )
+
+
+def working_set_mb() -> float | None:
+    """What this process is holding, in megabytes, or ``None`` off Windows.
+
+    Deliberately not ``tracemalloc``: it counts what Python allocated, and the
+    six scenes being weighed here are graphics items living in C++. Measuring the
+    half that does not matter would be worse than not measuring.
+    """
+    if sys.platform != "win32":
+        return None
+    counters = _MemoryCounters()
+    counters.cb = ctypes.sizeof(counters)
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    # Spelled out, because the default is a 32-bit int and the pseudo-handle then
+    # arrives at a 64-bit parameter half written.
+    read = ctypes.windll.psapi.GetProcessMemoryInfo
+    read.argtypes = (ctypes.c_void_p, ctypes.POINTER(_MemoryCounters), ctypes.c_uint32)
+    read.restype = ctypes.c_int
+    if not read(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        return None
+    return float(counters.WorkingSetSize) / (1024 * 1024)
+
+
+def run_tabs(size: int, count: int) -> None:
+    """What five more open factories cost the one being edited.
+
+    The same edit, measured with one tab open and with six. They must cost the
+    same: the five that are not being looked at are not solved, not redrawn and
+    not consulted, and a figure that grew with the number of tabs would mean one
+    of those three is not true.
+    """
+    game_data = db.load_game_data_from_file(db.default_database_path())
+    graph = benchmark_graph(size)
+    application, window = build_window(graph, game_data)
+    try:
+        alone = measure_edit(window, application)
+        before = working_set_mb()
+        for _ in range(count - 1):
+            window.new_tab().document.reset(benchmark_graph(size))
+        window.select_tab(window.open_tabs()[0])
+        _settle(application)
+        after = working_set_mb()
+        crowded = measure_edit(window, application)
+    finally:
+        window.dispose()
+        window.close()
+
+    print(f"banc d'essai version {BENCHMARK_VERSION}, mediane de {REPEATS} passages")
+    print(f"usines de {size} nœuds, {len(graph.edges)} arêtes")
+    print(f"{'onglets ouverts':>16} {'édition':>12}")
+    print(f"{1:>16} {alone.median:>9.1f} ms")
+    print(f"{count:>16} {crowded.median:>9.1f} ms")
+    if before is not None and after is not None:
+        print(
+            f"\nmémoire du processus : {before:.0f} Mo avec 1 onglet, "
+            f"{after:.0f} Mo avec {count} — soit {(after - before) / (count - 1):.0f} Mo "
+            f"par usine de {size} nœuds"
+        )
+
+
 def profile(size: int) -> None:
     """Where the time goes on one resolution of the largest graph."""
     game_data = db.load_game_data_from_file(db.default_database_path())
@@ -217,9 +304,19 @@ def main(argv: list[str] | None = None) -> int:
         metavar="TAILLE",
         help="profiler une résolution de cette taille au lieu de mesurer",
     )
+    parser.add_argument(
+        "--tabs",
+        nargs="?",
+        type=int,
+        const=6,
+        metavar="NOMBRE",
+        help="mesurer une édition avec un onglet puis avec NOMBRE onglets (6 par défaut)",
+    )
     arguments = parser.parse_args(argv)
     if arguments.profile:
         profile(arguments.profile)
+    elif arguments.tabs:
+        run_tabs(max(arguments.sizes), arguments.tabs)
     else:
         run(tuple(arguments.sizes))
     return 0

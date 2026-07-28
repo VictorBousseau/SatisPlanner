@@ -32,8 +32,7 @@ def window(qtbot: QtBot, game_data: GameData, store: QSettings) -> Iterator[Main
     del qtbot
     built = MainWindow(game_data, settings=store)
     yield built
-    built.document.undo_stack.setClean()
-    built.scene.dispose()
+    built.dispose()
     built.close()
     built.deleteLater()
 
@@ -135,7 +134,7 @@ def test_a_filter_toggled_in_the_palette_is_still_off_next_time(
         assert reopened.palette_widget.alternates.isChecked() is False
         assert not any(entry.is_alternate for entry in reopened.palette_widget.visible_entries())
     finally:
-        reopened.scene.dispose()
+        reopened.dispose()
         reopened.close()
         reopened.deleteLater()
 

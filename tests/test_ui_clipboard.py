@@ -31,8 +31,7 @@ def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWi
     del qtbot
     built = MainWindow(game_data, settings=temporary_settings(tmp_path))
     yield built
-    built.document.undo_stack.setClean()
-    built.scene.dispose()
+    built.dispose()
     built.close()
     built.deleteLater()
 
@@ -240,8 +239,7 @@ def test_a_selection_travels_between_two_windows(
         assert len(other.document.graph.nodes) == 2
         assert len(other.document.graph.edges) == 1
     finally:
-        other.document.undo_stack.setClean()
-        other.scene.dispose()
+        other.dispose()
         other.close()
         other.deleteLater()
 

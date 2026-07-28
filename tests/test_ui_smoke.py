@@ -34,8 +34,7 @@ def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWi
     del qtbot
     built = MainWindow(game_data, settings=temporary_settings(tmp_path))
     yield built
-    built.document.undo_stack.setClean()
-    built.scene.dispose()
+    built.dispose()
     built.close()
     built.deleteLater()
 
@@ -64,10 +63,11 @@ def test_main_window_builds_and_shows(qtbot: QtBot) -> None:
 
     assert built.isVisible()
     assert "SatisPlanner" in built.windowTitle()
-    assert built.centralWidget() is built.view
+    assert built.centralWidget() is built.tabs
+    assert built.tabs.currentWidget() is built.current_tab
     assert built.game_data.recipes, "le catalogue embarque doit être lisible sans le jeu"
     assert built.document.is_modified is False
-    built.scene.dispose()
+    built.dispose()
     built.close()
     built.deleteLater()
 

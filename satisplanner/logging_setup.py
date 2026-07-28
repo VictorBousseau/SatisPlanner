@@ -170,9 +170,9 @@ def build_report(exception: BaseException) -> CrashReport:
         title="Erreur inattendue",
         message=(
             "SatisPlanner a rencontré une erreur inattendue.\n\n"
-            "L'usine en cours n'a pas été modifiée par cette erreur ; si elle contient "
-            "du travail non enregistré, enregistrez-la sous un autre nom avant de "
-            "continuer."
+            "Aucune des usines ouvertes n'a été modifiée par cette erreur ; si l'une "
+            "d'elles contient du travail non enregistré, enregistrez-la sous un autre "
+            "nom avant de continuer."
         ),
         summary=f"{name} : {text}" if text else name,
         # ``format_exception`` copes with an exception that was never raised and has

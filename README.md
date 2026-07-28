@@ -74,8 +74,15 @@ Vérifications :
 
 ## Utilisation
 
-Palette à gauche, canvas au centre, trois panneaux à droite.
+Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
 
+- **Onglets** : plusieurs usines ouvertes à la fois. `Ctrl+N` ou `Ctrl+T` pour un nouvel onglet,
+  `Ctrl+W` pour fermer celui du dessus, `Ctrl+Tab` pour passer au suivant ; ouvrir un fichier ou
+  importer un code de partage ouvre son propre onglet, et un fichier récent aussi. Le titre de
+  l'onglet porte le nom du fichier et un point quand il reste du travail non enregistré.
+  **Chaque onglet garde son zoom, son cadrage et sa sélection** : y revenir retrouve l'usine là où
+  on l'avait laissée. `Annuler` défait toujours dans l'usine qu'on regarde, jamais dans une autre.
+  Les préférences, la palette et les couleurs par objet restent communes à toute l'application.
 - **Palette** : recherche insensible aux accents et par mots indépendants (« alt plaque » trouve
   « Alternative : plaque de fer moulée »), filtre par machine, bascules pour les recettes
   alternatives et les objets d'événement, et le tier par défaut des nouvelles lignes.
@@ -113,8 +120,8 @@ Palette à gauche, canvas au centre, trois panneaux à droite.
 - **Copier-coller** : `Ctrl+C` / `Ctrl+X` / `Ctrl+V`, plus `Ctrl+D` pour dupliquer sans toucher au
   presse-papiers. Les lignes internes à la sélection suivent, celles qui en sortaient non — elles
   n'auraient plus rien à quoi s'accrocher. Un collage est **une seule annulation**. La sélection
-  voyage dans le presse-papiers système au format code de partage, donc **entre deux fenêtres**. Un
-  presse-papiers qui contient autre chose est ignoré en silence.
+  voyage dans le presse-papiers système au format code de partage, donc **entre deux onglets et
+  entre deux fenêtres**. Un presse-papiers qui contient autre chose est ignoré en silence.
 - **Machines déployées** (`Ctrl+M`, désactivé par défaut) : une vignette par machine bâtie, en
   grille, avec une vignette partielle pour un compte fractionnaire et « … ×N » au-delà du plafond.
   Clic droit sur un nœud pour y déroger — afficher, masquer, ou suivre la préférence. **Purement
@@ -291,6 +298,13 @@ d'annulation, `commands.py` les opérations, `catalogue.py` la passerelle entre 
 palette (sans Qt, donc testable sans fenêtre), `canvas.py` / `canvas_items.py` le rendu,
 `report_html.py` le rapport en HTML — partagé par le panneau des totaux et l'export PDF, pour que
 la page imprimée et le panneau à côté ne puissent pas afficher deux chiffres différents.
+
+`document_tab.py` réunit ce qui appartient à une usine ouverte et à elle seule — son document, sa
+scène, sa vue — et `binding.py` tient les connexions du document affiché : tout ce qui est branché
+est noté, et le débranchement rejoue cette note. Oublier de défaire une connexion demanderait
+d'oublier de la faire, ce qui est la seule protection sérieuse contre un panneau qui se met à jour
+deux fois sans que rien ne se voie. `MainWindow._activate` est le seul endroit qui sait que
+l'usine regardée a changé : il y débranche, rebranche, et désigne la pile d'annulation active.
 
 `data/factory_file.py` lit et écrit les usines : c'est de l'entrée-sortie, donc c'est dans `data/`,
 au même titre que le parseur du jeu et la base SQLite.

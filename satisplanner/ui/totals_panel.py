@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
 
 from satisplanner.core.results import FactoryReport
 from satisplanner.ui import report_html
+from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.document import FactoryDocument
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,6 @@ class TotalsPanel(QWidget):
 
     def __init__(self, document: FactoryDocument, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.document = document
         self.browser = QTextBrowser(self)
         self.browser.setOpenExternalLinks(False)
 
@@ -29,11 +29,19 @@ class TotalsPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.browser)
 
-        document.reportChanged.connect(self.show_report)
-        if document.report is not None:
-            self.show_report(document.report)
-        else:
-            self.show_report(None)
+        self._binding = DocumentBinding()
+        self.set_document(document)
+
+    def set_document(self, document: FactoryDocument) -> None:
+        """Show another factory, and stop listening to the previous one.
+
+        The report is **read**, never asked for: the document being shown has
+        already been solved, and switching tabs is not an edit.
+        """
+        self._binding.unbind()
+        self.document = document
+        self._binding.bind(document.reportChanged, self.show_report)
+        self.show_report(document.report)
 
     def show_report(self, report: FactoryReport | None) -> None:
         """Redraw, keeping the scroll position so a live recompute is not jarring."""

@@ -32,8 +32,7 @@ def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWi
     yield built
     if built.item_card is not None:
         built.item_card.close()
-    built.document.undo_stack.setClean()
-    built.scene.dispose()
+    built.dispose()
     built.close()
     built.deleteLater()
 

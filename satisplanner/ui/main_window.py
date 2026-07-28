@@ -1,9 +1,20 @@
-"""Main window: palette on the left, canvas in the middle, three panels on the right.
+"""Main window: palette on the left, the open factories in the middle, panels right.
 
 This is where the application becomes an application rather than a canvas: a document
 has a name, a place on disk and a modified state, closing it asks before throwing
 work away, and the three panels are kept in step with the same report the canvas
 draws from.
+
+Several factories are open at once, one per tab. Each tab owns its document, its
+scene and its view -- so its zoom, its framing and its selection are its own -- while
+the palette, the three panels and the preferences are shared and rebound as the tabs
+change. That split is deliberate: three panels per open factory would be three times
+the work on every edit, for two of which nobody is looking.
+
+The rebinding lives in exactly one method, :meth:`MainWindow._activate`, which also
+sets the active undo stack. It has to be one method: a window where the panels
+follow the tabs and the undo history follows something else is a window where
+``Annuler`` eventually undoes an edit made in another factory.
 
 Selection is synchronised in both directions between the canvas and the table. The
 loop is broken with one flag rather than by disconnecting signals, because
@@ -21,7 +32,13 @@ from pathlib import Path
 from typing import Final
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QGuiApplication, QKeySequence
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QGuiApplication,
+    QKeySequence,
+    QUndoGroup,
+)
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -33,6 +50,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPlainTextEdit,
+    QTabWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -45,10 +63,12 @@ from satisplanner.core.results import FactoryReport, Severity
 from satisplanner.data import db, factory_file
 from satisplanner.data.factory_file import FILE_FILTER, FILE_SUFFIX, FactoryFileError
 from satisplanner.ui import exporters, theme
+from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.canvas import MAX_SCALE, FactoryScene, FactoryView
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry, build_entries
 from satisplanner.ui.diagnostics_panel import DiagnosticsPanel
 from satisplanner.ui.document import FactoryDocument
+from satisplanner.ui.document_tab import DocumentTab
 from satisplanner.ui.help_dialog import HelpDialog, shortcut_rows
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.item_card import ItemCard
@@ -170,7 +190,7 @@ class PdfOptionsDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    """Application shell around one edited factory."""
+    """Application shell around the factories that are open."""
 
     def __init__(
         self, game_data: GameData | None = None, settings: QSettings | None = None
@@ -186,31 +206,199 @@ class MainWindow(QMainWindow):
             user_directory=self.preferences.effective_icon_directory
         )
         self.entries: list[PaletteEntry] = build_entries(self.game_data)
-        self.document = FactoryDocument(self.game_data, self)
         # Built on first use and kept: see show_item_card.
         self.item_card: ItemCard | None = None
         self._syncing_selection = False
         # In creation order, which is menu order, which is the order the help lists.
         self.menus: list[QMenu] = []
+        # One history per open factory, and one group so that Annuler always means
+        # "undo in the factory being looked at".
+        self.undo_group = QUndoGroup(self)
+        # Everything that belongs to the active document, connected and disconnected
+        # as one piece. Filled and emptied only by _activate.
+        self._binding = DocumentBinding()
+        self._active: DocumentTab | None = None
 
         self.resize(1700, 980)
-        self.scene = FactoryScene(self.document, self.icons, self.entries, self)
-        self.view = FactoryView(self.scene, self)
-        self.setCentralWidget(self.view)
+        self.tabs = QTabWidget(self)
+        self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)
+        self.tabs.setDocumentMode(True)
+        self.tabs.currentChanged.connect(self._current_changed)
+        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.setCentralWidget(self.tabs)
+
+        # The first factory exists before the panels, because they are built around a
+        # document; it joins the tab bar last, once there is something to bind it to.
+        first = self._new_tab()
 
         self.palette_widget = PaletteWidget(self.game_data, self.icons, self.entries, self)
-        self.table_panel = NodeTablePanel(self.document, self)
-        self.totals_panel = TotalsPanel(self.document, self)
-        self.diagnostics_panel = DiagnosticsPanel(self.document, self)
+        self.table_panel = NodeTablePanel(first.document, self)
+        self.totals_panel = TotalsPanel(first.document, self)
+        self.diagnostics_panel = DiagnosticsPanel(first.document, self)
+        self.panels = (self.table_panel, self.totals_panel, self.diagnostics_panel)
 
         self._build_docks()
         self._build_actions()
         self._connect()
-
-        self.apply_preferences()
         self._show_catalogue_summary()
+
+        self._adopt(first)
+        self.apply_preferences()
+
+    # ------------------------------------------------------------------- tabs
+
+    @property
+    def current_tab(self) -> DocumentTab:
+        """The factory being looked at. There is always exactly one."""
+        assert self._active is not None, "la fenêtre a toujours une usine ouverte"
+        return self._active
+
+    @property
+    def document(self) -> FactoryDocument:
+        return self.current_tab.document
+
+    @property
+    def scene(self) -> FactoryScene:
+        return self.current_tab.scene
+
+    @property
+    def view(self) -> FactoryView:
+        return self.current_tab.view
+
+    def open_tabs(self) -> list[DocumentTab]:
+        """Every open factory, in tab-bar order."""
+        found = []
+        for index in range(self.tabs.count()):
+            widget = self.tabs.widget(index)
+            if isinstance(widget, DocumentTab):
+                found.append(widget)
+        return found
+
+    def _new_tab(self) -> DocumentTab:
+        """Build a factory and its canvas, without putting them on screen yet."""
+        tab = DocumentTab(self.game_data, self.icons, self.entries, self)
+        self.undo_group.addStack(tab.document.undo_stack)
+        # Its own title follows its own name and modified state for as long as it
+        # exists -- which is not the same lifetime as being the active document, so
+        # this connection is not one of _activate's.
+        tab.document.identityChanged.connect(self.refresh_title)
+        # So that a tab always has a report to show and switching to it never has to
+        # ask the engine for one. An empty factory costs microseconds.
+        tab.document.solve_now()
+        return tab
+
+    def _adopt(self, tab: DocumentTab) -> DocumentTab:
+        """Put a built tab on screen and make it the active one."""
+        index = self.tabs.addTab(tab, tab.title())
+        self.tabs.setCurrentIndex(index)
+        # Adding the very first tab makes it current without changing the index, so
+        # ``currentChanged`` may not have fired. Activating twice is free: _activate
+        # returns at once when the document has not changed.
+        self._activate(tab)
+        return tab
+
+    def new_tab(self) -> DocumentTab:
+        """A blank factory in a new tab, made active."""
+        return self._adopt(self._new_tab())
+
+    def select_tab(self, tab: DocumentTab) -> None:
+        self.tabs.setCurrentIndex(self.tabs.indexOf(tab))
+
+    def next_tab(self) -> None:
+        """Ctrl+Tab, wrapping round rather than stopping at the last one."""
+        if self.tabs.count() > 1:
+            self.tabs.setCurrentIndex((self.tabs.currentIndex() + 1) % self.tabs.count())
+
+    def close_current_tab(self) -> bool:
+        return self.close_tab(self.tabs.currentIndex())
+
+    def close_tab(self, index: int) -> bool:
+        """Close one factory, asking first if it would lose work.
+
+        The tab is brought to the front before the question is asked, and only
+        then: "« Usine » a été modifiée" is a question about a factory and should
+        be answered while looking at it, but closing a background tab that has
+        nothing to lose has no reason to move the view at all.
+        """
+        tab = self.tabs.widget(index)
+        if not isinstance(tab, DocumentTab):
+            return False
+        if tab.document.is_modified:
+            self.tabs.setCurrentIndex(index)
+            if not self.confirm_discard():
+                return False
+        if self.tabs.count() == 1:
+            # The window always has a factory in it. Closing the only one leaves a
+            # blank one rather than a window with nothing to edit and half its menus
+            # pointing at nothing. The replacement is put in place *first*, so the
+            # active document is never momentarily absent.
+            self.new_tab()
+        self.tabs.removeTab(index)
+        self.undo_group.removeStack(tab.document.undo_stack)
+        tab.dispose()
+        tab.deleteLater()
+        return True
+
+    def _reusable_tab(self) -> DocumentTab | None:
+        """The active tab when it is a blank one nobody has touched.
+
+        Opening a file into it rather than beside it is what stops the window
+        filling up with the empty document it started with.
+        """
+        tab = self._active
+        return tab if tab is not None and tab.is_pristine else None
+
+    def _current_changed(self, index: int) -> None:
+        widget = self.tabs.widget(index)
+        self._activate(widget if isinstance(widget, DocumentTab) else None)
+
+    def _activate(self, tab: DocumentTab | None) -> None:
+        """The one and only place that knows the active document changed.
+
+        It undoes the previous document's connections, makes the new one's, and
+        hands the undo group the matching stack. Those three have to happen
+        together: panels that follow the tabs and an undo history that follows
+        something else drift apart silently, and the first sign of it is
+        ``Annuler`` undoing an edit made in a factory that is no longer on screen.
+
+        Nothing here asks the engine for anything. The document being shown was
+        solved when it was created and after every edit since; the panels redisplay
+        that report, they do not request a new one. Switching tabs is not an edit.
+        """
+        if tab is self._active:
+            return
+        self._binding.unbind()
+        self._active = tab
+        if tab is None:
+            return
+
+        document, scene = tab.document, tab.scene
+        self._binding.bind(scene.itemCardRequested, self.show_item_card)
+        self._binding.bind(scene.selectionSummaryChanged, self._show_hint)
+        self._binding.bind(scene.selectionChanged, self._canvas_selection_changed)
+        self._binding.bind(document.reportChanged, self._show_report_summary)
+        for panel in self.panels:
+            panel.set_document(document)
+        self.undo_group.setActiveStack(document.undo_stack)
+
         self.refresh_title()
-        self.document.solve_now()
+        if document.report is not None:
+            self._show_report_summary(document.report)
+        # The table is shared, so it shows the selection of whichever canvas is in
+        # front -- including an empty one.
+        self._canvas_selection_changed()
+
+    def dispose(self) -> None:
+        """Let go of every open factory. For the tests; a running window closes.
+
+        The active document is unbound first, so that nothing is listening to a
+        scene while that scene is being taken apart.
+        """
+        self._binding.unbind()
+        for tab in self.open_tabs():
+            tab.document.undo_stack.setClean()
+            tab.dispose()
 
     # ------------------------------------------------------------------ layout
 
@@ -245,8 +433,16 @@ class MainWindow(QMainWindow):
         self._build_help_actions()
 
     def _build_file_actions(self) -> None:
-        self.new_action = _action(self, "Nouveau", QKeySequence.StandardKey.New, self.new_factory)
+        self.new_action = _action(self, "Nouvel onglet", QKeySequence.StandardKey.New, self.new_tab)
+        # Two bindings for one gesture: Ctrl+N is what "new document" means
+        # everywhere, Ctrl+T is what "new tab" means everywhere, and with tabs they
+        # are the same gesture. The help page lists both.
+        self.new_action.setShortcuts(
+            [QKeySequence(QKeySequence.StandardKey.New), QKeySequence("Ctrl+T")]
+        )
         self.open_action = _action(self, "Ouvrir...", QKeySequence.StandardKey.Open, self.open_file)
+        self.close_tab_action = _action(self, "Fermer l'onglet", "Ctrl+W", self.close_current_tab)
+        self.next_tab_action = _action(self, "Onglet suivant", "Ctrl+Tab", self.next_tab)
         self.save_action = _action(self, "Enregistrer", QKeySequence.StandardKey.Save, self.save)
         self.save_as_action = _action(
             self, "Enregistrer sous...", QKeySequence.StandardKey.SaveAs, self.save_as
@@ -271,6 +467,9 @@ class MainWindow(QMainWindow):
         menu.addAction(self.new_action)
         menu.addAction(self.open_action)
         self.recent_menu = menu.addMenu("Fichiers récents")
+        menu.addSeparator()
+        menu.addAction(self.next_tab_action)
+        menu.addAction(self.close_tab_action)
         menu.addSeparator()
         menu.addAction(self.save_action)
         menu.addAction(self.save_as_action)
@@ -299,30 +498,44 @@ class MainWindow(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
-        self.undo_action = self.document.undo_stack.createUndoAction(self, "Annuler")
+        # From the group rather than from one stack: the action stays the same
+        # object across a tab change and follows whichever history is active.
+        self.undo_action = self.undo_group.createUndoAction(self, "Annuler")
         self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
-        self.redo_action = self.document.undo_stack.createRedoAction(self, "Refaire")
+        self.redo_action = self.undo_group.createRedoAction(self, "Refaire")
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         toolbar.addAction(self.undo_action)
         toolbar.addAction(self.redo_action)
         toolbar.addSeparator()
 
+        # Every canvas action goes through the window rather than being bound to one
+        # scene: the actions are built once and the canvas underneath them changes
+        # with the tab. ``self.scene`` reads the active one at the moment of the
+        # click, which is the only moment at which the answer is known.
         self.delete_action = _action(
-            self, "Supprimer", QKeySequence.StandardKey.Delete, self.scene.delete_selection
+            self,
+            "Supprimer",
+            QKeySequence.StandardKey.Delete,
+            lambda: self.scene.delete_selection(),
         )
         self.select_all_action = _action(
-            self, "Tout sélectionner", QKeySequence.StandardKey.SelectAll, self.scene.select_all
+            self,
+            "Tout sélectionner",
+            QKeySequence.StandardKey.SelectAll,
+            lambda: self.scene.select_all(),
         )
         self.copy_action = _action(
-            self, "Copier", QKeySequence.StandardKey.Copy, self.scene.copy_selection
+            self, "Copier", QKeySequence.StandardKey.Copy, lambda: self.scene.copy_selection()
         )
         self.cut_action = _action(
-            self, "Couper", QKeySequence.StandardKey.Cut, self.scene.cut_selection
+            self, "Couper", QKeySequence.StandardKey.Cut, lambda: self.scene.cut_selection()
         )
         self.paste_action = _action(
-            self, "Coller", QKeySequence.StandardKey.Paste, self.scene.paste
+            self, "Coller", QKeySequence.StandardKey.Paste, lambda: self.scene.paste()
         )
-        self.duplicate_action = _action(self, "Dupliquer", "Ctrl+D", self.scene.duplicate_selection)
+        self.duplicate_action = _action(
+            self, "Dupliquer", "Ctrl+D", lambda: self.scene.duplicate_selection()
+        )
         self.adjust_action = _action(self, "Ajuster ce nœud", "Ctrl+E", self._adjust_selection)
         self.adjust_action.setToolTip(
             "Dimensionne le nœud sélectionné à ce que ses intrants permettent (calcul local)"
@@ -345,13 +558,17 @@ class MainWindow(QMainWindow):
         menu.addAction(self.adjust_action)
 
     def _build_view_actions(self) -> None:
+        # Through the window for the same reason as the edit actions: the view is
+        # the active tab's, and which tab that is changes.
         self.zoom_in_action = _action(
-            self, "Zoom avant", QKeySequence.StandardKey.ZoomIn, self.view.zoom_in
+            self, "Zoom avant", QKeySequence.StandardKey.ZoomIn, lambda: self.view.zoom_in()
         )
         self.zoom_out_action = _action(
-            self, "Zoom arrière", QKeySequence.StandardKey.ZoomOut, self.view.zoom_out
+            self, "Zoom arrière", QKeySequence.StandardKey.ZoomOut, lambda: self.view.zoom_out()
         )
-        self.reset_zoom_action = _action(self, "Zoom 100 %", "Ctrl+0", self.view.reset_zoom)
+        self.reset_zoom_action = _action(
+            self, "Zoom 100 %", "Ctrl+0", lambda: self.view.reset_zoom()
+        )
         self.fit_action = _action(self, "Tout afficher", "Ctrl+Shift+F", self.fit_to_factory)
         self.search_action = _action(
             self, "Rechercher dans la palette", "Ctrl+F", self.focus_search
@@ -395,20 +612,19 @@ class MainWindow(QMainWindow):
         menu.addAction(_action(self, "A propos", None, self._show_about))
 
     def _connect(self) -> None:
+        """What is wired once and for good: the shared widgets to the window.
+
+        Nothing here mentions a document. Everything that follows the active one is
+        in :meth:`_activate`, and keeping the two apart is what makes it possible to
+        say that the rebinding is complete.
+        """
         self.palette_widget.entryActivated.connect(self._add_at_view_centre)
         self.palette_widget.entryOpened.connect(self.show_entry_card)
-        self.scene.itemCardRequested.connect(self.show_item_card)
-        self.palette_widget.defaultTransportsChanged.connect(self.scene.set_default_transports)
         self.palette_widget.defaultTransportsChanged.connect(self._store_transports)
         self.palette_widget.filtersChanged.connect(self._store_filters)
-        self.scene.selectionSummaryChanged.connect(self._show_hint)
-        self.scene.selectionChanged.connect(self._canvas_selection_changed)
         self.table_panel.selectionChangedTo.connect(self._table_selection_changed)
         self.diagnostics_panel.targetPicked.connect(self.reveal)
         self.diagnostics_panel.fixRequested.connect(self.apply_fix)
-        self.document.reportChanged.connect(self._show_report_summary)
-        self.document.identityChanged.connect(self.refresh_title)
-        self.scene.set_default_transports(*self.palette_widget.default_transports())
 
     # -------------------------------------------------------------- selection
 
@@ -445,28 +661,30 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------- document actions
 
-    def new_factory(self) -> None:
-        if not self.confirm_discard():
-            return
-        self.document.reset()
-        self.statusBar().showMessage("Nouvelle usine.", 4000)
-
     def open_file(self, path: Path | None = None) -> bool:
-        if not self.confirm_discard():
-            return False
+        """Open a factory in its own tab, next to the ones already open.
+
+        The file is read **before** a tab is chosen for it: a file that cannot be
+        opened must not leave an empty tab behind as evidence that something was
+        attempted.
+        """
         if path is None:
             chosen, _ = QFileDialog.getOpenFileName(self, "Ouvrir une usine", "", FILE_FILTER)
             if not chosen:
                 return False
             path = Path(chosen)
         try:
-            loaded = self.document.open(path)
+            loaded = factory_file.load(path)
         except FactoryFileError as exc:
             QMessageBox.warning(self, "Ouverture impossible", str(exc))
             return False
+        tab = self._reusable_tab() or self.new_tab()
+        self.select_tab(tab)
+        warnings = list(loaded.warnings)
+        tab.document.adopt(loaded.graph, path, warnings)
         self.remember_recent(path)
         self.fit_to_factory()
-        self._report_warnings(loaded.warnings, path.name)
+        self._report_warnings(warnings, path.name)
         return True
 
     def save(self) -> bool:
@@ -521,10 +739,20 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Discard
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self.confirm_discard():
-            event.accept()
-        else:
-            event.ignore()
+        """Ask about every open factory: none forgotten, none asked twice.
+
+        Each tab is brought to the front before its own question, so the name in
+        the box is the factory on screen. Saving makes a document clean, and a
+        clean document is not asked about, which is what stops the second pass
+        from repeating the first. Cancelling anywhere stops the whole closing --
+        the factories already saved stay saved, and nothing has been discarded.
+        """
+        for index in range(self.tabs.count()):
+            self.tabs.setCurrentIndex(index)
+            if not self.confirm_discard():
+                event.ignore()
+                return
+        event.accept()
 
     # ----------------------------------------------------------- share codes
 
@@ -537,9 +765,8 @@ class MainWindow(QMainWindow):
         return code
 
     def import_code(self, code: str | None = None) -> bool:
+        """A shared factory arrives in its own tab, like an opened file."""
         if code is None:
-            if not self.confirm_discard():
-                return False
             dialog = ShareCodeDialog("Importer depuis un code", parent=self)
             if dialog.exec() != QDialog.DialogCode.Accepted:
                 return False
@@ -549,8 +776,10 @@ class MainWindow(QMainWindow):
         except FactoryFileError as exc:
             QMessageBox.warning(self, "Code refusé", str(exc))
             return False
+        tab = self._reusable_tab() or self.new_tab()
+        self.select_tab(tab)
         warnings = list(loaded.warnings)
-        self.document.adopt(loaded.graph, warnings=warnings)
+        tab.document.adopt(loaded.graph, warnings=warnings)
         self.fit_to_factory()
         self._report_warnings(warnings, "le code importé")
         return True
@@ -604,7 +833,12 @@ class MainWindow(QMainWindow):
     # ----------------------------------------------------------- preferences
 
     def apply_preferences(self) -> None:
-        """Push what was stored into the widgets that show it."""
+        """Push what was stored into the widgets that show it.
+
+        Onto **every** open canvas, not only the one in front: a preference is a
+        property of the application, and finding the old colours on the tab next
+        door would be a bug rather than a feature.
+        """
         self.palette_widget.apply_stored(
             self.preferences.default_belt,
             self.preferences.default_pipe,
@@ -613,9 +847,12 @@ class MainWindow(QMainWindow):
         )
         deployed = self.preferences.deployed_rendering
         self.deployed_action.setChecked(deployed)
-        self.scene.set_deployed_rendering(deployed, self.preferences.deployed_ceiling)
         palette = self.preferences.item_palette
-        self.scene.set_item_palette(palette)
+        belt, pipe = self.palette_widget.default_transports()
+        for tab in self.open_tabs():
+            tab.scene.set_deployed_rendering(deployed, self.preferences.deployed_ceiling)
+            tab.scene.set_item_palette(palette)
+            tab.scene.set_default_transports(belt, pipe)
         self.palette_widget.set_item_palette(palette)
         self.refresh_recent_menu()
 
@@ -623,7 +860,8 @@ class MainWindow(QMainWindow):
         """The Affichage menu and the preferences box set the same one setting."""
         enabled = self.deployed_action.isChecked()
         self.preferences.deployed_rendering = enabled
-        self.scene.set_deployed_rendering(enabled, self.preferences.deployed_ceiling)
+        for tab in self.open_tabs():
+            tab.scene.set_deployed_rendering(enabled, self.preferences.deployed_ceiling)
 
     def edit_preferences(self) -> bool:
         """Open the box and, if it is accepted, act on what changed."""
@@ -650,13 +888,16 @@ class MainWindow(QMainWindow):
             user_directory=self.preferences.effective_icon_directory
         )
         self.palette_widget.set_icons(self.icons)
-        self.scene.set_icons(self.icons)
+        for tab in self.open_tabs():
+            tab.scene.set_icons(self.icons)
         self._refresh_catalogue_summary()
         logger.info("%d fichier(s) d'icône indexe(s)", len(self.icons.index))
 
     def _store_transports(self, belt: str, pipe: str) -> None:
         self.preferences.default_belt = belt
         self.preferences.default_pipe = pipe
+        for tab in self.open_tabs():
+            tab.scene.set_default_transports(belt, pipe)
 
     def _store_filters(self, alternates: bool, events: bool) -> None:
         self.preferences.show_alternates = alternates
@@ -772,12 +1013,24 @@ class MainWindow(QMainWindow):
             self.view.centerOn(rect.center())
 
     def refresh_title(self) -> None:
-        marker = " •" if self.document.is_modified else ""
+        """The window's title, and every tab's, from the documents themselves.
+
+        All of them at once rather than only the active one: an identity change is
+        rare, there are a handful of tabs, and a routine that refreshes everything
+        cannot leave one stale.
+        """
+        for index, tab in enumerate(self.open_tabs()):
+            self.tabs.setTabText(index, tab.title())
+            self.tabs.setTabToolTip(index, tab.tooltip())
+        if self._active is None:
+            return
+        document = self._active.document
+        marker = " •" if document.is_modified else ""
         # Spelled out rather than iconic: this is the state where a reflex Ctrl+S
         # costs somebody their nodes, so it says what it means.
-        partial = " — OUVERTURE PARTIELLE" if self.document.is_partial else ""
+        partial = " — OUVERTURE PARTIELLE" if document.is_partial else ""
         self.setWindowTitle(
-            f"{self.document.display_name}{marker}{partial} — SatisPlanner {__version__} "
+            f"{document.display_name}{marker}{partial} — SatisPlanner {__version__} "
             f"— Satisfactory {db.GAME_VERSION}"
         )
 

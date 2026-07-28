@@ -5,6 +5,8 @@
 BOM) so that the tests exercise the same decoding path as production.
 """
 
+import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,6 +28,30 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 REFERENCE_FIXTURE = FIXTURE_DIR / "docs_en-US.json"
 FRENCH_FIXTURE = FIXTURE_DIR / "docs_fr.json"
 GRAPH_DIR = FIXTURE_DIR / "graphs"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def empty_clipboard_on_the_way_out() -> Iterator[None]:
+    """Leave the clipboard empty, or the interpreter dies on its way out.
+
+    Twelve lines of PySide6 and not one of this application reproduce it: make a
+    ``QApplication`` under the offscreen platform, put a ``QMimeData`` on the
+    clipboard, and the process segfaults at shutdown. Every test passes and the
+    runner still reports a crash, which then reads as a failure of whichever test
+    happened to run last -- and since the order is shuffled, of a different one
+    each time.
+
+    It is a toolkit defect and not one of ours, so nothing changes in
+    ``ui/clipboard``: a real session ends with Qt shutting down properly, and the
+    application never reaches this state. The workaround belongs where the problem
+    is, which is the harness.
+    """
+    yield
+    widgets = sys.modules.get("PySide6.QtWidgets")
+    if widgets is None:  # a run with no interface test in it
+        return
+    if widgets.QApplication.instance() is not None:
+        widgets.QApplication.clipboard().clear()
 
 
 @pytest.fixture(scope="session")

@@ -27,8 +27,7 @@ def window(qtbot: QtBot, game_data: GameData, tmp_path: Path) -> Iterator[MainWi
     del qtbot
     built = MainWindow(game_data, settings=temporary_settings(tmp_path))
     yield built
-    built.document.undo_stack.setClean()
-    built.scene.dispose()
+    built.dispose()
     built.close()
     built.deleteLater()
 

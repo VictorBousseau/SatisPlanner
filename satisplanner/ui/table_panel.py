@@ -48,8 +48,9 @@ from satisplanner.core.graph import (
     ResourceNode,
     WaterExtractorNode,
 )
-from satisplanner.core.results import LimitingFactor, NodeSolution
+from satisplanner.core.results import FactoryReport, LimitingFactor, NodeSolution
 from satisplanner.ui import edits, theme
+from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices, fuel_choices
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.edits import quantity_of
@@ -147,16 +148,28 @@ class NodeTableModel(QAbstractTableModel):
 
     def __init__(self, document: FactoryDocument, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self.document = document
         self._rows: list[str] = []
         self._row_of: dict[str, int] = {}
-        # Deliberately **not** connected to ``nodesMoved``: this table shows no
-        # position and has nothing to say about one.
-        document.graphChanged.connect(self.refresh)
-        document.reportChanged.connect(lambda _report: self.refresh())
-        self.refresh()
+        self._binding = DocumentBinding()
+        self.set_document(document)
 
     # -------------------------------------------------------------- structure
+
+    def set_document(self, document: FactoryDocument) -> None:
+        """Show another factory's nodes, and stop listening to the previous one.
+
+        Deliberately **not** connected to ``nodesMoved``: this table shows no
+        position and has nothing to say about one.
+        """
+        self._binding.unbind()
+        self.document = document
+        self._binding.bind(document.graphChanged, self.refresh)
+        self._binding.bind(document.reportChanged, self._report_changed)
+        self.refresh()
+
+    def _report_changed(self, _report: FactoryReport) -> None:
+        """The report carries the figures; which rows exist is read off the graph."""
+        self.refresh()
 
     def refresh(self) -> None:
         """Say what changed, in the cheapest way that is still true.
@@ -502,6 +515,16 @@ class NodeTablePanel(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.addWidget(self.filter)
         layout.addWidget(self.view, 1)
+
+    def set_document(self, document: FactoryDocument) -> None:
+        """Show another factory. The filter box is left alone.
+
+        The panel itself listens to no document signal -- the model does -- so
+        there is nothing here to disconnect: this passes the change on and takes
+        the new reference for the reads it does itself.
+        """
+        self.document = document
+        self.model.set_document(document)
 
     # ------------------------------------------------------------- selection
 
