@@ -16,6 +16,7 @@ from satisplanner.data.docs_parser import (
     GameDataset,
     french_labels,
     locate_docs_directory,
+    parse_building_costs,
     parse_class_list,
     parse_dataset,
     parse_icon_filename,
@@ -505,3 +506,100 @@ def test_icons_are_resolved_for_the_items_of_the_control_table(dataset: GameData
     assert icons["Desc_Plastic_C"] == "IconDesc_Plastic_256.png"
     # A _512 asset must have been rewritten to the exported _256 variant.
     assert icons["Desc_LiquidOil_C"] == "LiquidOil_Pipe_256.png"
+
+
+# --------------------------------------------------------------------------- #
+# Build costs
+# --------------------------------------------------------------------------- #
+
+
+def test_the_build_cost_of_a_smelter_is_read_not_written(dataset: GameDataset) -> None:
+    """The figure comes from the game file, and carries the recipe it came from."""
+    costs = {cost.class_name: cost for cost in dataset.building_costs}
+    smelter = costs["Build_SmelterMk1_C"]
+    assert smelter.amounts == {"Desc_IronRod_C": 5.0, "Desc_Wire_C": 8.0}
+    assert smelter.recipe_class == "Recipe_SmelterBasicMk1_C"
+
+
+def test_every_building_of_the_dataset_is_priced(dataset: GameDataset) -> None:
+    priced = {cost.class_name for cost in dataset.building_costs}
+    missing = sorted({building.class_name for building in dataset.buildings} - priced)
+    assert missing == [], f"batiment(s) sans cout de construction : {missing}"
+
+
+def _grouped(*recipes: dict[str, str]) -> dict[str, list[dict[str, str]]]:
+    return {"FGRecipe": list(recipes)}
+
+
+_QUOTE = "'"
+
+
+def _class_path(class_name: str) -> str:
+    """A class reference written the way the game writes one, quotes and all."""
+    return f'"/Script/Engine.BlueprintGeneratedClass{_QUOTE}/Game/X.{class_name}{_QUOTE}"'
+
+
+def _recipe(name: str, product: str, ingredients: str, *, gun: bool = True) -> dict[str, str]:
+    produced = "BP_BuildGun_C" if gun else "Build_ConstructorMk1_C"
+    return {
+        "ClassName": name,
+        "mProducedIn": f'("/Game/X/{produced}.{produced}")',
+        "mProduct": f"((ItemClass={_class_path(product)},Amount=1))",
+        "mIngredients": ingredients,
+    }
+
+
+def _amount(item_class: str, amount: int) -> str:
+    return f"ItemClass={_class_path(item_class)},Amount={amount}"
+
+
+def test_a_building_with_no_build_recipe_is_named_in_the_warnings(dataset: GameDataset) -> None:
+    """The signal that stops a missing cost from turning into a silent zero."""
+    buildings = [b for b in dataset.buildings if b.class_name == "Build_SmelterMk1_C"]
+    warnings: list[str] = []
+
+    costs = parse_building_costs(_grouped(), buildings, {}, warnings)
+
+    assert costs == []
+    assert len(warnings) == 1
+    assert "Build_SmelterMk1_C" in warnings[0]
+    assert "sans recette de construction" in warnings[0]
+
+
+def test_a_cost_calling_for_an_unknown_item_is_dropped_whole(dataset: GameDataset) -> None:
+    """Half a cost is worse than none: it looks like a cost and is not one."""
+    buildings = [b for b in dataset.buildings if b.class_name == "Build_SmelterMk1_C"]
+    warnings: list[str] = []
+    grouped = _grouped(
+        _recipe(
+            "Recipe_Essai_C",
+            "Desc_SmelterMk1_C",
+            f"(({_amount('Desc_IronRod_C', 5)}),({_amount('Desc_Inconnu_C', 2)}))",
+        )
+    )
+
+    costs = parse_building_costs(grouped, buildings, {"Desc_IronRod_C": ItemForm.SOLID}, warnings)
+
+    assert costs == [], "un cout partiel ne doit pas être publié"
+    assert any("Desc_Inconnu_C" in warning for warning in warnings)
+    assert any("sans recette de construction" in warning for warning in warnings)
+
+
+def test_a_recipe_that_is_not_built_with_the_build_gun_is_not_a_cost(
+    dataset: GameDataset,
+) -> None:
+    """A constructor making iron plates is not the cost of a constructor."""
+    buildings = [b for b in dataset.buildings if b.class_name == "Build_SmelterMk1_C"]
+    warnings: list[str] = []
+    grouped = _grouped(
+        _recipe(
+            "Recipe_Essai_C",
+            "Desc_SmelterMk1_C",
+            f"(({_amount('Desc_IronRod_C', 5)}))",
+            gun=False,
+        )
+    )
+
+    costs = parse_building_costs(grouped, buildings, {"Desc_IronRod_C": ItemForm.SOLID}, warnings)
+
+    assert costs == []

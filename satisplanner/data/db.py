@@ -19,6 +19,7 @@ from satisplanner.core.models import (
     AttachmentRole,
     Belt,
     Building,
+    BuildingCost,
     BuildingKind,
     Extractor,
     GameData,
@@ -44,7 +45,10 @@ logger = logging.getLogger(__name__)
 # 5 added `items.energy_mj` and the `generators` / `generator_fuels` tables, so
 # that power can be produced and not only consumed. The burn rate of every fuel
 # is derived at generation time, exactly as a recipe's rates are.
-SCHEMA_VERSION: Final = 5
+# 6 added the `building_costs` table: what each building costs to put down, read
+# from the recipe the game crafts it with. Nothing is inferred -- a building with
+# no such recipe simply has no rows, and the shopping list names it.
+SCHEMA_VERSION: Final = 6
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -97,6 +101,18 @@ CREATE TABLE buildings (
     -- mPowerConsumptionExponent: overclocking raises the draw to this power.
     power_exponent  REAL NOT NULL,
     icon_file       TEXT
+);
+
+-- What one of a building costs to put down, read from its build-gun recipe.
+-- ``recipe_class`` is carried so a figure on screen can be traced back to the
+-- line of the game files it came from. A building absent from this table has no
+-- build recipe in the data, and the shopping list says so rather than guessing.
+CREATE TABLE building_costs (
+    building_class TEXT NOT NULL REFERENCES buildings (class_name),
+    item_class     TEXT NOT NULL REFERENCES items (class_name),
+    amount         REAL NOT NULL,
+    recipe_class   TEXT NOT NULL,
+    PRIMARY KEY (building_class, item_class)
 );
 
 CREATE TABLE recipes (
@@ -224,6 +240,7 @@ def build_database(dataset: GameDataset, path: Path) -> None:
         _insert_meta(connection, dataset)
         _insert_items(connection, dataset.items)
         _insert_buildings(connection, dataset.buildings)
+        _insert_building_costs(connection, dataset.building_costs)
         _insert_recipes(connection, dataset.recipes)
         _insert_extractors(connection, dataset.extractors)
         _insert_generators(connection, dataset.generators)
@@ -295,6 +312,18 @@ def _insert_buildings(connection: sqlite3.Connection, buildings: tuple[Building,
                 building.icon_file,
             )
             for building in buildings
+        ],
+    )
+
+
+def _insert_building_costs(connection: sqlite3.Connection, costs: tuple[BuildingCost, ...]) -> None:
+    connection.executemany(
+        "INSERT INTO building_costs (building_class, item_class, amount, recipe_class)"
+        " VALUES (?, ?, ?, ?)",
+        [
+            (cost.class_name, item_class, amount, cost.recipe_class)
+            for cost in costs
+            for item_class, amount in sorted(cost.amounts.items())
         ],
     )
 
@@ -471,6 +500,22 @@ def read_buildings(connection: sqlite3.Connection) -> list[Building]:
     ]
 
 
+def read_building_costs(connection: sqlite3.Connection) -> list[BuildingCost]:
+    """One :class:`BuildingCost` per building, rebuilt from its rows."""
+    amounts: dict[str, dict[str, float]] = {}
+    recipes: dict[str, str] = {}
+    for row in connection.execute(
+        "SELECT * FROM building_costs ORDER BY building_class, item_class"
+    ):
+        building = row["building_class"]
+        amounts.setdefault(building, {})[row["item_class"]] = row["amount"]
+        recipes[building] = row["recipe_class"]
+    return [
+        BuildingCost(class_name=building, recipe_class=recipes[building], amounts=items)
+        for building, items in sorted(amounts.items())
+    ]
+
+
 def read_recipes(connection: sqlite3.Connection) -> list[Recipe]:
     slots: dict[str, dict[str, list[RecipeSlot]]] = {}
     for table, key in (("recipe_ingredients", "ingredients"), ("recipe_products", "products")):
@@ -613,6 +658,7 @@ def load_game_data(connection: sqlite3.Connection) -> GameData:
         storages=read_storages(connection),
         attachments=read_attachments(connection),
         power_shards=read_power_shards(connection),
+        building_costs=read_building_costs(connection),
     )
 
 

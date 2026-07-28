@@ -134,9 +134,16 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
   canvas, colonne « Quantité » éditable — machines, extracteurs, débit d'un apport externe ou
   stock initial d'un tampon selon le type de nœud — plus « Cadence », « Pureté », « Extracteur »
   et « Carburant ». Les trois dernières se choisissent dans une liste, jamais en tapant du texte.
-- **Totaux** : matières brutes, fluides et sous-produits, électricité, liste de courses. Quand
-  l'usine vit sur un stock, un bandeau rouge et deux colonnes de chiffres — « avec les stocks » et
-  « régime établi » — remplacent le silence qui laisserait croire à une réussite.
+- **Totaux** : matières brutes, fluides et sous-produits, électricité, liste de courses, matériaux
+  de construction. Quand l'usine vit sur un stock, un bandeau rouge et deux colonnes de chiffres —
+  « avec les stocks » et « régime établi » — remplacent le silence qui laisserait croire à une
+  réussite.
+- **Matériaux de construction** : ce qu'il faut avoir fabriqué avant de pouvoir bâtir l'usine,
+  agrégé par objet. Les coûts sont lus dans les recettes du jeu — un bâtiment se construit par une
+  recette comme le reste — et multipliés par les comptes de la liste de courses. Un niveau de
+  profondeur : dix fonderies coûtent cinquante barres de fer, pas le minerai qu'il faut pour les
+  faire. **Les convoyeurs et les tuyaux n'y sont pas chiffrés** : leur coût se paie à la longueur,
+  et l'outil ne connaît aucune distance. Le blanc est explicite et compte les lignes concernées.
 - **Diagnostics** : triés par niveau, filtrables, **cliquables** — sélectionner une ligne
   sélectionne et centre le nœud ou la ligne concernée. Quand un diagnostic nomme une correction,
   un bouton l'applique.
@@ -397,7 +404,11 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
    la perte ne puisse pas être propagée au fichier d'origine par inadvertance.
 9. **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Un nœud à trois lignes sortantes
    se dessine comme trois lignes, ce qui est la façon dont le joueur y pense. Ils restent des
-   bâtiments à construire et sont comptés dans la liste de courses.
+   bâtiments à construire et sont comptés dans la liste de courses, coût de construction compris.
+   En revanche **les convoyeurs et les tuyaux ne sont pas chiffrés** : leur coût se paie à la
+   longueur, l'outil ne connaît aucune distance, et une estimation tirée d'une longueur moyenne
+   serait un chiffre inventé posé au milieu de chiffres exacts. Un blanc qui se voit vaut mieux
+   qu'un total qu'on croit complet.
 10. **La palette est un modèle, pas une liste d'objets.** Construire l'icône de chaque entrée à
     l'ouverture coûtait neuf millisecondes fois sept cents, soit une fenêtre figée neuf secondes.
     Qt ne demande au modèle que les lignes qu'il s'apprête à peindre.

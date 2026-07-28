@@ -202,6 +202,63 @@ def test_the_shopping_list_counts_the_splitters(window: MainWindow) -> None:
     assert "Jonction de pipeline" in html
 
 
+def test_the_materials_block_says_what_to_make_before_building(window: MainWindow) -> None:
+    """Miner, smelter, exit: one Foreuse Mk.1 and one Fonderie, added up by hand.
+
+    Foreuse Mk.1 : 1 foreuse portable, 10 bétons, 10 plaques de fer
+    Fonderie     : 5 barres de fer, 8 fils
+    """
+    iron_chain(window)
+    html = window.totals_panel.html()
+
+    assert "Matériaux de construction" in html
+    assert ">Béton</td><td class='value'>10<" in html, html
+    assert ">Barre de fer</td><td class='value'>5<" in html, html
+    assert ">Fil électrique</td><td class='value'>8<" in html, html
+
+
+def test_the_lines_are_left_blank_and_the_blank_is_named(window: MainWindow) -> None:
+    """The Phase 1 limit, written where somebody reading a total would trip on it.
+
+    Absent, it would read as "the lines cost nothing"; estimated, it would read as
+    a figure. It is neither: it is a stated refusal with the count it applies to.
+    """
+    iron_chain(window)
+    html = window.totals_panel.html()
+
+    assert "2 ligne(s)" in html, "le blanc doit dire sur combien de lignes il porte"
+    assert "ne sont pas chiffrées" in html
+    assert "se paie à la longueur" in html
+    assert "aucune distance" in html
+
+
+def test_a_building_without_a_build_recipe_is_named_in_the_block(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A total that quietly drops a building is worse than one that says it cannot.
+
+    The catalogue prices everything today, so the gap is made rather than found:
+    what is being checked is that the reader is told, on the day a game update
+    adds a building this build has no recipe for.
+    """
+    iron_chain(window)
+    stripped = {
+        name: cost
+        for name, cost in window.game_data.building_costs.items()
+        if name != "Build_SmelterMk1_C"
+    }
+    monkeypatch.setattr(
+        window.totals_panel.document,
+        "game_data",
+        window.game_data.model_copy(update={"building_costs": stripped}),
+    )
+
+    html = window.totals_panel.html()
+
+    assert "Sans recette de construction" in html
+    assert "Fonderie" in html.split("Sans recette de construction")[1]
+
+
 # --------------------------------------------------------------------------- #
 # Diagnostics
 # --------------------------------------------------------------------------- #

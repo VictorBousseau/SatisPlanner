@@ -284,6 +284,26 @@ class Attachment(_Row):
         return -(-(lines - 1) // (self.branches - 1))  # ceiling division
 
 
+class BuildingCost(_Row):
+    """What one of a building costs to put down, from the game's own build recipe.
+
+    Buildings are crafted like everything else: the game declares a recipe whose
+    ``mProducedIn`` is the build gun and whose single product is the building. This
+    is that recipe, kept apart from :class:`Recipe` because it has none of what
+    makes one -- no machine, no cycle, and therefore no rate per minute. A build
+    cost is a quantity, not a flow, and giving it a cycle time would invite it to
+    be divided by one.
+
+    ``amounts`` is per **unit built**: one smelter, or one unit of length of belt.
+    What a length is, is geometry, and geometry is out of scope -- which is why the
+    shopping list prices machines and leaves lines blank.
+    """
+
+    class_name: str  # the Build_* class this is the cost of
+    recipe_class: str  # the Recipe_* it was read from, so the figure can be traced
+    amounts: dict[str, float]  # item class -> quantity for one unit
+
+
 class Storage(_Row):
     class_name: str
     form: ItemForm
@@ -312,6 +332,9 @@ class GameData(BaseModel):
     storages: dict[str, Storage] = Field(default_factory=dict)
     attachments: dict[str, Attachment] = Field(default_factory=dict)
     power_shards: dict[str, PowerShard] = Field(default_factory=dict)
+    # Build costs, by Build_* class. Empty on a catalogue built before schema 6,
+    # and the shopping list says so rather than showing a total of nothing.
+    building_costs: dict[str, BuildingCost] = Field(default_factory=dict)
 
     @classmethod
     def from_rows(
@@ -327,6 +350,7 @@ class GameData(BaseModel):
         storages: Iterable[Storage] = (),
         attachments: Iterable[Attachment] = (),
         power_shards: Iterable[PowerShard] = (),
+        building_costs: Iterable[BuildingCost] = (),
     ) -> Self:
         return cls(
             items={row.class_name: row for row in items},
@@ -339,6 +363,7 @@ class GameData(BaseModel):
             storages={row.class_name: row for row in storages},
             attachments={row.class_name: row for row in attachments},
             power_shards={row.class_name: row for row in power_shards},
+            building_costs={row.class_name: row for row in building_costs},
         )
 
     def item(self, class_name: str) -> Item:

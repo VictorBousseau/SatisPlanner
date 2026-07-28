@@ -117,6 +117,13 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "pas le temps qui passe.",
     "Rien ici n'est de la géométrie : ni distance, ni élévation, ni hauteur de "
     "refoulement des pompes.",
+    "Les <b>matériaux de construction</b> donnent le coût exact des machines, "
+    "extracteurs, générateurs, conteneurs et répartiteurs, lu dans les recettes du "
+    "jeu et agrégé par objet. Les <b>convoyeurs et les tuyaux n'y sont pas "
+    "chiffrés</b> : leur coût se paie à la longueur, et l'outil ne connaît aucune "
+    "distance. Le blanc est volontaire — une estimation tirée d'une longueur moyenne "
+    "serait un chiffre inventé posé au milieu de chiffres exacts, et un blanc qui se "
+    "voit vaut mieux qu'un total qu'on croit complet.",
     "L'électricité est un <b>compteur, pas une contrainte</b> : consommation et "
     "production sont affichées côte à côte, et un déficit ne bride aucun débit. "
     "En jeu, manquer de courant ne ralentit pas l'usine, cela disjoncte tout le "

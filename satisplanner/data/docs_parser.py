@@ -29,6 +29,7 @@ from satisplanner.core.models import (
     AttachmentRole,
     Belt,
     Building,
+    BuildingCost,
     BuildingKind,
     Extractor,
     GameData,
@@ -247,6 +248,10 @@ PRODUCTION_MACHINES: Final[frozenset[str]] = frozenset(
     }
 )
 
+# The build gun. Anything crafted "in" it is a building being put down rather than
+# a part being manufactured, which is exactly how the game states a build cost.
+BUILD_GUN: Final = "BP_BuildGun_C"
+
 # Out of V1 scope on purpose (specification 5.3). Listed rather than inferred so
 # that a machine added by a future game version shows up as unknown instead of
 # being silently swallowed.
@@ -360,6 +365,7 @@ class GameDataset(BaseModel):
     items: tuple[Item, ...]
     recipes: tuple[Recipe, ...]
     buildings: tuple[Building, ...]
+    building_costs: tuple[BuildingCost, ...] = ()
     extractors: tuple[Extractor, ...]
     generators: tuple[Generator, ...] = ()
     belts: tuple[Belt, ...]
@@ -382,6 +388,7 @@ class GameDataset(BaseModel):
             storages=self.storages,
             attachments=self.attachments,
             power_shards=self.power_shards,
+            building_costs=self.building_costs,
         )
 
 
@@ -543,6 +550,77 @@ def parse_recipes(
             f"descripteurs : {', '.join(sorted(missing_items)[:5])}"
         )
     return sorted(recipes, key=lambda recipe: recipe.class_name)
+
+
+def parse_building_costs(
+    grouped: Locale,
+    buildings: Sequence[Building],
+    forms: dict[str, ItemForm],
+    warnings: list[str],
+) -> list[BuildingCost]:
+    """What each building in scope costs to put down, from its build-gun recipe.
+
+    Buildings are crafted like everything else, so the cost is read rather than
+    written here. Nothing is inferred and nothing is estimated: a building whose
+    recipe is missing, or whose recipe calls for an item this catalogue does not
+    describe, gets **no entry at all** and a warning naming it. A cost that is
+    partly right is worse than a cost that is absent, because absent is visible.
+    """
+    wanted = {building.class_name for building in buildings}
+    costs: list[BuildingCost] = []
+    priced: set[str] = set()
+
+    for cls in grouped.get("FGRecipe", []):
+        if BUILD_GUN not in parse_class_list(cls.get("mProducedIn", "")):
+            continue
+        products = parse_item_amounts(cls.get("mProduct", ""))
+        if len(products) != 1:
+            continue
+        descriptor, built = products[0]
+        building_class = descriptor.replace("Desc_", "Build_", 1)
+        if building_class not in wanted or built <= 0:
+            continue
+
+        recipe_class = cls["ClassName"]
+        amounts: dict[str, float] = {}
+        unknown: list[str] = []
+        for item_class, raw_amount in parse_item_amounts(cls.get("mIngredients", "")):
+            form = forms.get(item_class)
+            if form is None:
+                unknown.append(item_class)
+                continue
+            # Divided by what one recipe yields, so the figure is per building even
+            # if the game ever declares a recipe that puts down two at once.
+            amounts[item_class] = (
+                amounts.get(item_class, 0.0)
+                + conversions.normalise_amount(raw_amount, form) / built
+            )
+        if unknown:
+            warnings.append(
+                f"{recipe_class} : coût de construction ignoré, item(s) inconnu(s) "
+                f"{', '.join(sorted(unknown))}"
+            )
+            continue
+        if building_class in priced:
+            warnings.append(
+                f"{building_class} : plusieurs recettes de construction, {recipe_class} ignorée"
+            )
+            continue
+        priced.add(building_class)
+        costs.append(
+            BuildingCost(
+                class_name=building_class,
+                recipe_class=recipe_class,
+                amounts=dict(sorted(amounts.items())),
+            )
+        )
+
+    unpriced = sorted(wanted - priced)
+    if unpriced:
+        warnings.append(
+            f"{len(unpriced)} bâtiment(s) sans recette de construction : {', '.join(unpriced)}"
+        )
+    return sorted(costs, key=lambda cost: cost.class_name)
 
 
 def _building_icon(class_name: str, descriptors: dict[str, ClassEntry]) -> str | None:
@@ -877,6 +955,7 @@ def parse_dataset(
         items=tuple(items),
         recipes=tuple(recipes),
         buildings=tuple(buildings),
+        building_costs=tuple(parse_building_costs(reference, buildings, forms, warnings)),
         extractors=tuple(extractors),
         generators=tuple(generators),
         belts=tuple(belts),

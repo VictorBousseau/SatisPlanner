@@ -21,8 +21,11 @@ from typing import Any, Final
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from satisplanner.data.docs_parser import (
+    BUILD_GUN,
     FRENCH_FILENAME,
     locate_docs_directory,
+    parse_class_list,
+    parse_item_amounts,
     read_text_file,
     select_reference_file,
 )
@@ -169,11 +172,33 @@ KEEP_ALL: Final[frozenset[str]] = KEEP | frozenset(
 )
 
 
-def subset(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_cost_closure(raw: list[dict[str, Any]], wanted: frozenset[str]) -> frozenset[str]:
+    """The build recipe of every kept building, and the parts it calls for.
+
+    Derived rather than listed. Thirty recipe names and their twenty ingredients
+    written out by hand would be twenty-odd lines that stop matching the moment a
+    building joins the list above -- and the failure would be a build cost quietly
+    missing from the fixture, which is exactly the thing the fixture is there to
+    catch.
+    """
+    found: set[str] = set()
+    for entry in raw:
+        for cls in entry["Classes"]:
+            if BUILD_GUN not in parse_class_list(cls.get("mProducedIn", "")):
+                continue
+            products = parse_item_amounts(cls.get("mProduct", ""))
+            if len(products) != 1 or products[0][0] not in wanted:
+                continue
+            found.add(cls["ClassName"])
+            found.update(item for item, _ in parse_item_amounts(cls.get("mIngredients", "")))
+    return frozenset(found)
+
+
+def subset(raw: list[dict[str, Any]], wanted: frozenset[str]) -> list[dict[str, Any]]:
     """Keep only the wanted classes, preserving the native-class grouping."""
     kept: list[dict[str, Any]] = []
     for entry in raw:
-        classes = [cls for cls in entry["Classes"] if cls.get("ClassName") in KEEP_ALL]
+        classes = [cls for cls in entry["Classes"] if cls.get("ClassName") in wanted]
         if classes:
             kept.append({"NativeClass": entry["NativeClass"], "Classes": classes})
     return kept
@@ -197,6 +222,16 @@ def main(argv: list[str] | None = None) -> int:
     reference_path, _ = select_reference_file(docs_dir)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Worked out once, on the reference file, and applied to both: the two locales
+    # must contain exactly the same classes or the labels stop lining up.
+    reference_raw = json.loads(read_text_file(reference_path))
+    wanted = KEEP_ALL | build_cost_closure(reference_raw, KEEP_ALL)
+    logger.info(
+        "%d classe(s) retenue(s), dont %d par les recettes de construction",
+        len(wanted),
+        len(wanted) - len(KEEP_ALL),
+    )
+
     found: set[str] = set()
     for source, target in (
         (reference_path, args.output_dir / "docs_en-US.json"),
@@ -205,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         if not source.is_file():
             logger.warning("%s absent, fixture non écrite", source.name)
             continue
-        data = subset(json.loads(read_text_file(source)))
+        data = subset(json.loads(read_text_file(source)), wanted)
         write_fixture(data, target)
         found.update(cls["ClassName"] for entry in data for cls in entry["Classes"])
 

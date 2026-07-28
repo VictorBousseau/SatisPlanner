@@ -8,14 +8,14 @@ The one piece of judgement here is the **unsustainable block**. A factory living
 a tank shows perfectly healthy totals, so those totals are put side by side with the
 regime that survives the stock, under a banner that cannot be scrolled past by
 accident. Everywhere else the ordering follows the specification: solids, fluids and
-byproducts, power, then the shopping list.
+byproducts, power, then the shopping list, then what that list costs to build.
 """
 
 from collections.abc import Iterable, Mapping
 from html import escape
 from typing import Final
 
-from satisplanner.core import formatting
+from satisplanner.core import construction, formatting
 from satisplanner.core.models import GameData
 from satisplanner.core.results import FactoryReport, Severity
 from satisplanner.ui import theme
@@ -63,6 +63,7 @@ def document(report: FactoryReport | None, game_data: GameData) -> str:
         _power(report, game_data),
         _outputs(report, game_data),
         _shopping_list(report, game_data),
+        _construction_materials(report, game_data),
     ]
     return _page("\n".join(block for block in blocks if block))
 
@@ -260,6 +261,40 @@ def _shopping_list(report: FactoryReport, game_data: GameData) -> str:
     return (
         f"<h2>Liste de courses</h2><table>{''.join(rows) + ''.join(shard_rows)}</table>{note}</p>"
     )
+
+
+def _construction_materials(report: FactoryReport, game_data: GameData) -> str:
+    """What to make before any of the above can be put down.
+
+    Ordered by quantity rather than by name: this is a list to work through, and
+    the thing there is most of is the thing to start on.
+    """
+    materials = construction.materials_for(report.shopping_list, game_data)
+    rows = [
+        f"<tr><td>{escape(_item_name(class_name, game_data))}</td>"
+        f"<td class='value'>{formatting.number(amount)}</td></tr>"
+        for class_name, amount in sorted(
+            materials.amounts.items(), key=lambda pair: (-pair[1], pair[0])
+        )
+    ]
+    notes = []
+    if materials.line_count:
+        notes.append(
+            f"{materials.line_count} ligne(s) — {materials.belt_lines} de convoyeur et "
+            f"{materials.pipe_lines} de tuyauterie — <b>ne sont pas chiffrées</b> : leur coût "
+            "se paie à la longueur, et l'outil ne connaît aucune distance. Une estimation "
+            "à partir d'une longueur moyenne serait un chiffre inventé au milieu de chiffres "
+            "exacts, ce qui est pire qu'un blanc."
+        )
+    if materials.unpriced:
+        missing = ", ".join(_building_name(name, game_data) for name in materials.unpriced)
+        notes.append(
+            f"<span class='warn'>Sans recette de construction dans ce catalogue, donc absent(s) "
+            f"du total : {escape(missing)}.</span>"
+        )
+    body = "".join(rows) or _NOTHING
+    note = "".join(f"<p class='muted'>{text}</p>" for text in notes)
+    return f"<h2>Matériaux de construction</h2><table>{body}</table>{note}"
 
 
 # --------------------------------------------------------------------------- #
