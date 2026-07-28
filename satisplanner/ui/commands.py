@@ -112,10 +112,16 @@ class PasteCommand(_DocumentCommand):
     no longer exist.
     """
 
-    def __init__(self, document: FactoryDocument, pasted: FactoryGraph, offset: float) -> None:
+    def __init__(
+        self,
+        document: FactoryDocument,
+        pasted: FactoryGraph,
+        offset: float,
+        text: str | None = None,
+    ) -> None:
         count = len(pasted.nodes)
         plural = "s" if count > 1 else ""
-        super().__init__(document, f"collage de {count} nœud{plural}")
+        super().__init__(document, text or f"collage de {count} nœud{plural}")
         self.nodes, self.edges = _renumbered(document, pasted, offset)
 
     @property

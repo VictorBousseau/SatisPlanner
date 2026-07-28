@@ -101,6 +101,30 @@ def snapped(position: QPointF) -> QPointF:
     return QPointF(round(position.x() / step) * step, round(position.y() / step) * step)
 
 
+def _centred(graph: FactoryGraph, centre: QPointF) -> FactoryGraph:
+    """The same graph moved so that the middle of its nodes sits on ``centre``.
+
+    The **positions** are what move; every other field rides along untouched, and
+    the shape of the piece is preserved exactly -- an insertion is a translation,
+    never a re-layout.
+    """
+    xs = [node.position[0] for node in graph.nodes]
+    ys = [node.position[1] for node in graph.nodes]
+    target = snapped(centre)
+    shift = (
+        target.x() - (min(xs) + max(xs)) / 2,
+        target.y() - (min(ys) + max(ys)) / 2,
+    )
+    moved = graph.model_copy(deep=True)
+    moved.nodes = [
+        node.model_copy(
+            update={"position": (node.position[0] + shift[0], node.position[1] + shift[1])}
+        )
+        for node in moved.nodes
+    ]
+    return moved
+
+
 class FactoryScene(QGraphicsScene):
     """Mirror of the document's graph, plus the link-dragging interaction."""
 
@@ -637,9 +661,23 @@ class FactoryScene(QGraphicsScene):
             return False
         return self._paste_graph(clipboard.selection_graph(self.document.graph, node_ids))
 
-    def _paste_graph(self, pasted: FactoryGraph) -> bool:
+    def insert_graph(self, pasted: FactoryGraph, centre: QPointF, text: str) -> bool:
+        """Drop a piece of factory centred on a point, as **one** undo step.
+
+        The same door as a paste, with the offset worked out rather than fixed: a
+        module has to land where the reader is looking, not two grid steps from
+        wherever it happened to be drawn when it was saved.
+        """
+        if not pasted.nodes:
+            return False
+        return self._paste_graph(_centred(pasted, centre), offset=0.0, text=text)
+
+    def _paste_graph(
+        self, pasted: FactoryGraph, offset: float | None = None, text: str | None = None
+    ) -> bool:
         """One command, whatever the size of the piece, and the result selected."""
-        command = PasteCommand(self.document, pasted, clipboard.PASTE_OFFSET)
+        step = clipboard.PASTE_OFFSET if offset is None else offset
+        command = PasteCommand(self.document, pasted, step, text)
         created = command.node_ids
         self.document.undo_stack.push(command)
         self.select_nodes(created)

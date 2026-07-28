@@ -47,9 +47,16 @@ def scene_bounds(scene: QGraphicsScene) -> QRectF:
     return rect.adjusted(-EXPORT_MARGIN, -EXPORT_MARGIN, EXPORT_MARGIN, EXPORT_MARGIN)
 
 
-def render_scene(scene: QGraphicsScene, scale: float = EXPORT_SCALE) -> QImage | None:
-    """The canvas as an image, or ``None`` when the factory is empty."""
-    bounds = scene_bounds(scene)
+def render_scene(
+    scene: QGraphicsScene, scale: float = EXPORT_SCALE, region: QRectF | None = None
+) -> QImage | None:
+    """The canvas as an image, or ``None`` when there is nothing in view.
+
+    ``region`` narrows the picture to a part of the scene. A module saved from a
+    selection wants a picture of that selection, not of the factory it was lifted
+    out of.
+    """
+    bounds = scene_bounds(scene) if region is None else region
     if bounds.isEmpty():
         return None
     scale = min(scale, MAX_EXPORT_SIDE / max(bounds.width(), bounds.height()))
@@ -82,9 +89,9 @@ def export_png(scene: QGraphicsScene, path: Path) -> bool:
     return written
 
 
-def thumbnail_bytes(scene: QGraphicsScene) -> bytes | None:
-    """A small PNG for the ``.sfp`` archive, or ``None`` for an empty factory."""
-    image = render_scene(scene, scale=1.0)
+def thumbnail_bytes(scene: QGraphicsScene, region: QRectF | None = None) -> bytes | None:
+    """A small PNG for the ``.sfp`` archive or for a module, or ``None`` for nothing."""
+    image = render_scene(scene, scale=1.0, region=region)
     if image is None:
         return None
     small = image.scaled(

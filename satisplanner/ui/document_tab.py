@@ -60,11 +60,19 @@ class DocumentTab(QWidget):
 
     # -------------------------------------------------------------------- label
 
-    def title(self) -> str:
-        """What the tab bar shows: the file name, and what state it is in."""
+    def title(self, name: str | None = None) -> str:
+        """What the tab bar shows: the file name, and what state it is in.
+
+        ``name`` replaces the file name for a tab that has none to show -- a module
+        opened from the library is worth naming after the module rather than
+        leaving three of them reading "Usine sans titre".
+        """
         mark = MODIFIED_MARK if self.document.is_modified else ""
         partial = PARTIAL_MARK if self.document.is_partial else ""
-        return f"{partial}{self.document.display_name}{mark}"
+        shown = (
+            name if name is not None and self.document.path is None else self.document.display_name
+        )
+        return f"{partial}{shown}{mark}"
 
     def tooltip(self) -> str:
         """Where the file is, and the warning the tab has no room for."""

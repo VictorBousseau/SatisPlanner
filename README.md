@@ -122,6 +122,20 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
   n'auraient plus rien à quoi s'accrocher. Un collage est **une seule annulation**. La sélection
   voyage dans le presse-papiers système au format code de partage, donc **entre deux onglets et
   entre deux fenêtres**. Un presse-papiers qui contient autre chose est ignoré en silence.
+- **Modules** (`Ctrl+Maj+M` pour enregistrer, `Ctrl+B` pour la bibliothèque) : une sélection
+  s'enregistre sous un nom — « Plaque de fer 40/min » — et se réinsère dans n'importe quel projet,
+  au centre de la vue et **en une seule annulation**. La bibliothèque vit dans `%LOCALAPPDATA%`,
+  un fichier par module, et se cherche par nom, par description ou par objet produit. Renommer,
+  décrire, supprimer. Un module s'ouvre aussi **dans son propre onglet** pour être modifié puis
+  réenregistré sous le même nom ou sous un autre, et « Nouveau depuis ce module » démarre une usine
+  sur cette base.
+
+  Deux choses sont écrites à l'écran parce qu'on les suppose à l'envers. Un module inséré est une
+  **copie** : le modifier ensuite ne change pas le module, et modifier le module ne change pas les
+  usines où il est déjà. Et les débits affichés sont ceux du module **seul**, calculés à
+  l'enregistrement en le résolvant avec ses entrées servies et ses sorties écoulées — sans quoi un
+  module pris au milieu d'une chaîne s'étiquetterait « produit zéro ». C'est une étiquette, pas une
+  promesse : inséré dans une usine qui l'affame, il en fera moins.
 - **Machines déployées** (`Ctrl+M`, désactivé par défaut) : une vignette par machine bâtie, en
   grille, avec une vignette partielle pour un compte fractionnaire et « … ×N » au-delà du plafond.
   Clic droit sur un nœud pour y déroger — afficher, masquer, ou suivre la préférence. **Purement
@@ -305,6 +319,12 @@ d'annulation, `commands.py` les opérations, `catalogue.py` la passerelle entre 
 palette (sans Qt, donc testable sans fenêtre), `canvas.py` / `canvas_items.py` le rendu,
 `report_html.py` le rapport en HTML — partagé par le panneau des totaux et l'export PDF, pour que
 la page imprimée et le panneau à côté ne puissent pas afficher deux chiffres différents.
+
+`core/interface.py` calcule ce qu'un morceau d'usine prend et rend **seul**, en le résolvant avec
+ses ports ouverts servis d'un côté et écoulés de l'autre ; `data/module_file.py` range la
+bibliothèque, dont la charge utile est **le code de partage** — pas un second format, ce qui lui
+donne gratuitement la migration de schéma, le refus d'une version future, et la prise en charge
+des types de nœuds qui n'existent pas encore.
 
 `document_tab.py` réunit ce qui appartient à une usine ouverte et à elle seule — son document, sa
 scène, sa vue — et `binding.py` tient les connexions du document affiché : tout ce qui est branché

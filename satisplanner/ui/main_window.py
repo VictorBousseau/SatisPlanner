@@ -31,7 +31,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Final
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QRectF, QSettings, Qt
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -57,12 +57,15 @@ from PySide6.QtWidgets import (
 )
 
 from satisplanner import __version__, logging_setup
+from satisplanner.core import formatting, interface
 from satisplanner.core.graph import SCHEMA_VERSION as DOCUMENT_SCHEMA_VERSION
+from satisplanner.core.graph import FactoryGraph
 from satisplanner.core.models import GameData
 from satisplanner.core.results import FactoryReport, Severity
-from satisplanner.data import db, factory_file
+from satisplanner.data import db, factory_file, module_file
 from satisplanner.data.factory_file import FILE_FILTER, FILE_SUFFIX, FactoryFileError
-from satisplanner.ui import exporters, theme
+from satisplanner.data.module_file import FactoryModule, ModuleError
+from satisplanner.ui import clipboard, exporters, theme
 from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.canvas import MAX_SCALE, FactoryScene, FactoryView
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry, build_entries
@@ -73,6 +76,7 @@ from satisplanner.ui.help_dialog import HelpDialog, shortcut_rows
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.item_card import ItemCard
 from satisplanner.ui.localisation import install_french_translations
+from satisplanner.ui.modules import ModuleLibraryDialog, SaveModuleDialog
 from satisplanner.ui.palette import PaletteWidget
 from satisplanner.ui.preferences import Preferences, PreferencesDialog
 from satisplanner.ui.table_panel import NodeTablePanel
@@ -193,7 +197,10 @@ class MainWindow(QMainWindow):
     """Application shell around the factories that are open."""
 
     def __init__(
-        self, game_data: GameData | None = None, settings: QSettings | None = None
+        self,
+        game_data: GameData | None = None,
+        settings: QSettings | None = None,
+        module_directory: Path | None = None,
     ) -> None:
         super().__init__()
         # Before any dialog can be built: "Cancel" under a French question is this
@@ -206,8 +213,15 @@ class MainWindow(QMainWindow):
             user_directory=self.preferences.effective_icon_directory
         )
         self.entries: list[PaletteEntry] = build_entries(self.game_data)
-        # Built on first use and kept: see show_item_card.
+        # Injectable for the same reason as the settings: a test must not write
+        # into the developer's own library.
+        self.module_directory = module_directory
+        # Built on first use and kept: see show_item_card and show_module_library.
         self.item_card: ItemCard | None = None
+        self.library: ModuleLibraryDialog | None = None
+        # Tabs that were opened from the library, and which module each holds, so
+        # that re-saving one lands back on the file it came from.
+        self.editing_module: dict[DocumentTab, FactoryModule] = {}
         self._syncing_selection = False
         # In creation order, which is menu order, which is the order the help lists.
         self.menus: list[QMenu] = []
@@ -335,6 +349,7 @@ class MainWindow(QMainWindow):
             # active document is never momentarily absent.
             self.new_tab()
         self.tabs.removeTab(index)
+        self.editing_module.pop(tab, None)
         self.undo_group.removeStack(tab.document.undo_stack)
         tab.dispose()
         tab.deleteLater()
@@ -430,6 +445,7 @@ class MainWindow(QMainWindow):
         self._build_file_actions()
         self._build_edit_actions()
         self._build_view_actions()
+        self._build_module_actions()
         self._build_help_actions()
 
     def _build_file_actions(self) -> None:
@@ -600,6 +616,18 @@ class MainWindow(QMainWindow):
         # Actions reachable only by their shortcut still have to belong to a widget
         # that is visible, or Qt never delivers the key.
         self.addAction(self.search_action)
+
+    def _build_module_actions(self) -> None:
+        self.save_module_action = _action(
+            self, "Enregistrer la sélection comme module...", "Ctrl+Shift+M", self.save_as_module
+        )
+        self.library_action = _action(
+            self, "Bibliothèque de modules...", "Ctrl+B", self.show_module_library
+        )
+        menu = self.menuBar().addMenu("&Modules")
+        self.menus.append(menu)
+        menu.addAction(self.save_module_action)
+        menu.addAction(self.library_action)
 
     def _build_help_actions(self) -> None:
         self.help_action = _action(
@@ -790,6 +818,145 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "Usine ouverte avec des réserves", f"{subject} :\n\n" + "\n\n".join(warnings)
         )
+
+    # --------------------------------------------------------------- modules
+
+    def save_as_module(self) -> bool:
+        """Lift the selection out and put it in the library under a name.
+
+        The payload is the same share code a copy produces, so the library never
+        has to learn a second format -- and inherits its migration, its refusals
+        and its handling of node kinds that do not exist yet.
+        """
+        edited = self.editing_module.get(self.current_tab)
+        node_ids = [item.node.id for item in self.scene.selected_nodes()]
+        if not node_ids and edited is not None:
+            # A tab opened from the library **is** the module: re-saving it needs no
+            # selection, which is what makes the edit round trip one gesture.
+            node_ids = [node.id for node in self.document.graph.nodes]
+        if not node_ids:
+            QMessageBox.information(
+                self,
+                "Aucune sélection",
+                "Sélectionnez le morceau d'usine à enregistrer comme module.",
+            )
+            return False
+        piece = clipboard.selection_graph(self.document.graph, node_ids)
+
+        suggestion = edited.name if edited is not None else self._suggested_module_name(piece)
+        dialog = SaveModuleDialog(suggestion, self)
+        if edited is not None:
+            dialog.description.setPlainText(edited.description)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+
+        face = interface.interface_of(piece, self.game_data)
+        module = FactoryModule(
+            name=dialog.chosen_name(),
+            share_code=factory_file.encode_share_code(piece),
+            description=dialog.chosen_description(),
+            inputs=face.inputs,
+            outputs=face.outputs,
+            thumbnail=exporters.thumbnail_bytes(self.scene, self._selection_bounds()),
+        )
+        # The same name over the module being edited replaces it; any other name
+        # makes a second one. That is the whole of "sous le même nom ou un autre".
+        replacing = (
+            edited.path
+            if edited is not None and edited.path is not None and edited.name == module.name
+            else None
+        )
+        try:
+            saved = module_file.save_module(module, self.module_directory, replacing=replacing)
+        except ModuleError as exc:
+            QMessageBox.warning(self, "Module non enregistré", str(exc))
+            return False
+        self.editing_module[self.current_tab] = saved
+        if self.library is not None:
+            self.library.reload()
+        self.statusBar().showMessage(f"Module « {saved.name} » enregistré.", 4000)
+        return True
+
+    def _selection_bounds(self) -> QRectF:
+        """The rectangle around what is selected, so the thumbnail shows the module."""
+        bounds = QRectF()
+        for item in self.scene.selected_nodes():
+            bounds = bounds.united(item.sceneBoundingRect())
+        return bounds.adjusted(-20, -20, 20, 20) if not bounds.isEmpty() else bounds
+
+    def _suggested_module_name(self, piece: FactoryGraph) -> str:
+        """What it makes and how much of it -- the name a reader would have typed."""
+        face = interface.interface_of(piece, self.game_data)
+        if not face.outputs:
+            return ""
+        item_class, rate = max(face.outputs.items(), key=lambda pair: pair[1])
+        item = self.game_data.items.get(item_class)
+        name = item.display_name_fr if item else item_class
+        # The item first and the rate after, rather than "40 plaque de fer/min":
+        # the game's labels are singular, and inventing a plural rule for French
+        # to make one suggested name read better is not a trade worth making.
+        return f"{name} {formatting.number(rate)}/min"
+
+    def show_module_library(self) -> ModuleLibraryDialog:
+        """Open the library, and keep it open: inserting three in a row is the point."""
+        if self.library is None:
+            self.library = ModuleLibraryDialog(self.game_data, self.module_directory, self)
+            self.library.insertRequested.connect(self.insert_module)
+            self.library.openRequested.connect(self.open_module_in_tab)
+            self.library.newFromRequested.connect(self.new_from_module)
+        self.library.reload()
+        self.library.show()
+        self.library.raise_()
+        self.library.activateWindow()
+        return self.library
+
+    def insert_module(self, module: FactoryModule) -> bool:
+        """Drop a copy of the module in the middle of the view, as one undo step."""
+        graph = self._module_graph(module)
+        if graph is None:
+            return False
+        centre = self.view.mapToScene(self.view.viewport().rect().center())
+        inserted = self.scene.insert_graph(graph, centre, f"insertion du module « {module.name} »")
+        if inserted:
+            self.statusBar().showMessage(
+                f"Module « {module.name} » inséré. C'est une copie : il ne suivra pas "
+                "les modifications du module.",
+                6000,
+            )
+        return inserted
+
+    def open_module_in_tab(self, module: FactoryModule) -> DocumentTab | None:
+        """Edit the module itself: its own tab, so the factory stays where it is."""
+        graph = self._module_graph(module)
+        if graph is None:
+            return None
+        tab = self._reusable_tab() or self.new_tab()
+        self.select_tab(tab)
+        tab.document.adopt(graph)
+        self.editing_module[tab] = module
+        self.refresh_title()
+        self.fit_to_factory()
+        self.statusBar().showMessage(
+            f"Module « {module.name} » ouvert. Ctrl+Maj+M le réenregistre.", 6000
+        )
+        return tab
+
+    def new_from_module(self, module: FactoryModule) -> DocumentTab | None:
+        """Start a factory on this module: the same thing, without the link back."""
+        tab = self.open_module_in_tab(module)
+        if tab is not None:
+            self.editing_module.pop(tab, None)
+            self.statusBar().showMessage(
+                f"Nouvelle usine depuis « {module.name} ». C'est une copie.", 6000
+            )
+        return tab
+
+    def _module_graph(self, module: FactoryModule) -> FactoryGraph | None:
+        try:
+            return module.graph()
+        except ModuleError as exc:
+            QMessageBox.warning(self, "Module illisible", str(exc))
+            return None
 
     # --------------------------------------------------------------- exports
 
@@ -1020,7 +1187,8 @@ class MainWindow(QMainWindow):
         cannot leave one stale.
         """
         for index, tab in enumerate(self.open_tabs()):
-            self.tabs.setTabText(index, tab.title())
+            edited = self.editing_module.get(tab)
+            self.tabs.setTabText(index, tab.title(edited.name if edited else None))
             self.tabs.setTabToolTip(index, tab.tooltip())
         if self._active is None:
             return

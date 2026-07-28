@@ -98,6 +98,17 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "Clic sur un diagnostic",
         "sélectionne et centre le nœud ou la ligne concernée",
     ),
+    (
+        "Modules ▸ Enregistrer la sélection comme module",
+        "range le morceau sélectionné dans la bibliothèque, avec ses débits d'entrée "
+        "et de sortie calculés sur le module seul. Depuis un onglet ouvert sur un "
+        "module, aucune sélection n'est nécessaire : c'est le module entier",
+    ),
+    (
+        "Modules ▸ Bibliothèque",
+        "insérer au centre de la vue, ouvrir dans un onglet pour modifier, démarrer "
+        "une usine depuis un module, renommer, décrire, supprimer",
+    ),
 )
 
 
@@ -117,6 +128,12 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "pas le temps qui passe.",
     "Rien ici n'est de la géométrie : ni distance, ni élévation, ni hauteur de "
     "refoulement des pompes.",
+    "Un <b>module inséré est une copie</b>. Il ne garde aucun lien avec sa "
+    "définition : le modifier ensuite ne change pas le module, et modifier le module "
+    "ne change pas les usines où il a déjà été inséré. Les débits affichés sur un "
+    "module sont ceux du module <b>seul</b>, résolu à l'enregistrement avec ses "
+    "entrées servies et ses sorties écoulées ; inséré dans une usine qui l'affame, "
+    "il en fera moins. C'est une étiquette, pas une promesse.",
     "Les <b>matériaux de construction</b> donnent le coût exact des machines, "
     "extracteurs, générateurs, conteneurs et répartiteurs, lu dans les recettes du "
     "jeu et agrégé par objet. Les <b>convoyeurs et les tuyaux n'y sont pas "
