@@ -15,12 +15,15 @@ from satisplanner.core.graph import (
     FactoryGraph,
     GeneratorNode,
     MachineNode,
+    MergerNode,
     Node,
     ResourceNode,
+    SplitterNode,
     StorageNode,
     WaterExtractorNode,
     generator_input_rates,
     machine_building,
+    pass_through_item,
     storage_item,
 )
 from satisplanner.core.models import GameData, Item, UnknownClassError
@@ -156,6 +159,21 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             node_id=node.id,
         )
 
+    if isinstance(node, SplitterNode | MergerNode) and pass_through_item(node, graph) is None:
+        # Two different items on its lines, or none at all. Either way there is no
+        # building to count for it and nothing flows, which is worth saying out loud
+        # rather than leaving as an empty row on the canvas.
+        role = "répartiteur" if isinstance(node, SplitterNode) else "groupeur"
+        yield Diagnostic(
+            severity=Severity.WARNING,
+            code=DiagnosticCode.AMBIGUOUS_BUFFER,
+            message=(
+                f"Ce {role} ne transporte rien de déterminé : une ligne ne porte qu'un item, "
+                f"donc toutes celles qui y arrivent et en partent doivent porter le même."
+            ),
+            node_id=node.id,
+        )
+
     if not graph.incoming(node.id) and not graph.outgoing(node.id):
         yield Diagnostic(
             severity=Severity.INFO,
@@ -202,21 +220,35 @@ def _nodes(graph: FactoryGraph, game_data: GameData, report: FactoryReport) -> I
 
 
 def _blocked(node: Node, solution: NodeSolution, game_data: GameData) -> Iterator[Diagnostic]:
-    """The critical rule: an unevacuated product stops the machine dead."""
+    """The critical rule: an unevacuated product stops the machine dead.
+
+    A splitter with nothing behind it is blocked in the same sense and stops the
+    machine feeding it just as surely, so it gets the same finding worded for what
+    it is -- and a line into a dead-end splitter is named as the dead end it is
+    rather than left to look like back pressure.
+    """
     if not solution.blocked_products:
         return
     names = ", ".join(
         game_data.item(item_class).display_name_fr for item_class in solution.blocked_products
     )
     plural = "s" if len(solution.blocked_products) > 1 else ""
-    yield Diagnostic(
-        severity=Severity.ERROR,
-        code=DiagnosticCode.BLOCKED_BYPRODUCT,
-        message=(
+    if isinstance(node, SplitterNode | MergerNode):
+        subject = "le répartiteur" if isinstance(node, SplitterNode) else "le groupeur"
+        message = (
+            f"{names} n'a{plural} aucune sortie au-delà de ce raccord : {subject} ne laisse "
+            f"rien passer et bloque tout ce qui l'alimente. Raccordez une de ses branches."
+        )
+    else:
+        message = (
             f"{names} n'a{plural} aucune sortie : la machine est totalement bloquée et ne "
             f"produit rien. Raccordez une ligne vers un consommateur, un tampon, ou une "
             f"sortie marquée « rejet assumé »."
-        ),
+        )
+    yield Diagnostic(
+        severity=Severity.ERROR,
+        code=DiagnosticCode.BLOCKED_BYPRODUCT,
+        message=message,
         node_id=node.id,
     )
 

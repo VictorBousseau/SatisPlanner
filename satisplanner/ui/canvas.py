@@ -48,10 +48,13 @@ from satisplanner.core.graph import (
     FactoryGraph,
     GeneratorNode,
     MachineNode,
+    MergerNode,
     Node,
     ResourceNode,
+    SplitterNode,
     StorageNode,
     WaterExtractorNode,
+    pass_through_item,
     storage_item,
     unit_count,
 )
@@ -191,6 +194,10 @@ class FactoryScene(QGraphicsScene):
                 item.node = node
             if isinstance(node, StorageNode):
                 item.content_item = storage_item(node, graph)
+            elif isinstance(node, SplitterNode | MergerNode):
+                item.content_item = pass_through_item(node, graph)
+                many = graph.outgoing if isinstance(node, SplitterNode) else graph.incoming
+                item.branch_count = len(many(node.id))
             item.deployed = self._deployed if node.show_deployed is None else node.show_deployed
             item.deployed_ceiling = self._deployed_ceiling
             item.palette = self._palette
@@ -506,9 +513,15 @@ class FactoryScene(QGraphicsScene):
         if found is not None and not found[1].is_output:
             target_id, port = found
             return target_id, (dragged if port.item_class == ANY_ITEM else port.item_class)
-        # Dropping anywhere on an undecided buffer is accepted: it has one input.
+        # Dropping anywhere on an undecided buffer, splitter or merger is accepted:
+        # they take whatever the line brings, and have no other input to confuse it
+        # with.
         item = self._node_under(at)
-        if item is not None and isinstance(item.node, StorageNode) and item.content_item is None:
+        if (
+            item is not None
+            and isinstance(item.node, StorageNode | SplitterNode | MergerNode)
+            and item.content_item is None
+        ):
             return item.node.id, dragged
         return None
 
@@ -729,6 +742,8 @@ class FactoryScene(QGraphicsScene):
                 return node.fuel_class
             case StorageNode():
                 return storage_item(node, self.document.graph)
+            case SplitterNode() | MergerNode():
+                return pass_through_item(node, self.document.graph)
             case _:
                 return getattr(node, "item_class", None)
 
@@ -1043,6 +1058,8 @@ def _id_prefix(entry: PaletteEntry) -> str:
         "water_extractor": "pompe",
         "generator": "generateur",
         "storage": "tampon",
+        "splitter": "repartiteur",
+        "merger": "groupeur",
         "external": "entree",
         "output": "sortie",
         "sink": "rejet",

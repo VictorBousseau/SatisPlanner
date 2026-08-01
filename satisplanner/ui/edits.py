@@ -24,9 +24,11 @@ from satisplanner.core.graph import (
     ExternalSourceNode,
     GeneratorNode,
     MachineNode,
+    MergerNode,
     Node,
     OutputNode,
     ResourceNode,
+    SplitterNode,
     StorageNode,
     WaterExtractorNode,
 )
@@ -69,7 +71,9 @@ def quantity_of(node: Node) -> Quantity | None:
             return Quantity("rate_per_minute", "/min")
         case StorageNode():
             return Quantity("initial_content", "en stock")
-        case OutputNode():
+        case OutputNode() | SplitterNode() | MergerNode():
+            # An exit is a boundary and an attachment is a fitting: neither is a
+            # bank of anything, so neither has a number to set.
             return None
 
 

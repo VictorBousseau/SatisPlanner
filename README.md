@@ -31,9 +31,10 @@ Autant le dire avant d'ouvrir la fenêtre.
   intervention manuelle. Afficher tout à zéro n'apprendrait rien, et un bridage partiel serait une
   invention. Les générateurs tournent à 100 % : leur surcadençage suit un exposant différent de
   celui des machines. (V2)
-- **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Ils sont comptés dans la liste
-  de courses, jamais dessinés et jamais un goulot — un répartiteur passe 2000 items/min quand le
-  meilleur convoyeur plafonne à 1200.
+- **Un port porte une ligne.** Un nœud a autant de ports qu'il a de bâtiments : huit fonderies ont
+  huit sorties, une seule en a une. Au-delà, il faut un répartiteur ou un groupeur, et ce sont des
+  nœuds qu'on pose et qu'on voit. Ils ne sont jamais un goulot — un répartiteur passe 2000 items/min
+  quand le meilleur convoyeur plafonne à 1200 — mais ils décident du partage.
 - **Hors périmètre V1** : Mélangeur, Convertisseur, Encodeur quantique, Accélérateur de
   particules, nucléaire, extracteur de puits de ressources, Clean Pipeline.
 - **Le nombre de machines est une saisie**, pas un résultat. « Je veux 5 Ordinateurs par minute,
@@ -422,9 +423,12 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
    recette dans le catalogue et sont en droit de l'y trouver. Ce que l'utilisateur risquait de
    perdre — la disposition de tout le reste — est préservé, et le document est marqué de façon que
    la perte ne puisse pas être propagée au fichier d'origine par inadvertance.
-9. **Répartiteurs, groupeurs et jonctions ne sont pas des nœuds.** Un nœud à trois lignes sortantes
-   se dessine comme trois lignes, ce qui est la façon dont le joueur y pense. Ils restent des
-   bâtiments à construire et sont comptés dans la liste de courses, coût de construction compris.
+9. **Un port porte une ligne, et un nœud a autant de ports qu'il a de bâtiments.** `ceil(count)`
+   par objet et par sens : huit fonderies alimentant huit consommateurs n'ont besoin d'aucun
+   répartiteur, une seule fonderie en a besoin d'un dès la deuxième ligne. Les répartiteurs et les
+   groupeurs sont donc des nœuds, posés et comptés là où ils sont, coût de construction compris. Un
+   partage en arbre réel ne donne des parts égales que lorsque le nombre de lignes se ramène à des
+   moitiés et des tiers : 2, 3, 4, 6, 9 oui, 5 et 7 non — et c'est le jeu qui est ainsi.
    En revanche **les convoyeurs et les tuyaux ne sont pas chiffrés** : leur coût se paie à la
    longueur, l'outil ne connaît aucune distance, et une estimation tirée d'une longueur moyenne
    serait un chiffre inventé posé au milieu de chiffres exacts. Un blanc qui se voit vaut mieux
@@ -476,7 +480,6 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 - **Mode objectif descendant** : « je veux tant d'Ordinateurs par minute », résolu par un solveur
   linéaire plutôt que par le point fixe actuel.
 - Répartiteurs intelligents et programmables.
-- Mode « déployer » affichant l'arbre de répartiteurs qu'un nœud à n sorties implique réellement.
 - Simulation temporelle des tampons, pour voir le film et pas seulement l'état final.
 - Interopérabilité avec satisfactory-calculator.com.
 - Internationalisation anglaise.

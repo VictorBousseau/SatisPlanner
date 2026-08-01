@@ -23,6 +23,7 @@ the engine.
 
 from typing import Final
 
+from satisplanner.core.attachments import materialise
 from satisplanner.core.graph import (
     Edge,
     ExternalSourceNode,
@@ -38,7 +39,9 @@ from satisplanner.core.graph import (
 from satisplanner.core.models import Purity
 
 # Bump whenever the generated shape changes. Thresholds quote it.
-BENCHMARK_VERSION: Final = 1
+# 2: the splitters and mergers the design always implied are now in the graph,
+# because a port carries one line. The design is the same one; it is wired.
+BENCHMARK_VERSION: Final = 2
 
 # The three sizes the lot is measured at.
 BENCHMARK_SIZES: Final[tuple[int, ...]] = (50, 200, 500)
@@ -267,12 +270,20 @@ _SPECIAL_SIZE: Final = 5 + 4
 MINIMUM_SIZE: Final = _SPECIAL_SIZE + _ROUND_SIZE
 
 
-def benchmark_graph(size: int) -> FactoryGraph:
-    """A connected factory of exactly ``size`` nodes, always the same one.
+def benchmark_graph(size: int, *, wired: bool = True) -> FactoryGraph:
+    """A connected factory designed around exactly ``size`` nodes, always the same one.
 
     Sizes below :data:`MINIMUM_SIZE` are refused rather than silently rounded up:
     the recycling loop and the draining buffer are not optional, and a graph
     without them would not be measuring the same engine.
+
+    ``size`` counts the nodes of the **design**: the machines, deposits, buffers and
+    exits somebody would draw. The splitters and mergers those imply are then put in
+    by the same migration a saved document goes through, which is what makes a
+    measurement comparable to one taken before they existed -- the same factory,
+    correctly wired, rather than a smaller factory padded back to the same node
+    count. ``wired=False`` returns the design on its own, which is what the earlier
+    figures were taken on.
     """
     if size < MINIMUM_SIZE:
         msg = f"un graphe d'essai fait au moins {MINIMUM_SIZE} noeuds, pas {size}"
@@ -298,4 +309,7 @@ def benchmark_graph(size: int) -> FactoryGraph:
             builder.smelters[extra % len(builder.smelters)], exit_id, "Desc_IronIngot_C", BELT
         )
 
-    return FactoryGraph(nodes=builder.nodes, edges=builder.edges)
+    graph = FactoryGraph(nodes=builder.nodes, edges=builder.edges)
+    if wired:
+        materialise(graph)
+    return graph

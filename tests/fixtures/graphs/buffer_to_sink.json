@@ -1,36 +1,82 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "nodes": [
     {
-      "kind": "resource",
       "id": "deposit",
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "resource",
       "item_class": "Desc_OreIron_C",
       "extractor_class": "Build_MinerMk2_C",
       "purity": "normal",
-      "count": 2
+      "count": 2.0,
+      "clock_speed": 1.0
     },
     {
-      "kind": "machine",
       "id": "smelter",
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
       "recipe_class": "Recipe_IngotIron_C",
-      "machine_count": 8
+      "machine_count": 8.0,
+      "building_class": null,
+      "clock_speed": 1.0
     },
     {
-      "kind": "storage",
       "id": "buffer",
       "label": "Conteneur en bout de chaine",
-      "storage_class": "Build_StorageContainerMk2_C"
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "storage",
+      "storage_class": "Build_StorageContainerMk2_C",
+      "item_class": null,
+      "initial_content": 0.0
     },
     {
-      "kind": "output",
       "id": "ingot_out",
-      "item_class": "Desc_IronIngot_C"
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_IronIngot_C",
+      "is_sink": false
     },
     {
-      "kind": "output",
       "id": "ingot_sink",
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
       "item_class": "Desc_IronIngot_C",
       "is_sink": true
+    },
+    {
+      "id": "buffer-rep1",
+      "label": null,
+      "position": [
+        460.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "item_class": "Desc_IronIngot_C",
+      "kind": "splitter"
     }
   ],
   "edges": [
@@ -49,16 +95,23 @@
       "transport_class": "Build_ConveyorBeltMk5_C"
     },
     {
-      "id": "e3",
-      "source": "buffer",
+      "id": "e5",
+      "source": "buffer-rep1",
       "target": "ingot_out",
       "item_class": "Desc_IronIngot_C",
       "transport_class": "Build_ConveyorBeltMk5_C"
     },
     {
-      "id": "e4",
-      "source": "buffer",
+      "id": "e6",
+      "source": "buffer-rep1",
       "target": "ingot_sink",
+      "item_class": "Desc_IronIngot_C",
+      "transport_class": "Build_ConveyorBeltMk5_C"
+    },
+    {
+      "id": "e7",
+      "source": "buffer",
+      "target": "buffer-rep1",
       "item_class": "Desc_IronIngot_C",
       "transport_class": "Build_ConveyorBeltMk5_C"
     }

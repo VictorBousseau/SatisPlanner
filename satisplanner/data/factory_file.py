@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from satisplanner import __version__
+from satisplanner.core import attachments
 from satisplanner.core.graph import (
     SCHEMA_VERSION,
     ExternalSourceNode,
@@ -41,9 +42,11 @@ from satisplanner.core.graph import (
     GeneratorNode,
     GraphError,
     MachineNode,
+    MergerNode,
     Node,
     OutputNode,
     ResourceNode,
+    SplitterNode,
     StorageNode,
     WaterExtractorNode,
 )
@@ -133,7 +136,10 @@ class LoadedFactory:
 # --------------------------------------------------------------------------- #
 
 
-def _one_to_two(payload: dict[str, Any]) -> dict[str, Any]:
+Step = Callable[[dict[str, Any]], tuple[dict[str, Any], list[str]]]
+
+
+def _one_to_two(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Schema 1 to 2: clock speed added to extractors and machines.
 
     Nothing to write. The field defaults to 100 %, which is exactly what a document
@@ -141,33 +147,60 @@ def _one_to_two(payload: dict[str, Any]) -> dict[str, Any]:
     hole in it -- and because a version that migrates by doing nothing is a fact
     worth stating once rather than rediscovering.
     """
-    return payload
+    return payload, []
 
 
-def _two_to_three(payload: dict[str, Any]) -> dict[str, Any]:
+def _two_to_three(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Schema 2 to 3: the generator node appeared.
 
     Nothing to write either. A document from before it existed simply has none,
     and every other node is untouched. The step exists so the walk stays whole and
     so a schema-3 file is refused by a build that cannot draw a generator.
     """
-    return payload
+    return payload, []
 
 
-def _three_to_four(payload: dict[str, Any]) -> dict[str, Any]:
+def _three_to_four(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Schema 3 to 4: the per-node deployed-rendering override appeared.
 
     Nothing to write once more. ``None`` means "follow the global preference",
     which is what a document written before the field existed meant.
     """
-    return payload
+    return payload, []
+
+
+def _four_to_five(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Schema 4 to 5: splitters and mergers became nodes, and ports became finite.
+
+    The first step that actually writes something, and the first that can move a
+    figure. A document from before this has three lines leaving a port that only
+    ever had one, because until now the splitter between them was deduced from the
+    lines and never drawn. It is drawn now, so it is built now: the tree goes in,
+    the lines are laid again through it, and the shares it gives are the shares a
+    real tree gives. See :mod:`satisplanner.core.attachments` for why they are not
+    forced back to what they were.
+
+    Refusing to convert and asking for the factory to be redrawn by hand was never
+    an option, so a payload this cannot read is handed back untouched: the loader
+    behind it says what is wrong with it far better than a half-migration would.
+    """
+    try:
+        graph = FactoryGraph.model_validate(payload)
+    except (GraphError, ValueError):
+        logger.debug("charge utile illisible : conversion des raccords ignorée")
+        return payload, []
+    done = attachments.materialise(graph)
+    if not done.changes:
+        return payload, []
+    return json.loads(graph.model_dump_json()), done.notes()
 
 
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
-MIGRATIONS: Final[dict[int, Callable[[dict[str, Any]], dict[str, Any]]]] = {
+MIGRATIONS: Final[dict[int, Step]] = {
     1: _one_to_two,
     2: _two_to_three,
     3: _three_to_four,
+    4: _four_to_five,
 }
 
 
@@ -196,8 +229,9 @@ def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any
                 f"le fichier ne peut pas être converti."
             )
             raise FactoryFileError(msg)
-        payload = step(payload)
+        payload, written = step(payload)
         notes.append(f"document converti du schéma {current} au schéma {current + 1}")
+        notes.extend(written)
         current += 1
     return payload, notes
 
@@ -346,6 +380,9 @@ def _referenced_by(node: Node, game_data: GameData) -> list[tuple[str, Any]]:
             ]
         case ExternalSourceNode() | OutputNode() as endpoint:
             return [(endpoint.item_class, game_data.items)]
+        case SplitterNode() | MergerNode() as attachment:
+            # No building class of its own: which one it is follows from the item.
+            return [(attachment.item_class, game_data.items)] if attachment.item_class else []
         case StorageNode() as storage:
             stored: list[tuple[str, Any]] = [(storage.storage_class, game_data.storages)]
             if storage.item_class:

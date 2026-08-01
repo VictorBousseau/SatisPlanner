@@ -35,15 +35,21 @@ from satisplanner.ui.main_window import MainWindow
 from tests.benchmark_graphs import BENCHMARK_VERSION, benchmark_graph
 from tests.conftest import load_graph, temporary_settings
 
-# Measured on 2026-07-26 with ``tools/benchmark.py`` on the reference machine, then
+# Measured on 2026-08-01 with ``tools/benchmark.py`` on the reference machine, then
 # tripled. The margin is deliberately generous: these are a guard against an order
 # of magnitude, not a specification. Bump them only together with
 # ``BENCHMARK_VERSION``, because a threshold quoted against one generated factory
 # says nothing about another.
+#
+# Version 2 wired the splitters in, so the same fifty-node design is fifty-five
+# nodes solved: the resolution went from 20,9 to 26,5 ms at that size and from
+# 199,4 to 229,1 ms at five hundred. Per node that is 0,42 against 0,48 and 0,40
+# against 0,43 -- the cost is still linear in the size of the factory, which is the
+# rule Lot 1 set and the only one a threshold can honestly guard.
 MARGIN = 3.0
-MEASURED_SOLVE_MS = {50: 21.0, 200: 80.0, 500: 205.0}
-MEASURED_EDIT_MS = {50: 79.0, 200: 175.0, 500: 360.0}
-MEASURED_MOVE_MS = {50: 3.7, 200: 3.6, 500: 3.8}
+MEASURED_SOLVE_MS = {50: 26.5, 200: 91.2, 500: 229.1}
+MEASURED_EDIT_MS = {50: 93.0, 200: 202.0, 500: 416.0}
+MEASURED_MOVE_MS = {50: 3.7, 200: 4.3, 500: 3.7}
 
 
 def _is_traced() -> bool:
@@ -472,10 +478,18 @@ def test_the_generated_factories_are_what_the_thresholds_were_measured_on(
     A threshold is meaningless without the factory it was taken on, so the shape of
     that factory is pinned here: the seven kinds of node, a recycling loop, a buffer
     being drained, and exactly one line too small.
+
+    The design is fifty nodes and the graph is the design wired up, which is a
+    different number: a port carries one line, so the splitters that were always
+    implied are now in it. That is what "the same factory" means from this lot on,
+    and comparing fifty wired nodes to fifty unwired ones would be comparing two
+    different factories.
     """
+    design = benchmark_graph(50, wired=False)
+    assert len(design.nodes) == 50
     graph = benchmark_graph(50)
-    assert len(graph.nodes) == 50
-    kinds = {node.kind.value for node in graph.nodes}
+    assert len(graph.nodes) == 50 + 5, "cinq raccords, dont un partage en cinq voies"
+    kinds = {node.kind.value for node in design.nodes}
     assert kinds == {
         "resource",
         "water_extractor",
@@ -485,6 +499,7 @@ def test_the_generated_factories_are_what_the_thresholds_were_measured_on(
         "storage",
         "output",
     }
+    assert {node.kind.value for node in graph.nodes} - kinds == {"splitter"}
     assert any(isinstance(node, OutputNode) and node.is_sink for node in graph.nodes)
 
     report = engine.solve(graph, game_data)

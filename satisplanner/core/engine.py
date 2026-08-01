@@ -50,24 +50,29 @@ from typing import Final
 
 from satisplanner.core import constants, validation
 from satisplanner.core.graph import (
+    PASS_THROUGH_KINDS,
     Edge,
     ExternalSourceNode,
     FactoryGraph,
     GeneratorNode,
     MachineNode,
+    MergerNode,
     Node,
     NodeKind,
     OutputNode,
     ResourceNode,
+    SplitterNode,
     StorageNode,
     WaterExtractorNode,
+    attachment_building,
     condensation_order,
     generator_input_rates,
     machine_building,
+    pass_through_item,
     storage_item,
     unit_count,
 )
-from satisplanner.core.models import AttachmentRole, GameData
+from satisplanner.core.models import GameData
 from satisplanner.core.results import (
     FLOW_EPSILON,
     BufferSolution,
@@ -119,6 +124,9 @@ class _NodeState:
     outflow: dict[str, float] = field(default_factory=dict)
     blocked_products: tuple[str, ...] = ()
     absorbs_without_limit: bool = False
+    # A splitter or a merger: it keeps nothing, and its figures are read as
+    # "what went through" rather than "how hard it worked".
+    passes_through: bool = False
 
     @property
     def is_blocked(self) -> bool:
@@ -218,6 +226,13 @@ class _Solver:
             for node in self._sorted_nodes
             if isinstance(node, StorageNode)
         }
+        self._line_items: dict[str, str | None] = {
+            node.id: pass_through_item(node, graph)
+            for node in self._sorted_nodes
+            if isinstance(node, SplitterNode | MergerNode)
+        }
+        self._drained = self._draining_ports()
+        self._deferred = self._conduits_to_sinks()
         self.limits: dict[str, float] = {
             edge.id: self._capacity(edge) if self.options.enforce_line_capacity else math.inf
             for edge in graph.edges
@@ -241,13 +256,131 @@ class _Solver:
             state.nominal_out = self._nominal_out(node)
             state.nominal_in = self._nominal_in(node)
             state.absorbs_without_limit = isinstance(node, OutputNode | StorageNode)
+            state.passes_through = isinstance(node, SplitterNode | MergerNode)
             state.blocked_products = self._blocked_products(node)
-            # Optimistic start: every constraint assumed satisfied.
-            state.ratio_in = dict.fromkeys(state.nominal_in, 1.0)
-            state.ratio_out = dict.fromkeys(state.nominal_out, 1.0)
             self.states[node.id] = state
         # ``_sorted_nodes`` is already in identifier order, so this list is too.
         self._states_in_order = [self.states[node.id] for node in self._sorted_nodes]
+        self._size_pass_throughs()
+        for state in self._states_in_order:
+            # Optimistic start: every constraint assumed satisfied. A splitter needs
+            # this more than anything else in the graph, and both halves of it: it
+            # keeps nothing, so its intake is capped by what it pushed last round
+            # and its offer is what it took last round, and there is no nameplate to
+            # pin either. Start one of the two at nothing and the pair either
+            # oscillates with a period of two -- the offer chasing the refusal --
+            # or settles on "a tree of splitters carries zero", which is as
+            # self-consistent as a stopped recycling loop and just as wrong.
+            state.ratio_in = dict.fromkeys(state.nominal_in, 1.0)
+            state.ratio_out = dict.fromkeys(state.nominal_out, 1.0)
+        self._seed_storage_intake()
+
+    def _seed_storage_intake(self) -> None:
+        """Let a buffer start the round believing its suppliers will deliver.
+
+        A buffer with an unlimited absorber downstream has no figure to match, so it
+        offers its own intake -- and its intake, before anything has been allocated,
+        is nothing. Every other node in the graph starts optimistic and descends;
+        this one started at zero and climbed, which was harmless for as long as
+        nothing downstream reacted to it. A splitter reacts to it: it is a conduit,
+        so what it may take in is what it managed to push out, and a supply that
+        climbs from below while that is being decided sets the two chasing each
+        other with a period of two. Two rounds later the buffer is offering plenty
+        and the splitter is refusing it because of a shortage that ended.
+
+        Seeded with what the suppliers say they make, which is a nameplate and not a
+        guess, and which the very first allocation replaces with the truth.
+        """
+        for state in self._states_in_order:
+            if not isinstance(state.node, StorageNode):
+                continue
+            item = self._storage_items[state.node.id]
+            if item is None:
+                continue
+            arriving = sum(
+                rate
+                for edge in self.in_edges[state.node.id]
+                if edge.item_class == item
+                for rate in (self.states[edge.source].nominal_out.get(item, 0.0),)
+                if math.isfinite(rate)
+            )
+            state.inflow = {item: arriving}
+
+    def _size_pass_throughs(self) -> None:
+        """Give every splitter and merger a nameplate, and nothing else changes.
+
+        A splitter is then an ordinary node to the iteration, which is the whole
+        design: what it offers is its rating times its intake ratio, and what it can
+        absorb is its rating times its output ratio. Write ``i`` and ``o`` for its
+        intake and its outflow and the fixed point says ``i <= o`` and ``o <= i``, so
+        **conservation is a consequence and not a rule bolted on**: a splitter
+        cannot leak, and back pressure crosses it because its own intake is capped
+        by what it managed to push out last round.
+
+        That leaves the rating itself. It has to be a figure no flow can reach --
+        the game's splitter moves more than the fastest belt, so it is never the
+        bottleneck -- and it has to *be* a figure, because those two ratios are
+        quotients and infinity is not one. Two bounds say so, and the smaller wins:
+
+        * everything the factory makes of the item plus everything it asks for,
+          since nothing arrives here that was neither produced nor wanted;
+        * what its own incoming lines can carry, read from the ceilings **this
+          solve** is enforcing -- so the uncapped companion run keeps the first
+          bound alone, exactly as it ignores every other transport limit.
+
+        The second is what keeps the first round from flooding: a rating of ten
+        thousand offered down a belt that carries seven hundred would report a
+        transport ceiling as binding, and buy a companion run to be told it was not.
+        """
+        ceiling: dict[str, float] = {}
+        for state in self._states_in_order:
+            if state.passes_through:
+                continue
+            for rates in (state.nominal_out, state.nominal_in):
+                for item, rate in rates.items():
+                    if math.isfinite(rate):
+                        ceiling[item] = ceiling.get(item, 0.0) + rate
+        for state in self._states_in_order:
+            if not state.passes_through:
+                continue
+            carried = self._line_items[state.node.id]
+            if carried is None:
+                continue
+            arriving = sum(
+                self.limits[edge.id]
+                for edge in self.in_edges[state.node.id]
+                if edge.item_class == carried
+            )
+            rating = min(ceiling.get(carried, 0.0), arriving)
+            state.nominal_out = {carried: rating}
+            state.nominal_in = {carried: rating}
+
+    def _draining_ports(self) -> set[tuple[str, str]]:
+        """``(node, item)`` pairs the item can still leave by.
+
+        Without splitters this was "is there an outgoing line for it", and the answer
+        is unchanged wherever there are none. With them the question grows a step: a
+        line into a splitter that leads nowhere is no more of a route out than no
+        line at all, and a machine behind one is as blocked as a machine behind
+        nothing. Solved backwards from whatever really absorbs, which also settles
+        a ring of splitters closed on itself -- it drains nothing, and says so.
+        """
+        drained: set[tuple[str, str]] = set()
+        settled = False
+        while not settled:
+            settled = True
+            for edge in self._sorted_edges:
+                port = (edge.source, edge.item_class)
+                if port in drained:
+                    continue
+                target = self.graph.node(edge.target)
+                if not isinstance(target, SplitterNode | MergerNode) or (
+                    edge.target,
+                    edge.item_class,
+                ) in drained:
+                    drained.add(port)
+                    settled = False
+        return drained
 
     def _nominal_out(self, node: Node) -> dict[str, float]:
         """Production at full speed, per item and per minute.
@@ -285,6 +418,10 @@ class _Solver:
                 return {item: 0.0} if item else {}
             case OutputNode():
                 return {}
+            case SplitterNode() | MergerNode():
+                # Rated by :meth:`_size_pass_throughs`, which needs every other
+                # node's nameplate to be known first.
+                return {}
 
     def _nominal_in(self, node: Node) -> dict[str, float]:
         """Consumption at full speed, per item and per minute."""
@@ -307,18 +444,56 @@ class _Solver:
             case _:
                 return {}
 
+    def _conduits_to_sinks(self) -> frozenset[str]:
+        """Splitters and mergers with nothing but unlimited absorbers behind them.
+
+        These are served last, with the sinks, and the reason is that they are not
+        consumers at all. A machine's ceiling says how much of the material is
+        *wanted*, which is why a machine is served before a flare; a splitter's says
+        only how much fits through it. Left in the first round it would take a whole
+        node's output and hand it to two exits, while three more exits drawn beside
+        it -- one line each, no splitter needed -- got nothing.
+
+        Falsified rather than proved, so that a ring of splitters closed on itself
+        stays in the set: it absorbs nothing either way, and is reported blocked.
+        """
+        conduits = {
+            node.id for node in self._sorted_nodes if isinstance(node, SplitterNode | MergerNode)
+        }
+        settled = False
+        while not settled:
+            settled = True
+            for node_id in sorted(conduits):
+                for edge in self.out_edges[node_id]:
+                    target = self.graph.node(edge.target)
+                    if isinstance(target, OutputNode | StorageNode) or edge.target in conduits:
+                        continue
+                    conduits.discard(node_id)
+                    settled = False
+                    break
+        return frozenset(conduits)
+
     def _blocked_products(self, node: Node) -> tuple[str, ...]:
         """Products with no route out, decided on the topology alone.
 
         A machine whose output cannot leave stops entirely -- in game its output
         buffer fills and it shuts down. Buffers and outputs, including a deliberate
-        discard, all count as valid routes.
+        discard, all count as valid routes; a splitter counts only if something is
+        hanging off it, which is what :meth:`_draining_ports` works out.
+
+        A splitter with nowhere to send what it carries is blocked in exactly the
+        same sense, and saying so is what stops the machine feeding it from being
+        reported as merely under back pressure.
         """
+        if isinstance(node, SplitterNode | MergerNode):
+            item = self._line_items[node.id]
+            if item is None or (node.id, item) in self._drained:
+                return ()
+            return (item,)
         if not isinstance(node, MachineNode):
             return ()
-        routed = {edge.item_class for edge in self.out_edges[node.id]}
         products = self.game_data.recipe(node.recipe_class).product_rates()
-        return tuple(item for item in sorted(products) if item not in routed)
+        return tuple(item for item in sorted(products) if (node.id, item) not in self._drained)
 
     # -------------------------------------------------------------- iteration
 
@@ -395,11 +570,13 @@ class _Solver:
         asked = 0.0
         passes_through = False
         for edge in self.out_edges[state.node.id]:
-            downstream = self.states[edge.target]
-            if downstream.absorbs_without_limit:
-                passes_through = True
-            else:
-                asked += downstream.nominal_in.get(item, 0.0) * downstream.ratio_excluding(item)
+            if edge.item_class != item:
+                continue
+            demand, reaches_sink = self._reachable_demand(
+                edge.target, item, frozenset({state.node.id})
+            )
+            asked += demand
+            passes_through = passes_through or reaches_sink
         if passes_through:
             # The intake counts **once**, however many sinks are hanging off this
             # buffer: two containers side by side share what arrives, they do not
@@ -408,6 +585,36 @@ class _Solver:
             # what the real consumers left and no more.
             asked = max(asked, state.inflow.get(item, 0.0))
         return {item: asked}
+
+    def _reachable_demand(
+        self, node_id: str, item: str, seen: frozenset[str]
+    ) -> tuple[float, bool]:
+        """What lies downstream of here really wants, and whether a sink is among it.
+
+        A splitter is looked **through**. Its own appetite is the rating
+        :meth:`_size_pass_throughs` gave it, which is a ceiling nobody reaches, and a
+        buffer that read that as demand would empty itself into a fitting. What is
+        behind the fitting is the question, so that is what is asked -- and if a sink
+        is behind it, the rule that a buffer never invents material for a sink
+        applies exactly as it does when the sink is wired straight to it.
+
+        ``seen`` closes a ring of splitters: it contributes its own demand once and
+        does not come round again.
+        """
+        state = self.states[node_id]
+        if state.absorbs_without_limit:
+            return 0.0, True
+        if not state.passes_through:
+            return state.nominal_in.get(item, 0.0) * state.ratio_excluding(item), False
+        total = 0.0
+        sink = False
+        for edge in self.out_edges[node_id]:
+            if edge.item_class != item or edge.target in seen:
+                continue
+            demand, reaches_sink = self._reachable_demand(edge.target, item, seen | {node_id})
+            total += demand
+            sink = sink or reaches_sink
+        return total, sink
 
     def _refresh_storage_supply(self) -> None:
         """Adopt each buffer's offer for this round.
@@ -489,7 +696,9 @@ class _Solver:
         for item in self._items_in_order:
             item_edges = self._edges_by_item[item]
             item_supplies = supplies.get(item, {})
-            item_flows, bound = allocate(item_supplies, caps.get(item, {}), item_edges, self.limits)
+            item_flows, bound = allocate(
+                item_supplies, caps.get(item, {}), item_edges, self.limits, self._deferred
+            )
             self.line_bound = self.line_bound or bound
             flows.update(item_flows)
             sent: dict[str, float] = {}
@@ -601,7 +810,7 @@ class _Solver:
     def _node_solution(self, state: _NodeState) -> NodeSolution:
         node = state.node
         spare = self._spare_upstream(node.id)
-        ratio = state.ratio()
+        ratio = 1.0 if state.passes_through and not state.is_blocked else state.ratio()
         machine_count = unit_count(node)
         clock = getattr(node, "clock_speed", 1.0)
         building = self._building_of(node)
@@ -624,18 +833,27 @@ class _Solver:
             generator = self.game_data.generators.get(node.generator_class)
             if generator is not None and generator.accepts(node.fuel_class):
                 produced = generator.power_mw * node.count * ratio
+        # A splitter has no nameplate and cannot be starved: it is a fitting, and the
+        # rating :meth:`_size_pass_throughs` gave it is a ceiling nobody reaches, not
+        # a rate it was built for. Writing it on the node would be a number pretending
+        # to be a capacity, which is the same reason a buffer shows none.
+        limiting = (
+            (LimitingFactor.BLOCKED if state.is_blocked else LimitingFactor.NONE)
+            if state.passes_through
+            else state.limiting_factor(spare)
+        )
         return NodeSolution(
             node_id=node.id,
             kind=node.kind,
             label=node.label or self._default_label(node),
             ratio=ratio,
-            limiting=state.limiting_factor(spare),
+            limiting=limiting,
             inputs=_clean(state.inflow),
             outputs=_clean(state.outflow),
-            nominal_inputs=_nameplate(state.nominal_in),
-            nominal_outputs=_nameplate(state.nominal_out),
+            nominal_inputs={} if state.passes_through else _nameplate(state.nominal_in),
+            nominal_outputs={} if state.passes_through else _nameplate(state.nominal_out),
             blocked_products=state.blocked_products,
-            starved_items=state.starved_items(spare),
+            starved_items=() if state.passes_through else state.starved_items(spare),
             building_class=building,
             machine_count=machine_count,
             useful_machine_count=None if machine_count is None else machine_count * ratio,
@@ -655,6 +873,8 @@ class _Solver:
                 return node.generator_class
             case StorageNode():
                 return node.storage_class
+            case SplitterNode() | MergerNode():
+                return attachment_building(node, self._line_items[node.id], self.game_data)
             case _:
                 return None
 
@@ -671,6 +891,12 @@ class _Solver:
                 return self.game_data.building(node.generator_class).display_name_fr
             case StorageNode():
                 return self.game_data.building(node.storage_class).display_name_fr
+            case SplitterNode() | MergerNode():
+                building = self._building_of(node)
+                if building is None:
+                    # Nothing on its lines yet, so no building to name it after.
+                    return "Répartiteur" if isinstance(node, SplitterNode) else "Groupeur"
+                return self.game_data.building(building).display_name_fr
 
     def _buffer_solution(self, state: _NodeState) -> BufferSolution:
         node = state.node
@@ -801,12 +1027,18 @@ class _Solver:
 
     def _shopping_list(self, nodes: Iterable[NodeSolution]) -> ShoppingList:
         buildings: dict[str, int] = {}
+        attachments: dict[str, int] = {}
         shards: dict[str, int] = {}
         for solution in nodes:
             if solution.building_class is None:
                 continue
             count = math.ceil(solution.machine_count or 1.0)
-            buildings[solution.building_class] = buildings.get(solution.building_class, 0) + count
+            # Splitters and mergers are counted where they are placed now, so they
+            # keep a heading of their own rather than being deduced from the lines.
+            basket = attachments if solution.kind in PASS_THROUGH_KINDS else buildings
+            basket[solution.building_class] = basket.get(solution.building_class, 0) + count
+            if basket is attachments:
+                continue
             if solution.clock_speed > 1.0 and solution.machine_count is not None:
                 for item, needed in self.game_data.shards_for(
                     solution.clock_speed, solution.machine_count
@@ -826,38 +1058,9 @@ class _Solver:
             buildings=dict(sorted(buildings.items())),
             belts_by_tier=dict(sorted(belts.items())),
             pipes_by_tier=dict(sorted(pipes.items())),
-            attachments=self._attachments(),
+            attachments=dict(sorted(attachments.items())),
             power_shards=dict(sorted(shards.items())),
         )
-
-    def _attachments(self) -> dict[str, int]:
-        """Splitters, mergers and junctions implied by lines that share a node.
-
-        Two lines leaving one node with the same item means the player has to split
-        that output, and two arriving means a merge. The count follows from the
-        number of lines alone -- a splitter serves three, so each unit adds two --
-        which is as far as a throughput model can honestly go: how the units are
-        physically chained is geometry, and geometry is out of scope.
-        """
-        totals: dict[str, int] = {}
-        for node in self.graph.sorted_nodes():
-            for role, edges in (
-                (AttachmentRole.SPLIT, self.out_edges[node.id]),
-                (AttachmentRole.MERGE, self.in_edges[node.id]),
-            ):
-                lines: dict[str, int] = {}
-                for edge in edges:
-                    lines[edge.item_class] = lines.get(edge.item_class, 0) + 1
-                for item_class, count in sorted(lines.items()):
-                    attachment = self.game_data.attachment_for(
-                        self.game_data.item(item_class).form, role
-                    )
-                    if attachment is None:
-                        continue
-                    units = attachment.units_for(count)
-                    if units:
-                        totals[attachment.class_name] = totals.get(attachment.class_name, 0) + units
-        return dict(sorted(totals.items()))
 
 
 def allocate(
@@ -865,6 +1068,7 @@ def allocate(
     caps: Mapping[str, float],
     edges: Sequence[Edge],
     limits: Mapping[str, float] | None = None,
+    deferred: frozenset[str] = frozenset(),
 ) -> tuple[dict[str, float], bool]:
     """Share each producer's output between the consumers it is wired to.
 
@@ -879,6 +1083,13 @@ def allocate(
     3. consumers that absorb without limit (buffers, outputs, flares) are served
        **last**, with whatever nobody else could take. Treating their appetite as
        infinite in step 1 would let a flare starve a machine standing next to it.
+
+    ``deferred`` names consumers that have a real appetite and are served last all
+    the same. There is one kind: a splitter with nothing but sinks behind it. It is
+    a conduit, so its own ceiling says nothing about what wants the material, and
+    letting it queue ahead of an exit drawn beside it would starve the exit to fill
+    a fitting. Its ceiling is still enforced when its turn comes -- unlike a real
+    sink's, which is not one.
 
     ``limits`` caps each line by its transport tier. Deterministic: producers,
     consumers and edges are all walked in sorted order.
@@ -897,24 +1108,19 @@ def allocate(
     remaining_line = {
         edge.id: math.inf if limits is None else limits.get(edge.id, math.inf) for edge in ordered
     }
-    finite = {node: cap for node, cap in caps.items() if math.isfinite(cap)}
-    unlimited = sorted(node for node, cap in caps.items() if not math.isfinite(cap))
+    served_now = {node for node, cap in caps.items() if math.isfinite(cap) and node not in deferred}
+    finite = {node: cap for node, cap in caps.items() if node in served_now}
+    later = {node: cap for node, cap in caps.items() if node not in served_now}
 
     bound = _water_fill(flows, ordered, remaining_supply, dict(finite), remaining_line)
-    if unlimited:
-        # Second pass: the leftovers go to the unlimited absorbers.
+    if later:
+        # Second pass: the leftovers go to the unlimited absorbers, and to the
+        # conduits that lead only to them, each still held to its own ceiling.
         leftovers = {
             node_id: value for node_id, value in remaining_supply.items() if value > FLOW_EPSILON
         }
-        sink_edges = [edge for edge in ordered if edge.target in set(unlimited)]
-        bound |= _water_fill(
-            flows,
-            sink_edges,
-            leftovers,
-            dict.fromkeys(unlimited, math.inf),
-            remaining_line,
-            unlimited_caps=True,
-        )
+        sink_edges = [edge for edge in ordered if edge.target in later]
+        bound |= _water_fill(flows, sink_edges, leftovers, dict(later), remaining_line)
         for node_id, value in leftovers.items():
             remaining_supply[node_id] = value
     return flows, bound
@@ -926,10 +1132,13 @@ def _water_fill(
     remaining_supply: dict[str, float],
     remaining_cap: dict[str, float],
     remaining_line: dict[str, float],
-    *,
-    unlimited_caps: bool = False,
 ) -> bool:
     """Move as much as possible from supplies to caps, redistributing what bounces.
+
+    A consumer that absorbs without limit is passed a ceiling of infinity, which
+    every step below then handles on its own: it never runs out, it never scales an
+    offer down, and a clip in front of it is never harmless. There used to be a flag
+    saying all of that a second time, and it had to be right in four places.
 
     Returns whether a transport ceiling ever changed what got delivered.
 
@@ -951,8 +1160,9 @@ def _water_fill(
     for _ in range(MAX_ALLOCATION_ROUNDS):
         active = []
         for edge in edges:
-            if remaining_supply.get(edge.source, 0.0) <= FLOW_EPSILON or (
-                not unlimited_caps and remaining_cap.get(edge.target, 0.0) <= FLOW_EPSILON
+            if (
+                remaining_supply.get(edge.source, 0.0) <= FLOW_EPSILON
+                or remaining_cap.get(edge.target, 0.0) <= FLOW_EPSILON
             ):
                 continue
             if remaining_line[edge.id] <= FLOW_EPSILON:
@@ -992,12 +1202,8 @@ def _water_fill(
             if offered <= FLOW_EPSILON:
                 continue
             capacity = remaining_cap.get(target, 0.0)
-            factor = 1.0 if unlimited_caps else min(1.0, capacity / offered)
-            if (
-                len(group) == 1
-                and not unlimited_caps
-                and capacity <= offers[group[0].id] + FLOW_EPSILON
-            ):
+            factor = min(1.0, capacity / offered)
+            if len(group) == 1 and capacity <= offers[group[0].id] + FLOW_EPSILON:
                 # One line into this consumer, and it is the consumer's appetite
                 # that runs out first: it takes all it can hold either way.
                 harmless.add(group[0].id)
@@ -1008,8 +1214,7 @@ def _water_fill(
                 flows[edge.id] += accepted
                 remaining_supply[edge.source] -= accepted
                 remaining_line[edge.id] -= accepted
-                if not unlimited_caps:
-                    remaining_cap[target] -= accepted
+                remaining_cap[target] -= accepted
                 moved += accepted
         # Anything clipped and not shown harmless -- including an offer too small
         # to have reached step 2 at all -- has to be assumed to have mattered.

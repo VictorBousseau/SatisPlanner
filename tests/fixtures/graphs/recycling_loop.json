@@ -1,34 +1,91 @@
 {
-  "schema_version": 1,
+  "schema_version": 5,
   "nodes": [
     {
-      "kind": "external_source",
       "id": "fuel",
       "label": "Carburant importe",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "external_source",
       "item_class": "Desc_LiquidFuel_C",
-      "rate_per_minute": 60
+      "rate_per_minute": 60.0
     },
     {
-      "kind": "machine",
       "id": "recycled_plastic",
-      "recipe_class": "Recipe_Alternate_Plastic_1_C",
-      "machine_count": 1
-    },
-    {
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
       "kind": "machine",
+      "recipe_class": "Recipe_Alternate_Plastic_1_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
       "id": "recycled_rubber",
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
       "recipe_class": "Recipe_Alternate_RecycledRubber_C",
-      "machine_count": 1
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
     },
     {
-      "kind": "output",
       "id": "plastic_out",
-      "item_class": "Desc_Plastic_C"
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_Plastic_C",
+      "is_sink": false
     },
     {
-      "kind": "output",
       "id": "rubber_out",
-      "item_class": "Desc_Rubber_C"
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_Rubber_C",
+      "is_sink": false
+    },
+    {
+      "id": "recycled_plastic-rep1",
+      "label": null,
+      "position": [
+        460.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "item_class": "Desc_Plastic_C",
+      "kind": "splitter"
+    },
+    {
+      "id": "recycled_rubber-rep1",
+      "label": null,
+      "position": [
+        460.0,
+        240.0
+      ],
+      "show_deployed": null,
+      "item_class": "Desc_Rubber_C",
+      "kind": "splitter"
     }
   ],
   "edges": [
@@ -47,30 +104,44 @@
       "transport_class": "Build_Pipeline_C"
     },
     {
-      "id": "e3",
-      "source": "recycled_plastic",
+      "id": "e7",
+      "source": "recycled_plastic-rep1",
       "target": "recycled_rubber",
       "item_class": "Desc_Plastic_C",
       "transport_class": "Build_ConveyorBeltMk2_C"
     },
     {
-      "id": "e4",
-      "source": "recycled_rubber",
-      "target": "recycled_plastic",
-      "item_class": "Desc_Rubber_C",
-      "transport_class": "Build_ConveyorBeltMk2_C"
-    },
-    {
-      "id": "e5",
-      "source": "recycled_plastic",
+      "id": "e8",
+      "source": "recycled_plastic-rep1",
       "target": "plastic_out",
       "item_class": "Desc_Plastic_C",
       "transport_class": "Build_ConveyorBeltMk2_C"
     },
     {
-      "id": "e6",
-      "source": "recycled_rubber",
+      "id": "e9",
+      "source": "recycled_plastic",
+      "target": "recycled_plastic-rep1",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e10",
+      "source": "recycled_rubber-rep1",
+      "target": "recycled_plastic",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e11",
+      "source": "recycled_rubber-rep1",
       "target": "rubber_out",
+      "item_class": "Desc_Rubber_C",
+      "transport_class": "Build_ConveyorBeltMk2_C"
+    },
+    {
+      "id": "e12",
+      "source": "recycled_rubber",
+      "target": "recycled_rubber-rep1",
       "item_class": "Desc_Rubber_C",
       "transport_class": "Build_ConveyorBeltMk2_C"
     }

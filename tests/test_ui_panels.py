@@ -199,7 +199,11 @@ def test_the_shopping_list_counts_the_splitters(window: MainWindow) -> None:
     window.document.reset(load_graph("recycling_loop"))
     html = window.totals_panel.html()
     assert "Répartiteur de convoyeurs" in html, "le libellé du jeu, accent compris"
-    assert "Jonction de pipeline" in html
+    # Two of them, one per product looping back, and counted as the nodes they are.
+    assert window.document.report is not None
+    assert window.document.report.shopping_list.attachments == {
+        "Build_ConveyorAttachmentSplitter_C": 2
+    }
 
 
 def test_the_materials_block_says_what_to_make_before_building(window: MainWindow) -> None:

@@ -44,6 +44,25 @@ POWER_SHARD_SLOTS: Final = 3
 # the data by `tests/test_conversions.py` so it cannot drift from it.
 MAX_CLOCK_SPEED: Final = 2.5
 
+# -------------------------------------------------------------- attachments
+
+# Lines one splitter, merger or pipe junction serves on its many-line side: three
+# outputs for a conveyor splitter, three inputs for a merger, three branches plus a
+# trunk for a pipe junction.
+#
+# **Not in the game files.** The port counts of a buildable live in its blueprint,
+# not in `Docs.json`: `mFactoryInputConnections`, `mPipeConnections` and their
+# siblings are exported as empty strings, and the splitter declares nothing beyond
+# `mCurrentOutputIndex`. So the figure is written here with its reason, exactly as
+# `POWER_SHARD_SLOTS` is, and the catalogue's own `branches` column -- filled from
+# the same hand-written table in `data.docs_parser` -- is checked against it by
+# `tests/test_conversions.py` so the two cannot drift apart.
+#
+# Repeated here rather than read from the catalogue because a graph validates its
+# own shape without a catalogue in hand, and because a document is migrated from an
+# older schema before any game data is looked at.
+ATTACHMENT_BRANCHES: Final = 3
+
 # ------------------------------------------------------------------- families
 #
 # Which items belong together, for the reader who wants to colour a factory by the

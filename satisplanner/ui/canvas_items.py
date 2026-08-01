@@ -37,12 +37,16 @@ from satisplanner.core.graph import (
     ExternalSourceNode,
     GeneratorNode,
     MachineNode,
+    MergerNode,
     Node,
     OutputNode,
     ResourceNode,
+    SplitterNode,
     StorageNode,
     WaterExtractorNode,
+    attachment_building,
     machine_building,
+    port_line_budget,
     unit_count,
 )
 from satisplanner.core.models import GameData, Item, ItemForm
@@ -298,9 +302,12 @@ class NodeItem(QGraphicsItem):
         # called wherever something really did change.
         self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
         self.setPos(QPointF(*node.position))
-        # What a buffer holds, once the graph can tell. Set by the scene, which is the
-        # only place that knows the other lines.
+        # What a buffer holds, or what a splitter is placed on, once the graph can
+        # tell. Set by the scene, which is the only place that knows the other lines.
         self.content_item: str | None = None
+        # Lines already on the many side of a splitter or a merger, likewise: a node
+        # cannot count its own neighbours.
+        self.branch_count = 0
         # Deployed rendering, as resolved by the scene: the global preference unless
         # this node overrides it. Purely a way of drawing; nothing reads it back.
         self.deployed = False
@@ -464,7 +471,9 @@ class NodeItem(QGraphicsItem):
                 # Fuel first, make-up water second: the game's own order, not the
                 # alphabet. A generator has no output port -- power is not a flow.
                 return (self._generator_inputs(generator), ())
-            case StorageNode():
+            case StorageNode() | SplitterNode() | MergerNode():
+                # One row each side for whatever it carries: how many *lines* hang
+                # off that side is the port budget's business, not a row's.
                 content = self.content_item
                 return ((content or ANY_ITEM,), (content,) if content else ())
             case OutputNode() as output:
@@ -561,6 +570,20 @@ class NodeItem(QGraphicsItem):
                 return self.game_data.building(generator.generator_class).display_name_fr
             case StorageNode() as storage:
                 return self.game_data.building(storage.storage_class).display_name_fr
+            case SplitterNode() | MergerNode():
+                return self._attachment_name()
+
+    def _attachment_name(self) -> str:
+        """What this splitter or merger is called, once its item says which it is.
+
+        A solid one is a conveyor splitter and a fluid one a pipe junction, so the
+        name cannot be settled before something is on the line -- and until then the
+        generic word is the honest answer rather than a building picked at random.
+        """
+        building = attachment_building(self.node, self.content_item, self.game_data)
+        if building is not None and building in self.game_data.buildings:
+            return self.game_data.buildings[building].display_name_fr
+        return "Répartiteur" if isinstance(self.node, SplitterNode) else "Groupeur"
 
     def subtitle(self) -> str:
         """The line under the title, as one string. Assembled from the segments."""
@@ -626,6 +649,8 @@ class NodeItem(QGraphicsItem):
                 return self._storage_segments(storage)
             case OutputNode() as output:
                 return [Segment("rejet assumé" if output.is_sink else "sortie de l'usine")]
+            case SplitterNode() | MergerNode():
+                return self._attachment_segments()
 
     def subtitle_layout(self) -> SubtitleLayout:
         """The measured subtitle, from the cache when the text has not changed.
@@ -741,8 +766,36 @@ class NodeItem(QGraphicsItem):
             Segment(formatting.number(storage.initial_content), Field.QUANTITY),
         ]
 
+    def _attachment_segments(self) -> list[Segment]:
+        """How many lines are on it and how many it can take, which is the whole point.
+
+        A reader looking at a splitter wants to know whether there is a branch left.
+        The count is read off the lines rather than stored, so it is right the moment
+        one is drawn, and it is the number of **lines** and not of items: three
+        outputs of the same thing is exactly the case this node exists for.
+        """
+        node = self.node
+        assert isinstance(node, SplitterNode | MergerNode)
+        wide = port_line_budget(node, is_output=isinstance(node, SplitterNode))
+        used = self.branch_count
+        word = "sortie" if isinstance(node, SplitterNode) else "entrée"
+        role = "répartiteur" if isinstance(node, SplitterNode) else "groupeur"
+        if self.content_item is None:
+            return [Segment(f"{role} — contenu indéterminé")]
+        name = self.game_data.item(self.content_item).display_name_fr
+        return [
+            Segment(f"{role} — "),
+            Segment(name),
+            Segment(f" — {used} {word}(s) sur {wide}"),
+        ]
+
     def icon(self) -> QIcon:
         match self.node:
+            case SplitterNode() | MergerNode():
+                building = attachment_building(self.node, self.content_item, self.game_data)
+                if building is not None and building in self.game_data.buildings:
+                    return self.icons.for_building(self.game_data.buildings[building])
+                return self.icons.icon_for(self.node.kind.value, None, self._attachment_name())
             case MachineNode() as machine:
                 recipe = self.game_data.recipe(machine.recipe_class)
                 headline = recipe.products[0].item_class if recipe.products else None
@@ -1019,7 +1072,7 @@ class NodeItem(QGraphicsItem):
                 headline = generator.fuel_class
             case WaterExtractorNode() as pump:
                 headline = self.game_data.extractor(pump.extractor_class).item_class
-            case StorageNode():
+            case StorageNode() | SplitterNode() | MergerNode():
                 headline = self.content_item
             case _:
                 headline = getattr(self.node, "item_class", None)

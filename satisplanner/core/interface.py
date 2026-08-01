@@ -34,6 +34,7 @@ from satisplanner.core.graph import (
     ExternalSourceNode,
     FactoryGraph,
     OutputNode,
+    port_line_budget,
 )
 from satisplanner.core.models import GameData, UnknownClassError
 
@@ -138,8 +139,13 @@ def _fed_and_drained(
         transport = _fastest_transport(port.item_class, game_data)
         capacity = game_data.transport_capacity(transport)
         # As many lines as the rate needs, which is what a player would lay: one
-        # artificial belt running at its limit would measure the belt, not the module.
-        lines = max(1, math.ceil(port.nominal_rate / capacity)) if capacity > 0 else 1
+        # artificial belt running at its limit would measure the belt, not the
+        # module. Never more than the port has room for, though -- a bank of one
+        # machine has one output, and pretending otherwise would measure a module
+        # that could not be built.
+        wanted = max(1, math.ceil(port.nominal_rate / capacity)) if capacity > 0 else 1
+        budget = port_line_budget(graph.node(port.node_id), is_output=port.is_output)
+        lines = wanted if budget is None else min(wanted, budget)
         share = port.nominal_rate / lines
         for line in range(lines):
             helper = f"_interface{index}_{line}"

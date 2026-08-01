@@ -72,7 +72,7 @@ qui a rangé son usine s'attend à la retrouver rangée.
 
 ---
 
-## 3. Les sept types de nœuds
+## 3. Les neuf types de nœuds
 
 ### `resource` — un gisement
 
@@ -218,6 +218,34 @@ passe**.
 deux absorbent sans limite ; le drapeau ne change que la ligne du rapport où le flux
 est compté — `final_outputs` ou `discarded_outputs`.
 
+### `splitter` et `merger` — les raccords
+
+```json
+{
+  "kind": "splitter",
+  "id": "repartiteur1",
+  "position": [400.0, 0.0],
+  "item_class": null
+}
+```
+
+Un répartiteur prend **une ligne** et en ressort jusqu'à **trois** ; un groupeur fait
+l'inverse. Ils ne portent ni cadence, ni quantité, ni classe de bâtiment : lequel des
+trois bâtiments du jeu c'est se déduit de la forme de ce qui passe — répartiteur de
+convoyeurs et groupeur de convoyeurs pour un solide, jonction de pipeline pour un
+fluide, parce qu'elle a quatre ports et fait les deux métiers.
+
+`item_class` peut rester `null` : il se lit alors sur les lignes, comme le contenu
+d'un tampon. Toutes les lignes d'un raccord portent le même objet — c'est ce qu'est
+un convoyeur.
+
+Un raccord **ne garde rien** : ce qui entre ressort. Il n'a pas de débit nominal et
+il ne bride jamais rien, parce que dans le jeu il déplace plus que le convoyeur le
+plus rapide. Un répartiteur partage **également entre ses branches raccordées**,
+avec la règle max-min habituelle : ce qu'une branche ne peut pas prendre revient aux
+autres. Un répartiteur qui ne mène nulle part bloque tout ce qui l'alimente, comme
+un sous-produit sans issue.
+
 ---
 
 ## 4. Les lignes
@@ -237,18 +265,31 @@ construction et non découvertes par le solveur :
 
 - un solide voyage sur un convoyeur, un fluide dans une tuyauterie, jamais l'inverse ;
 - `source` doit produire cet objet, `target` doit le consommer ;
-- une machine a au plus **4 entrées** et **2 sorties** distinctes (en objets, pas en
-  lignes : trois convoyeurs de minerai de fer, c'est une seule entrée) ;
+- une machine a au plus **4 entrées** et **2 sorties** distinctes en *objets* ;
+- **un port porte une ligne**, et un nœud a autant de ports qu'il a de bâtiments :
+  `ceil(count)` par objet et par sens. Huit fonderies ont huit sorties, une seule en
+  a une. Un gisement, une pompe, une machine et un générateur suivent tous cette
+  règle ; un tampon n'a pas de compte, donc il a un port de chaque côté ; une entrée
+  et une sortie d'usine sont la frontière du modèle et pas des bâtiments, donc elles
+  n'ont pas de limite ;
 - une ligne ne boucle pas sur son propre nœud ;
 - les identifiants de lignes sont uniques.
 
 La capacité du tier est une **contrainte, pas une remarque** : un Mk.1 alimenté à
 480/min en transporte 60 et refoule le reste en amont.
 
-**Il n'y a jamais de nœud répartiteur, groupeur ou jonction.** Deux lignes qui
-partent du même nœud se partagent sa production à parts égales, et le répartiteur
-que cela suppose est compté tout seul dans la liste de courses. Dans l'exemple, les
-240 lingots partent en trois lignes et chacune en emporte 80.
+**Une ligne de trop se raccorde par un répartiteur, qui est un nœud comme un
+autre.** Dans l'exemple les 240 lingots partent en trois lignes, et il n'y a aucun
+raccord : le nœud compte huit fonderies, donc huit sorties, et trois lignes y
+tiennent largement. Il en faudrait un si la même usine était dessinée avec deux
+fonderies.
+
+Un fichier écrit avant le schéma 5 est converti à l'ouverture : les raccords que sa
+disposition supposait sont matérialisés, les lignes reprises à travers eux. Un
+partage qui se ramène à des moitiés et des tiers — 2, 3, 4, 6, 9 lignes — donne
+exactement les mêmes débits qu'avant ; un partage en 5 ou en 7 n'est pas égal dans
+le jeu et ne l'est plus ici non plus, et la conversion dit lesquels, avec l'ancienne
+et la nouvelle part.
 
 ---
 
@@ -263,7 +304,7 @@ Résolu contre les données du jeu 1.2 :
 | Sorties | 80 lingots/min |
 | Rejets assumés | 80 lingots/min |
 | Électricité | 60,673 MW consommés, 150 MW produits |
-| Liste de courses | 8 fonderies, 1 Foreuse Mk.2, 1 pompe, 2 centrales, 1 conteneur, 1 répartiteur |
+| Liste de courses | 8 fonderies, 1 Foreuse Mk.2, 1 pompe, 2 centrales, 1 conteneur, aucun raccord |
 | Diagnostic | tampon en remplissage, +80/min, saturé en 1 h |
 
 L'électricité est un **compteur, pas une contrainte** : consommation et production

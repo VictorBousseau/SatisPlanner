@@ -18,13 +18,22 @@ from satisplanner.core.graph import (
     ExternalSourceNode,
     GeneratorNode,
     MachineNode,
+    MergerNode,
     Node,
     OutputNode,
     ResourceNode,
+    SplitterNode,
     StorageNode,
     WaterExtractorNode,
 )
-from satisplanner.core.models import BuildingKind, GameData, Item, ItemForm, Purity
+from satisplanner.core.models import (
+    AttachmentRole,
+    BuildingKind,
+    GameData,
+    Item,
+    ItemForm,
+    Purity,
+)
 
 # Default rate offered when the user drops an "import from outside" node. It is only
 # a starting point, edited on the node itself, and no game value is implied.
@@ -47,6 +56,8 @@ class EntryKind(StrEnum):
     WATER_EXTRACTOR = "water_extractor"
     GENERATOR = "generator"
     STORAGE = "storage"
+    SPLITTER = "splitter"
+    MERGER = "merger"
     EXTERNAL = "external"
     OUTPUT = "output"
     SINK = "sink"
@@ -59,6 +70,8 @@ SECTION_LABELS: Final[dict[EntryKind, str]] = {
     EntryKind.WATER_EXTRACTOR: "Extraction",
     EntryKind.GENERATOR: "Électricité",
     EntryKind.STORAGE: "Stockage",
+    EntryKind.SPLITTER: "Raccords",
+    EntryKind.MERGER: "Raccords",
     EntryKind.EXTERNAL: "Entrées et sorties",
     EntryKind.OUTPUT: "Entrées et sorties",
     EntryKind.SINK: "Entrées et sorties",
@@ -112,7 +125,8 @@ class PaletteEntry:
                 # can actually say something useful about.
                 generator = game_data.generators.get(self.class_name)
                 return generator.default_fuel if generator else None
-            case EntryKind.STORAGE:
+            case EntryKind.STORAGE | EntryKind.SPLITTER | EntryKind.MERGER:
+                # About a building, or about nothing until a line reaches it.
                 return None
             case _:
                 return self.class_name if self.class_name in game_data.items else None
@@ -155,6 +169,13 @@ class PaletteEntry:
                 )
             case EntryKind.STORAGE:
                 return StorageNode(id=node_id, storage_class=self.class_name, position=position)
+            case EntryKind.SPLITTER:
+                # No item and no building class: both follow from the line it is
+                # dropped on, and asking twice for something already on screen is
+                # exactly the ceremony a splitter is meant to save.
+                return SplitterNode(id=node_id, position=position)
+            case EntryKind.MERGER:
+                return MergerNode(id=node_id, position=position)
             case EntryKind.EXTERNAL:
                 return ExternalSourceNode(
                     id=node_id,
@@ -183,7 +204,56 @@ def build_entries(game_data: GameData) -> list[PaletteEntry]:
     entries.extend(_extraction(game_data))
     entries.extend(_generators(game_data))
     entries.extend(_storage(game_data))
+    entries.extend(_attachments(game_data))
     entries.extend(_endpoints(game_data))
+    return entries
+
+
+def _attachments(game_data: GameData) -> list[PaletteEntry]:
+    """One splitter and one merger, whatever the form of what will run through them.
+
+    Not one per building: a solid splits in a conveyor splitter and a fluid in a
+    pipe junction, and which of the two it is follows from the line it is dropped
+    on. Offering both would be asking the user to answer a question the canvas is
+    about to answer for them -- and to get it wrong.
+
+    The label names both buildings all the same, because that is what a player is
+    searching for: "jonction" has to find this row.
+    """
+    entries = []
+    for kind, role, label in (
+        (EntryKind.SPLITTER, AttachmentRole.SPLIT, "Répartiteur"),
+        (EntryKind.MERGER, AttachmentRole.MERGE, "Groupeur"),
+    ):
+        names = [
+            game_data.buildings[attachment.class_name].display_name_fr
+            for attachment in sorted(game_data.attachments.values(), key=lambda a: a.class_name)
+            if role in attachment.roles and attachment.class_name in game_data.buildings
+        ]
+        icon = next(
+            (
+                attachment.class_name
+                for attachment in sorted(game_data.attachments.values(), key=lambda a: a.class_name)
+                if role in attachment.roles and not attachment.form.is_fluid
+            ),
+            "",
+        )
+        building = game_data.buildings.get(icon)
+        verb = "sortir" if kind is EntryKind.SPLITTER else "entrer"
+        entries.append(
+            PaletteEntry(
+                kind=kind,
+                label=label,
+                detail=(
+                    f"{', '.join(names)} — pour faire {verb} plus d'une ligne d'un port"
+                    if names
+                    else f"pour faire {verb} plus d'une ligne d'un port"
+                ),
+                class_name=icon,
+                icon_class=icon,
+                icon_file=building.icon_file if building else None,
+            )
+        )
     return entries
 
 

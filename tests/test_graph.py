@@ -201,7 +201,12 @@ def test_a_straight_chain_has_only_trivial_components(game_data: GameData) -> No
 def test_a_loop_is_found_as_one_component() -> None:
     graph = load_graph("recycling_loop")
     components = strongly_connected_components(graph)
-    assert ("recycled_plastic", "recycled_rubber") in components
+    assert (
+        "recycled_plastic",
+        "recycled_plastic-rep1",
+        "recycled_rubber",
+        "recycled_rubber-rep1",
+    ) in components
     assert is_cyclic(("recycled_plastic", "recycled_rubber"), graph)
 
 

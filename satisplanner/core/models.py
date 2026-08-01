@@ -259,29 +259,22 @@ class Pipe(_Row):
 class Attachment(_Row):
     """A splitter, a merger, or a pipe junction.
 
-    These never appear as nodes on the canvas: a node with three outgoing lines is
-    drawn as three lines, exactly as the player thinks of it. They are still real
-    buildings that have to be placed, so they are counted in the shopping list.
-    Their throughput is deliberately not modelled: a splitter moves 2000 items/min
-    while the fastest conveyor tops out at 1200, so it can never be the bottleneck.
+    These are nodes on the canvas like any other, placed where the player would
+    place them: a port carries one line, so getting a second one out of it takes a
+    building, and a building somebody has to put down is a building they should be
+    able to see. Their throughput is deliberately not modelled -- a splitter moves
+    2000 items/min while the fastest conveyor tops out at 1200, so it can never be
+    the bottleneck -- which is why this row carries no rate.
     """
 
     class_name: str
     form: ItemForm
     roles: tuple[AttachmentRole, ...]
-    # Lines one unit can serve on its many-line side: 3 for a conveyor splitter
-    # (one input, three outputs) and 3 for a pipe junction (four ports, one used
-    # as the trunk).
+    # Lines one unit serves on its many-line side: 3 for a conveyor splitter (one
+    # input, three outputs) and 3 for a pipe junction (four ports, one used as the
+    # trunk). Mirrored by ``core.constants.ATTACHMENT_BRANCHES``, which is what the
+    # graph validates against when there is no catalogue to hand.
     branches: int
-
-    def units_for(self, lines: int) -> int:
-        """How many of these are needed to fan a single line out to ``lines``.
-
-        Each unit adds ``branches - 1`` lines to whatever it is chained onto.
-        """
-        if lines <= 1 or self.branches <= 1:
-            return 0
-        return -(-(lines - 1) // (self.branches - 1))  # ceiling division
 
 
 class BuildingCost(_Row):

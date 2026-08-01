@@ -253,7 +253,8 @@ def _shopping_list(report: FactoryReport, game_data: GameData) -> str:
     ]
     note = (
         f"<p class='muted'>{shopping.total_buildings} bâtiment(s) au total. Les répartiteurs et "
-        f"groupeurs sont déduits des lignes qui partagent un nœud."
+        f"groupeurs sont ceux qui figurent sur le plan : un port porte une ligne, et il en "
+        f"faut un dès qu'il en part davantage."
     )
     if shard_rows:
         note += " Les éclats ne se construisent pas : ils se fabriquent et se glissent dans"

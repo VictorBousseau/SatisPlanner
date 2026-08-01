@@ -65,6 +65,8 @@ KIND_LABELS: Final[dict[str, str]] = {
     "generator": "Générateur",
     "storage": "Tampon",
     "output": "Sortie",
+    "splitter": "Répartiteur",
+    "merger": "Groupeur",
 }
 
 LIMITING_LABELS: Final[dict[LimitingFactor, str]] = {

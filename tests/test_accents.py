@@ -308,7 +308,7 @@ IDENTIFIERS: dict[str, frozenset[str]] = {
     # Node identifier prefixes: they are written into every saved factory, and the
     # table shows them. Renaming them would change what a new document looks like on
     # disk for no reader's benefit.
-    "canvas.py": frozenset({"generateur", "entree"}),
+    "canvas.py": frozenset({"generateur", "entree", "repartiteur"}),
     # A serialised diagnostic code, read back from reports.
     "results.py": frozenset({"deficit"}),
     # Real files the self-check writes next to the executable.

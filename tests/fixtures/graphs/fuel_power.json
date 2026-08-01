@@ -1,43 +1,96 @@
 {
-  "schema_version": 3,
+  "schema_version": 5,
   "nodes": [
     {
-      "kind": "resource",
       "id": "oil",
       "label": "Gisement de petrole",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "resource",
       "item_class": "Desc_LiquidOil_C",
       "extractor_class": "Build_OilPump_C",
       "purity": "normal",
-      "count": 1
+      "count": 1.0,
+      "clock_speed": 1.0
     },
     {
-      "kind": "machine",
       "id": "plastic",
-      "recipe_class": "Recipe_Plastic_C",
-      "machine_count": 4
-    },
-    {
-      "kind": "output",
-      "id": "plastic_out",
-      "item_class": "Desc_Plastic_C"
-    },
-    {
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
       "kind": "machine",
-      "id": "residual_fuel",
-      "recipe_class": "Recipe_ResidualFuel_C",
-      "machine_count": 1
+      "recipe_class": "Recipe_Plastic_C",
+      "machine_count": 4.0,
+      "building_class": null,
+      "clock_speed": 1.0
     },
     {
-      "kind": "generator",
+      "id": "plastic_out",
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_Plastic_C",
+      "is_sink": false
+    },
+    {
+      "id": "residual_fuel",
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_ResidualFuel_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
       "id": "generator",
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "generator",
       "generator_class": "Build_GeneratorFuel_C",
       "fuel_class": "Desc_LiquidFuel_C",
-      "count": 1
+      "count": 1.0
     },
     {
-      "kind": "output",
       "id": "fuel_out",
-      "item_class": "Desc_LiquidFuel_C"
+      "label": null,
+      "position": [
+        0.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_LiquidFuel_C",
+      "is_sink": false
+    },
+    {
+      "id": "residual_fuel-rep1",
+      "label": null,
+      "position": [
+        460.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "item_class": "Desc_LiquidFuel_C",
+      "kind": "splitter"
     }
   ],
   "edges": [
@@ -63,16 +116,23 @@
       "transport_class": "Build_Pipeline_C"
     },
     {
-      "id": "e4",
-      "source": "residual_fuel",
+      "id": "e6",
+      "source": "residual_fuel-rep1",
       "target": "generator",
       "item_class": "Desc_LiquidFuel_C",
       "transport_class": "Build_Pipeline_C"
     },
     {
-      "id": "e5",
-      "source": "residual_fuel",
+      "id": "e7",
+      "source": "residual_fuel-rep1",
       "target": "fuel_out",
+      "item_class": "Desc_LiquidFuel_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e8",
+      "source": "residual_fuel",
+      "target": "residual_fuel-rep1",
       "item_class": "Desc_LiquidFuel_C",
       "transport_class": "Build_Pipeline_C"
     }

@@ -5,12 +5,16 @@ Design points that matter downstream:
 * An edge carries **one item** and **one transport**. A solid can only travel on a
   belt and a fluid only in a pipe; :meth:`FactoryGraph.connect` refuses anything
   else at construction time rather than letting the solver discover it.
+* A **port carries one line per building on the node**, and a line that has no port
+  left is refused the same way -- see :func:`port_line_budget`. Getting more lines
+  out of a node is what a splitter is for, and a splitter is a node like any other.
 * The graph is plain data and serialises to JSON through pydantic. It holds no
   reference to the game catalogue, which is passed in wherever it is needed.
 * Everything that iterates does so in a **sorted** order, so that two graphs built
   in different orders produce identical results.
 """
 
+import math
 from collections.abc import Callable
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal, Self
@@ -18,7 +22,7 @@ from typing import Annotated, Any, Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from satisplanner.core import constants
-from satisplanner.core.models import GameData, ItemForm, Purity, UnknownClassError
+from satisplanner.core.models import AttachmentRole, GameData, ItemForm, Purity, UnknownClassError
 
 # 2 added a clock speed to extractors and machines. Reading a version 1 document
 # needs no conversion -- the field defaults to 100 % -- but the bump is what makes
@@ -27,7 +31,10 @@ from satisplanner.core.models import GameData, ItemForm, Purity, UnknownClassErr
 # but a document that has one must not be opened by a build that cannot draw it.
 # 4 added the per-node deployed-rendering override, which is display state but
 # belongs to the document all the same -- exactly as a position does.
-SCHEMA_VERSION: Final = 4
+# 5 made splitters and mergers nodes of their own, and with them the rule that a
+# port carries as many lines as there are buildings on the node. A document from
+# before it has both to gain: the migration inserts what the layout implied.
+SCHEMA_VERSION: Final = 5
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -52,6 +59,8 @@ class NodeKind(StrEnum):
     GENERATOR = "generator"
     STORAGE = "storage"
     OUTPUT = "output"
+    SPLITTER = "splitter"
+    MERGER = "merger"
 
 
 class _NodeBase(BaseModel):
@@ -172,6 +181,34 @@ class OutputNode(_NodeBase):
     is_sink: bool = False
 
 
+class _PassThroughNode(_NodeBase):
+    """A splitter or a merger: one item in, the same item out, nothing kept.
+
+    ``item_class`` may be left empty and read off the lines, exactly as a buffer's
+    content is. A splitter is placed on a belt that already carries something, and
+    making the user name the item again would be asking twice.
+
+    There is no building class field. Which building this is follows from the item's
+    form and the job: a solid splits in a conveyor splitter and a fluid in a pipe
+    junction, and the junction does both jobs because it has four ports. A field
+    would only let a document disagree with itself.
+    """
+
+    item_class: str | None = None
+
+
+class SplitterNode(_PassThroughNode):
+    """One line in, up to three out, split equally between the ones connected."""
+
+    kind: Literal[NodeKind.SPLITTER] = NodeKind.SPLITTER
+
+
+class MergerNode(_PassThroughNode):
+    """Up to three lines in, one out."""
+
+    kind: Literal[NodeKind.MERGER] = NodeKind.MERGER
+
+
 Node = Annotated[
     ResourceNode
     | WaterExtractorNode
@@ -179,14 +216,23 @@ Node = Annotated[
     | MachineNode
     | GeneratorNode
     | StorageNode
-    | OutputNode,
+    | OutputNode
+    | SplitterNode
+    | MergerNode,
     Field(discriminator="kind"),
 ]
 
 # Node kinds that can absorb an incoming flow. A generator is a consumer and only
 # that: what it produces is power, and power does not travel on a line.
 CONSUMER_KINDS: Final = frozenset(
-    {NodeKind.MACHINE, NodeKind.GENERATOR, NodeKind.STORAGE, NodeKind.OUTPUT}
+    {
+        NodeKind.MACHINE,
+        NodeKind.GENERATOR,
+        NodeKind.STORAGE,
+        NodeKind.OUTPUT,
+        NodeKind.SPLITTER,
+        NodeKind.MERGER,
+    }
 )
 # Node kinds that can emit a flow.
 PRODUCER_KINDS: Final = frozenset(
@@ -196,8 +242,13 @@ PRODUCER_KINDS: Final = frozenset(
         NodeKind.EXTERNAL_SOURCE,
         NodeKind.MACHINE,
         NodeKind.STORAGE,
+        NodeKind.SPLITTER,
+        NodeKind.MERGER,
     }
 )
+# Kinds that keep nothing: what arrives leaves, and the node is neither a source
+# nor a sink of anything.
+PASS_THROUGH_KINDS: Final = frozenset({NodeKind.SPLITTER, NodeKind.MERGER})
 
 
 # Keys the identifier indexes live under, in the graph's own instance dictionary.
@@ -409,6 +460,10 @@ class FactoryGraph(BaseModel):
 def node_output_items(node: Node, game_data: GameData) -> set[str]:
     """Items this node can emit."""
     match node:
+        case SplitterNode() | MergerNode():
+            # Whatever it was put on. An empty set means "not decided yet", which
+            # is what lets the first line connected settle it.
+            return {node.item_class} if node.item_class else set()
         case ResourceNode():
             return {node.item_class}
         case WaterExtractorNode():
@@ -431,6 +486,8 @@ def node_output_items(node: Node, game_data: GameData) -> set[str]:
 def node_input_items(node: Node, game_data: GameData) -> set[str] | None:
     """Items this node can absorb, or ``None`` when it accepts anything."""
     match node:
+        case SplitterNode() | MergerNode():
+            return {node.item_class} if node.item_class else None
         case MachineNode():
             return set(game_data.recipe(node.recipe_class).ingredient_rates())
         case GeneratorNode():
@@ -479,6 +536,8 @@ def check_edge(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
         raise GraphError(msg)
 
     _check_port_budget(graph, edge, game_data)
+    _check_single_item(graph, edge, game_data)
+    _check_line_budget(graph, edge, game_data)
 
 
 def _check_port_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
@@ -497,6 +556,87 @@ def _check_port_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> 
             msg = f"le nœud {source.id} dépassé {MAX_MACHINE_OUTPUTS} sorties distinctes"
             raise GraphError(msg)
     _ = game_data  # kept for symmetry with check_edge's signature
+
+
+def _check_single_item(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
+    """A splitter or a merger carries one item, whether or not it was named.
+
+    The declared item is already handled by :func:`node_output_items`; this is the
+    inferred case, which no set of allowed classes can express: a splitter left to
+    follow its lines has no item until one arrives, and from then on it has that one.
+    """
+    for node_id in (edge.source, edge.target):
+        node = graph.node(node_id)
+        if not isinstance(node, SplitterNode | MergerNode) or node.item_class:
+            continue
+        carried = pass_through_item(node, graph)
+        if carried is not None and carried != edge.item_class:
+            name = game_data.item(carried).display_name_fr
+            msg = f"le nœud {node_id} transporte déjà {name} : une ligne ne porte qu'un item"
+            raise GraphError(msg)
+
+
+def port_line_budget(node: Node, *, is_output: bool) -> int | None:
+    """How many lines one port of this node may carry, or ``None`` for no limit.
+
+    In the game a port carries one line. A node standing for eight smelters has
+    eight of them, so it has eight output lines, and that is why the budget is
+    ``ceil(count)`` rather than one: eight smelters feeding eight consumers need no
+    splitter at all. It is counted per item **and** per direction, because a
+    manufacturer has one port per slot of its recipe.
+
+    The three kinds that have no ``count`` are decided rather than guessed:
+
+    * a **buffer** gets one, because one container is one building and the game
+      gives it one input and one output;
+    * an **exit** and an **import** get none, because they are the boundary of what
+      is being modelled and not buildings at all -- demanding a merger in front of
+      an abstraction would be ceremony with nothing behind it in game;
+    * a **splitter** and a **merger** get the branch count on their many side and
+      one on the other, which is the shape of the building.
+    """
+    match node:
+        case OutputNode() | ExternalSourceNode():
+            return None
+        case SplitterNode():
+            return constants.ATTACHMENT_BRANCHES if is_output else 1
+        case MergerNode():
+            return 1 if is_output else constants.ATTACHMENT_BRANCHES
+        case _:
+            count = unit_count(node)
+            if count is None:
+                return 1
+            # A machine count may be zero while it is being typed. Refusing every
+            # line at that instant would delete work over a keystroke, so the floor
+            # is one port -- the smallest thing that can exist at all.
+            return max(1, math.ceil(count))
+
+
+def _check_line_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
+    """Refuse a line the node has no port left for, and say what to insert."""
+    for node_id, is_output in ((edge.source, True), (edge.target, False)):
+        node = graph.node(node_id)
+        budget = port_line_budget(node, is_output=is_output)
+        if budget is None:
+            continue
+        neighbours = graph.outgoing(node_id) if is_output else graph.incoming(node_id)
+        # A line already in the graph under this identifier is the one being
+        # replaced -- changing a belt's tier is not asking for a second belt.
+        used = sum(
+            1
+            for other in neighbours
+            if other.item_class == edge.item_class and other.id != edge.id
+        )
+        if used < budget:
+            continue
+        item = game_data.item(edge.item_class).display_name_fr
+        side = "sortie" if is_output else "entrée"
+        remedy = "un répartiteur" if is_output else "un groupeur"
+        msg = (
+            f"le nœud {node_id} n'a que {budget} port(s) de {side} pour {item} "
+            f"et ils sont pris : insérez {remedy}"
+        )
+        raise GraphError(msg)
 
 
 def _form_label(form: ItemForm) -> str:
@@ -631,6 +771,24 @@ def storage_item(node: StorageNode, graph: FactoryGraph) -> str | None:
     return None
 
 
+def pass_through_item(node: Node, graph: FactoryGraph) -> str | None:
+    """The item a splitter or a merger carries: declared, or read off its lines.
+
+    Both ends are looked at, unlike a buffer, whose content is what fills it and so
+    is read off what arrives. A splitter has no content: it is a fitting on a line,
+    and the line is as much the one leaving as the one arriving. Ambiguity -- two
+    different items on its lines -- reads as undecided, which is what the diagnostic
+    then reports.
+    """
+    if not isinstance(node, SplitterNode | MergerNode):
+        return None
+    if node.item_class:
+        return node.item_class
+    items = {edge.item_class for edge in graph.incoming(node.id)}
+    items |= {edge.item_class for edge in graph.outgoing(node.id)}
+    return next(iter(items)) if len(items) == 1 else None
+
+
 def unit_count(node: Node) -> float | None:
     """How many buildings this node stands for, or ``None`` when it is not a bank.
 
@@ -650,6 +808,24 @@ def unit_count(node: Node) -> float | None:
 def machine_building(node: MachineNode, game_data: GameData) -> str:
     """The building a machine node runs in: its own, or the recipe's."""
     return node.building_class or game_data.recipe(node.recipe_class).building_class
+
+
+def attachment_building(node: Node, item_class: str | None, game_data: GameData) -> str | None:
+    """Which building a splitter or a merger is, from the form of what it carries.
+
+    A solid splits in a conveyor splitter and merges in a conveyor merger; a fluid
+    does both in the same pipe junction, which has four ports and no opinion about
+    which of them is the trunk. ``None`` while the item is still undecided: there is
+    nothing to build yet, and naming a building would be picking one at random.
+    """
+    if not isinstance(node, SplitterNode | MergerNode) or item_class is None:
+        return None
+    role = AttachmentRole.SPLIT if isinstance(node, SplitterNode) else AttachmentRole.MERGE
+    item = game_data.items.get(item_class)
+    if item is None:
+        return None
+    attachment = game_data.attachment_for(item.form, role)
+    return None if attachment is None else attachment.class_name
 
 
 def generator_input_rates(node: GeneratorNode, game_data: GameData) -> dict[str, float]:

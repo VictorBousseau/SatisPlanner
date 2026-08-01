@@ -297,13 +297,15 @@ def test_migration_is_a_single_door_that_already_works(
         factory_file,
         "MIGRATIONS",
         {
-            SCHEMA_VERSION: lambda payload: {**payload, "etape": "une"},
-            SCHEMA_VERSION + 1: lambda payload: {**payload, "etape": "deux"},
+            SCHEMA_VERSION: lambda payload: ({**payload, "etape": "une"}, []),
+            SCHEMA_VERSION + 1: lambda payload: ({**payload, "etape": "deux"}, ["ceci est écrit"]),
         },
     )
     payload, notes = factory_file.migrate({"nodes": []}, SCHEMA_VERSION)
     assert payload["etape"] == "deux", "les etapes s'enchainent jusqu'a la version courante"
-    assert len(notes) == 2
+    # One line per version crossed, plus whatever a step had to say for itself.
+    assert len(notes) == 3
+    assert "ceci est écrit" in notes
 
 
 def test_a_document_already_current_is_left_alone() -> None:
@@ -388,7 +390,10 @@ def test_a_code_without_the_prefix_is_refused() -> None:
 
 def test_a_truncated_code_is_refused(looping_factory: FactoryGraph) -> None:
     code = factory_file.encode_share_code(looping_factory)
-    with pytest.raises(FactoryFileError, match=r"tronque|incomplet"):
+    # Either half of a code can fail: the base64 may not decode at all, or it may
+    # decode into a compressed stream that stops short. Both are the same sentence
+    # to a reader, and this accepts either.
+    with pytest.raises(FactoryFileError, match=r"tronqué|abîmé"):
         factory_file.decode_share_code(code[: len(code) // 2])
 
 

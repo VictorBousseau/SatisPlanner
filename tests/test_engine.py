@@ -11,8 +11,10 @@ from satisplanner.core import constants, engine
 from satisplanner.core.graph import (
     ExternalSourceNode,
     FactoryGraph,
+    GraphError,
     MachineNode,
     OutputNode,
+    SplitterNode,
     StorageNode,
     condensation_order,
 )
@@ -99,28 +101,69 @@ def test_iron_plate_power_and_shopping_list(game_data: GameData) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_three_lines_out_of_one_node_need_one_splitter(game_data: GameData) -> None:
-    """One conveyor splitter serves three lines, so a three-way fan-out costs one."""
-    report = solved("screws_reinforced_plate", game_data)
-    assert report.shopping_list.attachments == {"Build_ConveyorAttachmentSplitter_C": 1}
-    # And it is counted in the total, alongside the machines.
-    assert report.shopping_list.total_buildings == sum(report.shopping_list.buildings.values()) + 1
+def test_a_splitter_is_counted_where_it_is_placed(game_data: GameData) -> None:
+    """Two splitters stand in the recycling loop, so two are on the shopping list.
+
+    Counted from the nodes and no longer deduced from the lines, which is the whole
+    of the change: what has to be built is what somebody drew.
+    """
+    report = solved("recycling_loop", game_data)
+    assert report.shopping_list.attachments == {"Build_ConveyorAttachmentSplitter_C": 2}
+    # And they are counted in the total, alongside the machines.
+    assert report.shopping_list.total_buildings == sum(report.shopping_list.buildings.values()) + 2
+
+
+def test_a_node_with_a_port_per_machine_needs_no_splitter(game_data: GameData) -> None:
+    """Two lines out of a bank of two machines are two ports, not a fan-out.
+
+    The consequence of counting ports rather than lines, and the one that makes the
+    shopping list of a balanced factory shorter than it used to be: eight smelters
+    feeding eight consumers need nothing between them.
+    """
+    graph = FactoryGraph()
+    graph.add_node(ExternalSourceNode(id="src", item_class="Desc_OreIron_C", rate_per_minute=60))
+    graph.add_node(MachineNode(id="bank", recipe_class="Recipe_IngotIron_C", machine_count=2))
+    belt = "Build_ConveyorBeltMk3_C"
+    graph.connect("src", "bank", "Desc_OreIron_C", belt, game_data)
+    for index in (1, 2):
+        graph.add_node(OutputNode(id=f"out{index}", item_class="Desc_IronIngot_C"))
+        graph.connect("bank", f"out{index}", "Desc_IronIngot_C", belt, game_data)
+
+    assert engine.solve(graph, game_data).shopping_list.attachments == {}
+
+    # A third line has no port left, and the refusal says what to insert.
+    graph.add_node(OutputNode(id="out3", item_class="Desc_IronIngot_C"))
+    with pytest.raises(GraphError, match="répartiteur"):
+        graph.connect("bank", "out3", "Desc_IronIngot_C", belt, game_data)
 
 
 def test_fluids_use_a_pipe_junction_rather_than_a_splitter(game_data: GameData) -> None:
-    """The recycling loop splits two solids and one fluid."""
-    report = solved("recycling_loop", game_data)
-    assert report.shopping_list.attachments == {
-        "Build_ConveyorAttachmentSplitter_C": 2,
-        "Build_PipelineJunction_Cross_C": 1,
-    }
+    """The same node on a pipe is a junction, because that is the building for it."""
+    graph = FactoryGraph()
+    graph.add_node(ExternalSourceNode(id="well", item_class="Desc_Water_C", rate_per_minute=120))
+    graph.add_node(SplitterNode(id="tee"))
+    pipe = "Build_PipelineMK2_C"
+    graph.connect("well", "tee", "Desc_Water_C", pipe, game_data)
+    for index in (1, 2):
+        graph.add_node(OutputNode(id=f"out{index}", item_class="Desc_Water_C"))
+        graph.connect("tee", f"out{index}", "Desc_Water_C", pipe, game_data)
+
+    report = engine.solve(graph, game_data)
+    assert report.shopping_list.attachments == {"Build_PipelineJunction_Cross_C": 1}
+    assert report.node("tee").label == "Jonction de pipeline"
 
 
 def test_a_splitter_serves_three_lines_at_a_time(game_data: GameData) -> None:
-    """Each unit adds two lines to whatever it is chained onto, hence the ceiling."""
-    splitter = game_data.attachments["Build_ConveyorAttachmentSplitter_C"]
-    assert splitter.branches == 3
-    assert [splitter.units_for(lines) for lines in range(1, 8)] == [0, 1, 1, 2, 2, 3, 3]
+    """The branch count the graph validates with is the catalogue's own.
+
+    The graph checks a port budget without a catalogue in hand -- a document is
+    migrated before any game data is looked at -- so the figure lives in
+    ``core.constants``. This is what stops the two from drifting apart.
+    """
+    assert all(
+        attachment.branches == constants.ATTACHMENT_BRANCHES
+        for attachment in game_data.attachments.values()
+    )
 
 
 def test_the_shopping_list_picks_the_attachment_by_form_and_role(game_data: GameData) -> None:
@@ -279,7 +322,16 @@ def test_the_recycling_loop_runs_at_full_speed(game_data: GameData) -> None:
     graph = load_graph("recycling_loop")
     # The two refineries really do form one strongly connected component.
     cyclic = [component for component in condensation_order(graph) if len(component) > 1]
-    assert cyclic == [("recycled_plastic", "recycled_rubber")]
+    # The splitters that carry each product back round are part of the cycle: a
+    # loop closed through a fitting is still a loop.
+    assert cyclic == [
+        (
+            "recycled_plastic",
+            "recycled_plastic-rep1",
+            "recycled_rubber",
+            "recycled_rubber-rep1",
+        )
+    ]
 
     report = engine.solve(graph, game_data)
     assert report.converged
@@ -293,9 +345,11 @@ def test_the_recycling_loop_runs_at_full_speed(game_data: GameData) -> None:
     assert rubber.inputs == {"Desc_LiquidFuel_C": 30.0, "Desc_Plastic_C": 30.0}
     assert rubber.outputs == {"Desc_Rubber_C": 60.0}
 
-    # Half of each product loops back, half leaves the factory.
-    assert report.edge("e3").rate_per_minute == 30.0
-    assert report.edge("e4").rate_per_minute == 30.0
+    # Half of each product loops back, half leaves the factory -- through the
+    # splitter that does the halving, which is where the two lines now start.
+    assert report.edge("e9").rate_per_minute == 60.0, "tout le plastique passe par le répartiteur"
+    assert report.edge("e7").rate_per_minute == 30.0
+    assert report.edge("e8").rate_per_minute == 30.0
     assert report.final_outputs == {"Desc_Plastic_C": 30.0, "Desc_Rubber_C": 30.0}
     assert report.raw_fluids == {"Desc_LiquidFuel_C": 60.0}
     assert not report.has_errors()
@@ -574,17 +628,24 @@ def test_the_intake_of_a_buffer_is_counted_once_however_many_sinks(
 def test_a_buffer_serves_its_machines_first_and_the_sink_takes_the_rest(
     game_data: GameData,
 ) -> None:
-    """A consumer with an appetite is not starved by a container standing next to it."""
+    """A consumer with an appetite is not starved by a container standing next to it.
+
+    A buffer has one output port, so the two lines leave through a splitter -- and
+    the rule survives the move: the splitter's own branches are shared the same way,
+    the machine first and the sink with what is left.
+    """
     graph = FactoryGraph()
     graph.add_node(ExternalSourceNode(id="src", item_class="Desc_IronIngot_C", rate_per_minute=240))
     graph.add_node(StorageNode(id="buffer", storage_class="Build_StorageContainerMk2_C"))
+    graph.add_node(SplitterNode(id="fork"))
     graph.add_node(MachineNode(id="plates", recipe_class="Recipe_IronPlate_C", machine_count=4))
     graph.add_node(OutputNode(id="plate_out", item_class="Desc_IronPlate_C"))
     graph.add_node(OutputNode(id="surplus", item_class="Desc_IronIngot_C"))
     belt = "Build_ConveyorBeltMk5_C"
     graph.connect("src", "buffer", "Desc_IronIngot_C", belt, game_data)
-    graph.connect("buffer", "plates", "Desc_IronIngot_C", belt, game_data)
-    graph.connect("buffer", "surplus", "Desc_IronIngot_C", belt, game_data)
+    graph.connect("buffer", "fork", "Desc_IronIngot_C", belt, game_data)
+    graph.connect("fork", "plates", "Desc_IronIngot_C", belt, game_data)
+    graph.connect("fork", "surplus", "Desc_IronIngot_C", belt, game_data)
     graph.connect("plates", "plate_out", "Desc_IronPlate_C", belt, game_data)
 
     report = engine.solve(graph, game_data)

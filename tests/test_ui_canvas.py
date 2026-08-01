@@ -14,7 +14,7 @@ from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QGraphicsSceneMouseEvent
 from pytestqt.qtbot import QtBot
 
-from satisplanner.core.graph import MachineNode, ResourceNode, StorageNode
+from satisplanner.core.graph import MachineNode, ResourceNode, SplitterNode, StorageNode
 from satisplanner.core.models import GameData, ItemForm, Purity
 from satisplanner.core.results import LimitingFactor
 from satisplanner.ui import theme
@@ -440,3 +440,84 @@ def test_a_line_too_small_is_reported_and_upgradable(scene: FactoryScene) -> Non
     scene.upgrade_line(edge_id)
     assert scene.document.graph.edge(edge_id).transport_class == "Build_ConveyorBeltMk4_C"
     assert scene.document.solve_now().edge(edge_id).rate_per_minute == 480.0
+
+
+# --------------------------------------------------------------------------- #
+# Splitters and mergers on the canvas
+# --------------------------------------------------------------------------- #
+
+
+def test_a_splitter_is_placed_from_the_palette_and_takes_the_item_of_its_line(
+    scene: FactoryScene,
+) -> None:
+    """The way out of the port budget, by the same door as everything else.
+
+    A splitter placed by hand names no item and no building: it learns both from the
+    first line drawn to it, which is the only reason making the budget stricter does
+    not make the application harder to use.
+    """
+    _, smelter = iron_chain(scene)
+    fork = place(scene, EntryKind.SPLITTER, "Build_ConveyorAttachmentSplitter_C", 1200, 0)
+    node = scene.document.graph.node(fork)
+    assert isinstance(node, SplitterNode)
+    assert node.item_class is None, "rien à saisir : la ligne le dira"
+    assert scene.nodes[fork].subtitle() == "répartiteur — contenu indéterminé"
+
+    # The smelter's one port is taken, so the second line has to go through it.
+    second = place(scene, EntryKind.OUTPUT, "Desc_IronIngot_C", 1600, 0)
+    refusal = scene.connect_nodes(smelter, second, "Desc_IronIngot_C")
+    assert refusal is not None and "répartiteur" in refusal
+
+    # Take the first line back -- the way a user would, by selecting it and pressing
+    # Delete -- and route both through the splitter instead.
+    scene.clearSelection()
+    scene.edges[scene.document.graph.outgoing(smelter)[0].id].setSelected(True)
+    scene.delete_selection()
+    assert scene.document.graph.outgoing(smelter) == []
+    assert scene.connect_nodes(smelter, fork, "Desc_IronIngot_C") is None
+    assert scene.connect_nodes(fork, second, "Desc_IronIngot_C") is None
+    assert scene.nodes[fork].subtitle() == "répartiteur — Lingot de fer — 1 sortie(s) sur 3"
+
+
+def test_a_merger_is_offered_too_and_names_the_two_buildings(scene: FactoryScene) -> None:
+    """One entry per job, not one per building: the form decides which it is."""
+    entry = entry_of(scene, EntryKind.MERGER, "Build_ConveyorAttachmentMerger_C")
+    assert entry.label == "Groupeur"
+    assert "Groupeur de convoyeurs" in entry.detail
+    assert "Jonction de pipeline" in entry.detail
+    assert entry.matches("jonction"), "un joueur cherche le nom du bâtiment"
+
+
+def test_a_migration_puts_no_node_on_top_of_another(scene: FactoryScene) -> None:
+    """Measured on the boxes as drawn, not on the envelope the migration assumes.
+
+    The one damage of this lot that no figure would catch: a factory somebody had
+    tidied coming back as a plate of noodles. ``core.attachments`` keeps a clearance
+    without knowing how wide a box really is -- the domain layer never has -- so
+    this is where the two are held against each other. It counts the overlaps the
+    layout already had and insists the conversion adds none: a benchmark grid that
+    was already tight is not this lot's to fix.
+    """
+    from satisplanner.core.attachments import materialise
+    from tests.benchmark_graphs import benchmark_graph
+
+    design = benchmark_graph(50, wired=False)
+    scene.document.reset(design.model_copy(deep=True))
+    before = _overlaps(scene)
+
+    wired = design.model_copy(deep=True)
+    materialise(wired)
+    scene.document.reset(wired)
+    assert _overlaps(scene) == before, "la conversion a posé un nœud sur un autre"
+    assert len(wired.nodes) > len(design.nodes), "elle a bien inséré quelque chose"
+
+
+def _overlaps(scene: FactoryScene) -> int:
+    boxes = [item.sceneBoundingRect() for item in scene.nodes.values()]
+    return sum(
+        1
+        for first in range(len(boxes))
+        for second in range(first + 1, len(boxes))
+        if boxes[first].intersected(boxes[second]).width() > 1
+        and boxes[first].intersected(boxes[second]).height() > 1
+    )

@@ -121,8 +121,12 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "La cadence multiplie le débit à l'identique et l'électricité en loi de "
     "puissance : à 250 %, une machine produit 2,5 fois plus et consomme environ "
     "3,36 fois plus.",
-    "Les répartiteurs, groupeurs et jonctions ne sont jamais des nœuds. Ils sont "
-    "déduits des lignes qui partagent un nœud et comptés dans la liste de courses.",
+    "<b>Un port porte une ligne</b>, et un nœud a autant de ports qu'il a de "
+    "bâtiments : huit fonderies ont huit sorties, une seule en a une. Pour en "
+    "faire partir davantage, posez un répartiteur — c'est un nœud comme un autre, "
+    "il partage également entre ses branches et il est compté dans la liste de "
+    "courses. Une entrée et une sortie d'usine sont la frontière du modèle et pas "
+    "des bâtiments : elles n'ont pas de limite.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
     "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",
