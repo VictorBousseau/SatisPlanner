@@ -10,6 +10,8 @@ from collections.abc import Iterator
 
 from satisplanner.core import formatting
 from satisplanner.core.graph import (
+    ANY_BRANCH,
+    OVERFLOW_BRANCH,
     Edge,
     ExternalSourceNode,
     FactoryGraph,
@@ -26,7 +28,7 @@ from satisplanner.core.graph import (
     pass_through_item,
     storage_item,
 )
-from satisplanner.core.models import GameData, Item, UnknownClassError
+from satisplanner.core.models import GameData, Item, SplitterMode, UnknownClassError
 from satisplanner.core.results import (
     FLOW_EPSILON,
     BufferState,
@@ -159,6 +161,9 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             node_id=node.id,
         )
 
+    if isinstance(node, SplitterNode):
+        yield from _branch_filters(node, graph, game_data)
+
     if isinstance(node, SplitterNode | MergerNode) and pass_through_item(node, graph) is None:
         # Two different items on its lines, or none at all. Either way there is no
         # building to count for it and nothing flows, which is worth saying out loud
@@ -181,6 +186,95 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             message="Ce nœud n'est raccordé à rien : il ne participe pas au calcul.",
             node_id=node.id,
         )
+
+
+def _branch_filters(
+    node: SplitterNode, graph: FactoryGraph, game_data: GameData
+) -> Iterator[Diagnostic]:
+    """What is written on a splitter's branches, checked against what it can do.
+
+    Everything here is silent on a standard splitter, which has nothing written on
+    it, and that is the point: the modes are an addition and they cost the
+    factories that use none of them nothing at all -- not a figure, not a warning.
+    """
+    if node.mode is SplitterMode.STANDARD and not node.filters:
+        return
+
+    carried = pass_through_item(node, graph)
+    branches = [edge.target for edge in graph.outgoing(node.id)]
+    written = {target: node.filters.get(target, ANY_BRANCH) for target in branches}
+    named = {
+        target: setting
+        for target, setting in sorted(written.items())
+        if setting not in (ANY_BRANCH, OVERFLOW_BRANCH)
+    }
+
+    if carried is not None and game_data.item(carried).form.is_fluid:
+        # There is one pipe junction and it filters nothing.
+        yield Diagnostic(
+            severity=Severity.ERROR,
+            code=DiagnosticCode.BRANCH_FILTER,
+            message=(
+                "Le jeu n'a pas de jonction de pipeline filtrante : un raccord sur un "
+                "fluide ne peut être que standard. Repassez-le en standard, ou triez "
+                "en amont."
+            ),
+            node_id=node.id,
+        )
+
+    if node.mode is SplitterMode.SMART and len(named) + _overflows(written) > 1:
+        yield Diagnostic(
+            severity=Severity.ERROR,
+            code=DiagnosticCode.BRANCH_FILTER,
+            message=(
+                f"Un répartiteur intelligent ne règle qu'une seule de ses branches ; "
+                f"{len(named) + _overflows(written)} le sont ici. Passez-le en "
+                f"programmable, ou remettez les autres en « n'importe lequel »."
+            ),
+            node_id=node.id,
+        )
+
+    for target, setting in named.items():
+        if carried is not None and setting != carried:
+            wanted = game_data.items.get(setting)
+            yield Diagnostic(
+                severity=Severity.WARNING,
+                code=DiagnosticCode.BRANCH_FILTER,
+                message=(
+                    f"La branche vers {target} est filtrée sur "
+                    f"{wanted.display_name_fr if wanted else setting}, que cette ligne "
+                    f"ne transporte jamais : elle porte "
+                    f"{game_data.item(carried).display_name_fr}. Rien ne passera par là."
+                ),
+                node_id=node.id,
+            )
+
+    stale = sorted(set(node.filters) - set(branches))
+    if stale:
+        yield Diagnostic(
+            severity=Severity.WARNING,
+            code=DiagnosticCode.BRANCH_FILTER,
+            message=(
+                f"Réglage(s) conservé(s) pour une branche qui n'existe plus : "
+                f"{', '.join(stale)}. Sans effet tant que la ligne n'est pas redessinée."
+            ),
+            node_id=node.id,
+        )
+
+    if branches and _overflows(written) == len(branches):
+        yield Diagnostic(
+            severity=Severity.WARNING,
+            code=DiagnosticCode.BRANCH_FILTER,
+            message=(
+                "Toutes les branches sont en « surplus » : il n'y a donc rien à "
+                "refuser en premier, et le raccord se comporte comme un standard."
+            ),
+            node_id=node.id,
+        )
+
+
+def _overflows(written: dict[str, str]) -> int:
+    return sum(1 for setting in written.values() if setting == OVERFLOW_BRANCH)
 
 
 def _generator_structure(node: GeneratorNode, game_data: GameData) -> Iterator[Diagnostic]:

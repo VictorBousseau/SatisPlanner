@@ -18,7 +18,7 @@ from satisplanner.core.graph import (
     StorageNode,
     condensation_order,
 )
-from satisplanner.core.models import AttachmentRole, GameData, ItemForm
+from satisplanner.core.models import AttachmentRole, GameData, ItemForm, SplitterMode
 from satisplanner.core.results import (
     BufferState,
     DiagnosticCode,
@@ -166,16 +166,25 @@ def test_a_splitter_serves_three_lines_at_a_time(game_data: GameData) -> None:
     )
 
 
-def test_the_shopping_list_picks_the_attachment_by_form_and_role(game_data: GameData) -> None:
+def test_the_shopping_list_picks_the_attachment_by_form_role_and_mode(
+    game_data: GameData,
+) -> None:
     solid, fluid = ItemForm.SOLID, ItemForm.LIQUID
-    assert game_data.attachment_for(solid, AttachmentRole.SPLIT) is not None
-    assert game_data.attachment_for(solid, AttachmentRole.SPLIT) is not game_data.attachment_for(
-        solid, AttachmentRole.MERGE
-    )
-    # A pipe junction does both jobs, so the same class answers either question.
-    assert game_data.attachment_for(fluid, AttachmentRole.SPLIT) is game_data.attachment_for(
-        fluid, AttachmentRole.MERGE
-    )
+    split, merge = AttachmentRole.SPLIT, AttachmentRole.MERGE
+    plain = game_data.attachment_for(solid, split, SplitterMode.STANDARD)
+    assert plain is not None
+    assert plain is not game_data.attachment_for(solid, merge)
+    # Three splitters on a belt, one per mode, and they are three buildings.
+    modes = {
+        mode: game_data.attachment_for(solid, split, mode) for mode in SplitterMode
+    }
+    assert None not in modes.values()
+    assert len({found.class_name for found in modes.values() if found}) == 3
+
+    # A pipe junction does both jobs, so the same class answers either question --
+    # and it has no mode at all, because the game has no filtering junction.
+    assert game_data.attachment_for(fluid, split) is game_data.attachment_for(fluid, merge)
+    assert game_data.attachment_for(fluid, split, SplitterMode.SMART) is None
 
 
 def test_screw_and_reinforced_plate_chain(game_data: GameData) -> None:

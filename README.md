@@ -429,6 +429,13 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
    groupeurs sont donc des nœuds, posés et comptés là où ils sont, coût de construction compris. Un
    partage en arbre réel ne donne des parts égales que lorsque le nombre de lignes se ramène à des
    moitiés et des tiers : 2, 3, 4, 6, 9 oui, 5 et 7 non — et c'est le jeu qui est ainsi.
+10. **Le répartiteur standard est le cas particulier du programmable**, pas une seconde
+   implémentation. Un programmable dont toutes les branches sont en « n'importe lequel » rend les
+   mêmes chiffres au bit près, par le même code. Ce qui change les débits est le mode **surplus** :
+   une branche qui ne prend que ce dont les autres n'ont pas voulu, servie en dernier par le même
+   mécanisme que les puits illimités. Une ligne porte un objet, donc filtrer une branche sur autre
+   chose la ferme — c'est signalé, pas deviné — et le jeu ne filtre que les convoyeurs : il n'y a
+   pas de jonction de pipeline intelligente.
    En revanche **les convoyeurs et les tuyaux ne sont pas chiffrés** : leur coût se paie à la
    longueur, l'outil ne connaît aucune distance, et une estimation tirée d'une longueur moyenne
    serait un chiffre inventé posé au milieu de chiffres exacts. Un blanc qui se voit vaut mieux
@@ -479,7 +486,10 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
   d'un emplacement de la carte.
 - **Mode objectif descendant** : « je veux tant d'Ordinateurs par minute », résolu par un solveur
   linéaire plutôt que par le point fixe actuel.
-- Répartiteurs intelligents et programmables.
+- **Répartiteur intelligent à trois sorties filtrées** : le jeu en règle les trois, une par objet,
+  et le programmable en accepte plusieurs par sortie. Le modèle actuel n'en règle qu'une pour
+  l'intelligent et une valeur par sortie pour le programmable, ce qui est plus restrictif.
+- **Groupeur prioritaire** : la réponse du jeu au répartiteur intelligent, côté groupage.
 - Simulation temporelle des tampons, pour voir le film et pas seulement l'état final.
 - Interopérabilité avec satisfactory-calculator.com.
 - Internationalisation anglaise.

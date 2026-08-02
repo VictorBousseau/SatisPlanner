@@ -14,8 +14,14 @@ from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QGraphicsSceneMouseEvent
 from pytestqt.qtbot import QtBot
 
-from satisplanner.core.graph import MachineNode, ResourceNode, SplitterNode, StorageNode
-from satisplanner.core.models import GameData, ItemForm, Purity
+from satisplanner.core.graph import (
+    OVERFLOW_BRANCH,
+    MachineNode,
+    ResourceNode,
+    SplitterNode,
+    StorageNode,
+)
+from satisplanner.core.models import GameData, ItemForm, Purity, SplitterMode
 from satisplanner.core.results import LimitingFactor
 from satisplanner.ui import theme
 from satisplanner.ui.canvas import FactoryScene, snapped
@@ -471,6 +477,7 @@ def test_a_splitter_is_placed_from_the_palette_and_takes_the_item_of_its_line(
     # Take the first line back -- the way a user would, by selecting it and pressing
     # Delete -- and route both through the splitter instead.
     scene.clearSelection()
+    scene.clearSelection()
     scene.edges[scene.document.graph.outgoing(smelter)[0].id].setSelected(True)
     scene.delete_selection()
     assert scene.document.graph.outgoing(smelter) == []
@@ -521,3 +528,77 @@ def _overlaps(scene: FactoryScene) -> int:
         if boxes[first].intersected(boxes[second]).width() > 1
         and boxes[first].intersected(boxes[second]).height() > 1
     )
+
+
+def test_the_mode_and_the_filters_are_readable_on_the_node(scene: FactoryScene) -> None:
+    """A branch set to surplus moves the figures, so it is on the face of the node.
+
+    Named after the box the branch goes to, because that is what a reader is
+    looking at. Branches left on "n'importe lequel" are not listed: three lines
+    saying nothing would bury the one that says something.
+    """
+    _, smelter = iron_chain(scene)
+    fork = place(scene, EntryKind.SPLITTER, "Build_ConveyorAttachmentSplitter_C", 1200, 0)
+    keep = place(scene, EntryKind.OUTPUT, "Desc_IronIngot_C", 1600, -200)
+    spill = place(scene, EntryKind.OUTPUT, "Desc_IronIngot_C", 1600, 200)
+    scene.clearSelection()
+    scene.edges[scene.document.graph.outgoing(smelter)[0].id].setSelected(True)
+    scene.delete_selection()
+    assert scene.connect_nodes(smelter, fork, "Desc_IronIngot_C") is None
+    assert scene.connect_nodes(fork, keep, "Desc_IronIngot_C") is None
+    assert scene.connect_nodes(fork, spill, "Desc_IronIngot_C") is None
+
+    assert "intelligent" not in scene.nodes[fork].subtitle()
+    assert scene.set_splitter_mode(fork, SplitterMode.SMART)
+    assert scene.set_branch_filter(fork, spill, OVERFLOW_BRANCH)
+
+    subtitle = scene.nodes[fork].subtitle()
+    assert subtitle.startswith("répartiteur intelligent — Lingot de fer")
+    assert f"{spill} : surplus" in subtitle
+    assert keep not in subtitle, "une branche en tout-venant n'encombre pas la ligne"
+
+
+def test_a_standard_splitter_refuses_a_filter_and_says_why(scene: FactoryScene) -> None:
+    """Which of the three buildings gets placed is the user's decision, and it costs."""
+    _, smelter = iron_chain(scene)
+    fork = place(scene, EntryKind.SPLITTER, "Build_ConveyorAttachmentSplitter_C", 1200, 0)
+    out = scene.document.graph.outgoing(smelter)[0].target
+    scene.clearSelection()
+    scene.edges[scene.document.graph.outgoing(smelter)[0].id].setSelected(True)
+    scene.delete_selection()
+    assert scene.connect_nodes(smelter, fork, "Desc_IronIngot_C") is None
+    assert scene.connect_nodes(fork, out, "Desc_IronIngot_C") is None
+
+    assert not scene.set_branch_filter(fork, out, OVERFLOW_BRANCH)
+    node = scene.document.graph.node(fork)
+    assert isinstance(node, SplitterNode)
+    assert node.filters == {}
+
+
+def test_going_back_to_standard_clears_the_filters_in_one_undo(scene: FactoryScene) -> None:
+    """A standard splitter shares equally whatever a branch claims, so the claim goes.
+
+    One macro, so one Ctrl+Z puts both back: a mode changed by mistake would
+    otherwise cost the user everything they had written on the branches.
+    """
+    _, smelter = iron_chain(scene)
+    fork = place(scene, EntryKind.SPLITTER, "Build_ConveyorAttachmentSplitter_C", 1200, 0)
+    out = scene.document.graph.outgoing(smelter)[0].target
+    scene.clearSelection()
+    scene.edges[scene.document.graph.outgoing(smelter)[0].id].setSelected(True)
+    scene.delete_selection()
+    scene.connect_nodes(smelter, fork, "Desc_IronIngot_C")
+    scene.connect_nodes(fork, out, "Desc_IronIngot_C")
+    scene.set_splitter_mode(fork, SplitterMode.PROGRAMMABLE)
+    scene.set_branch_filter(fork, out, OVERFLOW_BRANCH)
+
+    scene.set_splitter_mode(fork, SplitterMode.STANDARD)
+    node = scene.document.graph.node(fork)
+    assert isinstance(node, SplitterNode)
+    assert (node.mode, node.filters) == (SplitterMode.STANDARD, {})
+
+    scene.document.undo_stack.undo()
+    node = scene.document.graph.node(fork)
+    assert isinstance(node, SplitterNode)
+    assert node.mode is SplitterMode.PROGRAMMABLE
+    assert node.filters == {out: OVERFLOW_BRANCH}, "un seul undo rend les deux"

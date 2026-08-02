@@ -225,7 +225,9 @@ est compté — `final_outputs` ou `discarded_outputs`.
   "kind": "splitter",
   "id": "repartiteur1",
   "position": [400.0, 0.0],
-  "item_class": null
+  "item_class": null,
+  "mode": "standard",
+  "filters": {}
 }
 ```
 
@@ -245,6 +247,39 @@ plus rapide. Un répartiteur partage **également entre ses branches raccordées
 avec la règle max-min habituelle : ce qu'une branche ne peut pas prendre revient aux
 autres. Un répartiteur qui ne mène nulle part bloque tout ce qui l'alimente, comme
 un sous-produit sans issue.
+
+#### Les trois répartiteurs
+
+`mode` vaut `standard`, `smart` ou `programmable`, et c'est le choix d'un bâtiment :
+répartiteur de convoyeurs, répartiteur intelligent, répartiteur programmable. Ils ne
+coûtent pas la même chose, et la liste de courses suit.
+
+`filters` dit ce qui est écrit sur chaque branche, **indexé par le nœud à l'autre
+bout** — pas par la ligne, dont l'identifiant est un accident de l'ordre dans lequel
+le document a été assemblé et qu'un collage réécrit. Trois valeurs :
+
+| Valeur | Sens |
+| --- | --- |
+| `"*"` | n'importe lequel — le comportement standard, et la valeur par défaut |
+| `"+"` | surplus — ne prend que ce dont les autres branches n'ont pas voulu |
+| `Desc_..._C` | filtré sur cet objet |
+
+Un `standard` n'a rien d'écrit, un `smart` a **une** branche réglée et un
+`programmable` les a toutes. Un `programmable` dont toutes les branches sont en
+`"*"` rend exactement les mêmes chiffres qu'un `standard` : c'est le même code.
+
+Deux choses à savoir, qui viennent du jeu et pas de l'outil :
+
+- **une ligne porte un objet**, donc une branche filtrée sur autre chose que ce que
+  la ligne transporte ne reçoit jamais rien. Ce n'est pas refusé — on peut construire
+  vers quelque chose — mais c'est signalé ;
+- **le jeu ne filtre que les convoyeurs.** Il n'existe pas de jonction de pipeline
+  intelligente, donc un raccord sur un fluide ne peut être que `standard`.
+
+C'est le mode `surplus` qui déplace les chiffres : il donne un **ordre de service**,
+le même mécanisme que les puits illimités servis en dernier. C'est ce qui permet
+d'envoyer un sous-produit au recyclage jusqu'à saturation et le reste ailleurs, ce
+que le partage égal ne savait pas dire.
 
 ---
 

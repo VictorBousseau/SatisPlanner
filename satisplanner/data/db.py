@@ -31,6 +31,7 @@ from satisplanner.core.models import (
     PowerShard,
     Recipe,
     RecipeSlot,
+    SplitterMode,
     Storage,
 )
 from satisplanner.data.docs_parser import GameDataset
@@ -48,7 +49,10 @@ logger = logging.getLogger(__name__)
 # 6 added the `building_costs` table: what each building costs to put down, read
 # from the recipe the game crafts it with. Nothing is inferred -- a building with
 # no such recipe simply has no rows, and the shopping list names it.
-SCHEMA_VERSION: Final = 6
+# 7 added `attachments.splitter_mode`, which is how the three conveyor splitters
+# are told apart. They differ in what may be written on a branch and in what they
+# cost, and nothing else in the row says which is which.
+SCHEMA_VERSION: Final = 7
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -192,13 +196,15 @@ CREATE TABLE storages (
     capacity_m3 REAL
 );
 
--- Line attachments: never nodes on the canvas, only entries in the shopping list.
+-- Line attachments: splitters, mergers and pipe junctions, placed as nodes.
 CREATE TABLE attachments (
-    class_name TEXT PRIMARY KEY REFERENCES buildings (class_name),
-    form       TEXT NOT NULL CHECK (form IN ('solid', 'liquid', 'gas')),
-    can_split  INTEGER NOT NULL CHECK (can_split IN (0, 1)),
-    can_merge  INTEGER NOT NULL CHECK (can_merge IN (0, 1)),
-    branches   INTEGER NOT NULL
+    class_name    TEXT PRIMARY KEY REFERENCES buildings (class_name),
+    form          TEXT NOT NULL CHECK (form IN ('solid', 'liquid', 'gas')),
+    can_split     INTEGER NOT NULL CHECK (can_split IN (0, 1)),
+    can_merge     INTEGER NOT NULL CHECK (can_merge IN (0, 1)),
+    branches      INTEGER NOT NULL,
+    -- NULL for anything that is not one of the three conveyor splitters.
+    splitter_mode TEXT CHECK (splitter_mode IN ('standard', 'smart', 'programmable'))
 );
 
 -- Consumables that raise a building's clock ceiling. Only the overclocking kind
@@ -435,8 +441,9 @@ def _insert_attachments(
     connection: sqlite3.Connection, attachments: tuple[Attachment, ...]
 ) -> None:
     connection.executemany(
-        "INSERT INTO attachments (class_name, form, can_split, can_merge, branches)"
-        " VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO attachments"
+        " (class_name, form, can_split, can_merge, branches, splitter_mode)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
         [
             (
                 attachment.class_name,
@@ -444,6 +451,7 @@ def _insert_attachments(
                 int(AttachmentRole.SPLIT in attachment.roles),
                 int(AttachmentRole.MERGE in attachment.roles),
                 attachment.branches,
+                attachment.splitter_mode.value if attachment.splitter_mode else None,
             )
             for attachment in attachments
         ],
@@ -629,6 +637,9 @@ def read_attachments(connection: sqlite3.Connection) -> list[Attachment]:
                 if flag
             ),
             branches=row["branches"],
+            splitter_mode=(
+                SplitterMode(row["splitter_mode"]) if row["splitter_mode"] else None
+            ),
         )
         for row in rows
     ]

@@ -45,6 +45,8 @@ from PySide6.QtWidgets import (
 
 from satisplanner.core import constants, engine, formatting
 from satisplanner.core.graph import (
+    ANY_BRANCH,
+    OVERFLOW_BRANCH,
     FactoryGraph,
     GeneratorNode,
     MachineNode,
@@ -54,17 +56,20 @@ from satisplanner.core.graph import (
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
+    branch_filter,
     pass_through_item,
     storage_item,
     unit_count,
 )
-from satisplanner.core.models import ItemForm, Purity
+from satisplanner.core.models import ItemForm, Purity, SplitterMode
 from satisplanner.core.results import FactoryReport
 from satisplanner.ui import clipboard, edits, theme
 from satisplanner.ui.canvas_items import ANY_ITEM, EdgeItem, Field, NodeItem, Port, curve
 from satisplanner.ui.catalogue import (
     PURITY_LABELS,
+    SPLITTER_MODE_LABELS,
     PaletteEntry,
+    branch_label,
     build_entries,
     extractor_choices,
     fuel_choices,
@@ -198,6 +203,7 @@ class FactoryScene(QGraphicsScene):
                 item.content_item = pass_through_item(node, graph)
                 many = graph.outgoing if isinstance(node, SplitterNode) else graph.incoming
                 item.branch_count = len(many(node.id))
+                item.branch_settings = self._branch_settings(node, graph)
             item.deployed = self._deployed if node.show_deployed is None else node.show_deployed
             item.deployed_ceiling = self._deployed_ceiling
             item.palette = self._palette
@@ -222,6 +228,26 @@ class FactoryScene(QGraphicsScene):
         report = self.document.report
         if report is not None:
             self.apply_report(report)
+
+    def _branch_settings(self, node: Node, graph: FactoryGraph) -> tuple[tuple[str, str], ...]:
+        """What each branch of a splitter is set to, named the way a reader sees it.
+
+        The neighbour is called by its label when it has one, because that is the
+        word on the box the line goes to. Branches left on "any" are left out: see
+        :meth:`NodeItem._branch_segments`.
+        """
+        if not isinstance(node, SplitterNode) or node.mode is SplitterMode.STANDARD:
+            return ()
+        found: list[tuple[str, str]] = []
+        for edge in graph.outgoing(node.id):
+            setting = branch_filter(node, edge.target)
+            if setting == ANY_BRANCH:
+                continue
+            neighbour = graph.node(edge.target)
+            found.append(
+                (neighbour.label or neighbour.id, branch_label(setting, self.document.game_data))
+            )
+        return tuple(sorted(found))
 
     def apply_positions(self, node_ids: Sequence[str]) -> None:
         """Put the nodes that moved where the graph now says they are.
@@ -776,6 +802,11 @@ class FactoryScene(QGraphicsScene):
             menu.addAction(clock)
         if isinstance(item.node, StorageNode):
             menu.addMenu(self._storage_content_menu(item.node, menu))
+        if isinstance(item.node, SplitterNode):
+            menu.addMenu(self._splitter_mode_menu(item.node, menu))
+            if item.node.mode is not SplitterMode.STANDARD:
+                for branch in self._branch_menus(item.node, menu):
+                    menu.addMenu(branch)
         if unit_count(item.node) is not None:
             menu.addMenu(self._deployed_menu(item.node, menu))
         delete = QAction("Supprimer", menu)
@@ -802,6 +833,48 @@ class FactoryScene(QGraphicsScene):
             )
             menu.addAction(action)
         return menu
+
+    def _splitter_mode_menu(self, node: SplitterNode, parent: QMenu) -> QMenu:
+        """Which of the three splitters this is. A choice of building, and a price."""
+        menu = QMenu("Mode du répartiteur", parent)
+        for mode, label in SPLITTER_MODE_LABELS.items():
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(node.mode is mode)
+            action.triggered.connect(
+                lambda _checked=False, value=mode: self.set_splitter_mode(node.id, value)
+            )
+            menu.addAction(action)
+        return menu
+
+    def _branch_menus(self, node: SplitterNode, parent: QMenu) -> list[QMenu]:
+        """One submenu per branch, named after where the branch goes.
+
+        Named after the far end rather than numbered: "sortie 2" would mean nothing
+        on a canvas where the branches are drawn as lines to boxes with names on
+        them. The item the line carries is offered alongside "any" and "overflow",
+        because a filter naming anything else is a branch nothing goes down -- which
+        is a thing worth being able to say, but never by accident from a menu.
+        """
+        carried = pass_through_item(node, self.document.graph)
+        settings = [ANY_BRANCH, OVERFLOW_BRANCH] + ([carried] if carried else [])
+        menus: list[QMenu] = []
+        for edge in self.document.graph.outgoing(node.id):
+            neighbour = self.document.graph.node(edge.target)
+            menu = QMenu(f"Branche vers {neighbour.label or neighbour.id}", parent)
+            current = branch_filter(node, edge.target)
+            for setting in settings:
+                action = QAction(branch_label(setting, self.document.game_data), menu)
+                action.setCheckable(True)
+                action.setChecked(current == setting)
+                action.triggered.connect(
+                    lambda _checked=False, far=edge.target, value=setting: self.set_branch_filter(
+                        node.id, far, value
+                    )
+                )
+                menu.addAction(action)
+            menus.append(menu)
+        return menus
 
     def _extractor_menu(self, node: ResourceNode, parent: QMenu) -> QMenu:
         """Swap the miner without deleting the node and its lines with it."""
@@ -869,6 +942,12 @@ class FactoryScene(QGraphicsScene):
 
     def set_fuel(self, node_id: str, fuel_class: str) -> bool:
         return self._apply(edits.set_fuel(self.document, node_id, fuel_class))
+
+    def set_splitter_mode(self, node_id: str, mode: SplitterMode | str) -> bool:
+        return self._apply(edits.set_splitter_mode(self.document, node_id, mode))
+
+    def set_branch_filter(self, node_id: str, target_id: str, setting: str) -> bool:
+        return self._apply(edits.set_branch_filter(self.document, node_id, target_id, setting))
 
     def set_quantity(self, node_id: str, value: float) -> bool:
         return self._apply(edits.set_quantity(self.document, node_id, value))

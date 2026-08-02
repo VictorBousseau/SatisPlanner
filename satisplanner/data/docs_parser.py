@@ -41,6 +41,7 @@ from satisplanner.core.models import (
     PowerShard,
     Recipe,
     RecipeSlot,
+    SplitterMode,
     Storage,
 )
 from satisplanner.data import conversions
@@ -316,20 +317,43 @@ FLUID_TANKS: Final[frozenset[str]] = frozenset(
 # documentation dump: a conveyor splitter is one input and three outputs, a conveyor
 # merger three inputs and one output, and a pipe junction has four ports and so does
 # either job. The smart and programmable splitters and the priority merger are V2.
-ATTACHMENTS: Final[dict[str, tuple[ItemForm, tuple[AttachmentRole, ...], int]]] = {
-    "Build_ConveyorAttachmentSplitter_C": (ItemForm.SOLID, (AttachmentRole.SPLIT,), 3),
-    "Build_ConveyorAttachmentMerger_C": (ItemForm.SOLID, (AttachmentRole.MERGE,), 3),
+ATTACHMENTS: Final[
+    dict[str, tuple[ItemForm, tuple[AttachmentRole, ...], int, SplitterMode | None]]
+] = {
+    "Build_ConveyorAttachmentSplitter_C": (
+        ItemForm.SOLID,
+        (AttachmentRole.SPLIT,),
+        3,
+        SplitterMode.STANDARD,
+    ),
+    "Build_ConveyorAttachmentSplitterSmart_C": (
+        ItemForm.SOLID,
+        (AttachmentRole.SPLIT,),
+        3,
+        SplitterMode.SMART,
+    ),
+    "Build_ConveyorAttachmentSplitterProgrammable_C": (
+        ItemForm.SOLID,
+        (AttachmentRole.SPLIT,),
+        3,
+        SplitterMode.PROGRAMMABLE,
+    ),
+    "Build_ConveyorAttachmentMerger_C": (ItemForm.SOLID, (AttachmentRole.MERGE,), 3, None),
     "Build_PipelineJunction_Cross_C": (
         ItemForm.LIQUID,
         (AttachmentRole.SPLIT, AttachmentRole.MERGE),
         3,
+        None,
     ),
 }
 
 # Native classes the attachments above live under, so a class that moves between
-# them in a future game version shows up as missing instead of being ignored.
+# them in a future game version shows up as missing instead of being ignored. The
+# smart and the programmable splitter share one, which is the game's own name for
+# "a splitter you can write on".
 ATTACHMENT_NATIVE_CLASSES: Final[tuple[str, ...]] = (
     "FGBuildableAttachmentSplitter",
+    "FGBuildableSplitterSmart",
     "FGBuildableAttachmentMerger",
     "FGBuildablePipelineJunction",
 )
@@ -901,10 +925,16 @@ def parse_buildings(
             declared = ATTACHMENTS.get(class_name)
             if declared is None:
                 continue
-            form, roles, branches = declared
+            form, roles, branches, mode = declared
             buildings.append(_building(cls, BuildingKind.ATTACHMENT, labels, descriptors))
             attachments.append(
-                Attachment(class_name=class_name, form=form, roles=roles, branches=branches)
+                Attachment(
+                    class_name=class_name,
+                    form=form,
+                    roles=roles,
+                    branches=branches,
+                    splitter_mode=mode,
+                )
             )
     absent = sorted(set(ATTACHMENTS) - {attachment.class_name for attachment in attachments})
     if absent:

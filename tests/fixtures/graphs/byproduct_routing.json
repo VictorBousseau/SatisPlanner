@@ -1,0 +1,208 @@
+{
+  "schema_version": 6,
+  "nodes": [
+    {
+      "id": "petrole",
+      "label": "Pétrole importé",
+      "position": [
+        -1500.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "external_source",
+      "item_class": "Desc_LiquidOil_C",
+      "rate_per_minute": 180.0
+    },
+    {
+      "id": "eau",
+      "label": "Eau",
+      "position": [
+        -1500.0,
+        700.0
+      ],
+      "show_deployed": null,
+      "kind": "external_source",
+      "item_class": "Desc_Water_C",
+      "rate_per_minute": 40.0
+    },
+    {
+      "id": "carburant",
+      "label": "Carburant",
+      "position": [
+        -900.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_LiquidFuel_C",
+      "machine_count": 3.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "sortie_carburant",
+      "label": null,
+      "position": [
+        -300.0,
+        -400.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_LiquidFuel_C",
+      "is_sink": false
+    },
+    {
+      "id": "tri",
+      "label": "Tri de la résine",
+      "position": [
+        -300.0,
+        200.0
+      ],
+      "show_deployed": null,
+      "item_class": "Desc_PolymerResin_C",
+      "kind": "splitter",
+      "mode": "programmable",
+      "filters": {
+        "recyclage": "Desc_PolymerResin_C",
+        "secours": "+",
+        "torchere": "+"
+      }
+    },
+    {
+      "id": "recyclage",
+      "label": "Recyclage",
+      "position": [
+        300.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_ResidualPlastic_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "secours",
+      "label": "Recyclage de secours",
+      "position": [
+        300.0,
+        500.0
+      ],
+      "show_deployed": null,
+      "kind": "machine",
+      "recipe_class": "Recipe_ResidualPlastic_C",
+      "machine_count": 1.0,
+      "building_class": null,
+      "clock_speed": 1.0
+    },
+    {
+      "id": "sortie_plastique",
+      "label": null,
+      "position": [
+        900.0,
+        0.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_Plastic_C",
+      "is_sink": false
+    },
+    {
+      "id": "sortie_plastique2",
+      "label": null,
+      "position": [
+        900.0,
+        500.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_Plastic_C",
+      "is_sink": false
+    },
+    {
+      "id": "torchere",
+      "label": "Torchère",
+      "position": [
+        300.0,
+        1000.0
+      ],
+      "show_deployed": null,
+      "kind": "output",
+      "item_class": "Desc_PolymerResin_C",
+      "is_sink": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "petrole",
+      "target": "carburant",
+      "item_class": "Desc_LiquidOil_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e2",
+      "source": "carburant",
+      "target": "sortie_carburant",
+      "item_class": "Desc_LiquidFuel_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e3",
+      "source": "carburant",
+      "target": "tri",
+      "item_class": "Desc_PolymerResin_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e4",
+      "source": "tri",
+      "target": "recyclage",
+      "item_class": "Desc_PolymerResin_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e5",
+      "source": "tri",
+      "target": "secours",
+      "item_class": "Desc_PolymerResin_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e6",
+      "source": "tri",
+      "target": "torchere",
+      "item_class": "Desc_PolymerResin_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e7",
+      "source": "eau",
+      "target": "recyclage",
+      "item_class": "Desc_Water_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e8",
+      "source": "eau",
+      "target": "secours",
+      "item_class": "Desc_Water_C",
+      "transport_class": "Build_PipelineMK2_C"
+    },
+    {
+      "id": "e9",
+      "source": "recyclage",
+      "target": "sortie_plastique",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    },
+    {
+      "id": "e10",
+      "source": "secours",
+      "target": "sortie_plastique2",
+      "item_class": "Desc_Plastic_C",
+      "transport_class": "Build_ConveyorBeltMk3_C"
+    }
+  ]
+}

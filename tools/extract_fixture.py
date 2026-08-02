@@ -84,6 +84,10 @@ KEEP: Final[frozenset[str]] = frozenset(
         "Recipe_ResidualPlastic_C",
         # Consumes heavy oil residue: needed to test partial absorption of a byproduct.
         "Recipe_ResidualFuel_C",
+        # Makes a **solid** byproduct -- polymer resin -- which is what a smart or
+        # programmable splitter can actually sort. The game filters conveyors and
+        # not pipes, so a byproduct routing test needs a byproduct on a belt.
+        "Recipe_LiquidFuel_C",
         "Recipe_Computer_C",
         "Recipe_Cable_C",
         "Recipe_Wire_C",
@@ -129,12 +133,15 @@ KEEP: Final[frozenset[str]] = frozenset(
         "Build_PipelineMK2_C",
         "Build_Pipeline_NoIndicator_C",
         "Build_PipelineMK2_NoIndicator_C",
-        # -- line attachments, counted in the shopping list, plus the two V2 variants
-        # kept to prove they stay out of scope
+        # -- line attachments, placed as nodes and counted in the shopping list.
+        # The priority merger is kept alongside them to prove it stays out of
+        # scope: it is the merger's answer to the smart splitter and it is not
+        # modelled.
         "Build_ConveyorAttachmentSplitter_C",
+        "Build_ConveyorAttachmentSplitterSmart_C",
+        "Build_ConveyorAttachmentSplitterProgrammable_C",
         "Build_ConveyorAttachmentMerger_C",
         "Build_PipelineJunction_Cross_C",
-        "Build_ConveyorAttachmentSplitterSmart_C",
         "Build_ConveyorAttachmentMergerPriority_C",
         # -- overclocking: the shard that raises a clock ceiling, and the Somersloop
         # kept alongside it to prove the production-boost kind stays out of scope

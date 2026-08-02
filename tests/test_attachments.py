@@ -13,7 +13,6 @@ import pytest
 
 from satisplanner.core import attachments, constants, engine
 from satisplanner.core.graph import (
-    SCHEMA_VERSION,
     ExternalSourceNode,
     FactoryGraph,
     GraphError,
@@ -309,10 +308,14 @@ def test_a_fitting_with_nothing_behind_it_blocks_what_feeds_it(game_data: GameDa
 # --------------------------------------------------------------------------- #
 
 
+# The schema before splitters became nodes. Named rather than derived from the
+# current one: what this exercises is the step that inserts the trees, and that
+# step will not move just because a later one is added.
+BEFORE_ATTACHMENTS = 4
+
+
 def migrated(graph: FactoryGraph) -> tuple[FactoryGraph, list[str]]:
-    payload, notes = factory_file.migrate(
-        graph.model_dump(mode="json"), SCHEMA_VERSION - 1
-    )
+    payload, notes = factory_file.migrate(graph.model_dump(mode="json"), BEFORE_ATTACHMENTS)
     return FactoryGraph.model_validate(payload), notes
 
 

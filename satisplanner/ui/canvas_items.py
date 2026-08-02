@@ -49,10 +49,10 @@ from satisplanner.core.graph import (
     port_line_budget,
     unit_count,
 )
-from satisplanner.core.models import GameData, Item, ItemForm
+from satisplanner.core.models import GameData, Item, ItemForm, SplitterMode
 from satisplanner.core.results import EdgeSolution, LimitingFactor, NodeSolution
 from satisplanner.ui import item_colours, theme
-from satisplanner.ui.catalogue import PURITY_LABELS
+from satisplanner.ui.catalogue import PURITY_LABELS, SPLITTER_MODE_LABELS
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.item_colours import ItemPalette
 
@@ -308,6 +308,10 @@ class NodeItem(QGraphicsItem):
         # Lines already on the many side of a splitter or a merger, likewise: a node
         # cannot count its own neighbours.
         self.branch_count = 0
+        # What is written on the branches that are not simply "any", as
+        # ``(neighbour, setting)`` pairs already in French. Set by the scene, which
+        # is the only place that knows what the neighbours are called.
+        self.branch_settings: tuple[tuple[str, str], ...] = ()
         # Deployed rendering, as resolved by the scene: the global preference unless
         # this node overrides it. Purely a way of drawing; nothing reads it back.
         self.deployed = False
@@ -780,13 +784,25 @@ class NodeItem(QGraphicsItem):
         used = self.branch_count
         word = "sortie" if isinstance(node, SplitterNode) else "entrée"
         role = "répartiteur" if isinstance(node, SplitterNode) else "groupeur"
+        if isinstance(node, SplitterNode) and node.mode is not SplitterMode.STANDARD:
+            role += f" {SPLITTER_MODE_LABELS[node.mode].lower()}"
+        head: list[Segment] = [Segment(f"{role} — ")]
         if self.content_item is None:
-            return [Segment(f"{role} — contenu indéterminé")]
-        name = self.game_data.item(self.content_item).display_name_fr
+            return [Segment(f"{role} — contenu indéterminé"), *self._branch_segments()]
+        head.append(Segment(self.game_data.item(self.content_item).display_name_fr))
+        head.append(Segment(f" — {used} {word}(s) sur {wide}"))
+        return head + self._branch_segments()
+
+    def _branch_segments(self) -> list[Segment]:
+        """The branches that say something, one run each so a line can break between.
+
+        Only the ones that are not "any": three branches all reading "tout-venant"
+        would bury the one that reads "surplus", and it is the surplus that moves
+        the figures. A field that changes a rate has to be readable without a
+        click, and this is that field.
+        """
         return [
-            Segment(f"{role} — "),
-            Segment(name),
-            Segment(f" — {used} {word}(s) sur {wide}"),
+            Segment(f" — {neighbour} : {setting}") for neighbour, setting in self.branch_settings
         ]
 
     def icon(self) -> QIcon:

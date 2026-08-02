@@ -127,6 +127,17 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "il partage également entre ses branches et il est compté dans la liste de "
     "courses. Une entrée et une sortie d'usine sont la frontière du modèle et pas "
     "des bâtiments : elles n'ont pas de limite.",
+    "Un répartiteur se règle : <b>standard</b>, <b>intelligent</b> (une branche "
+    "réglée) ou <b>programmable</b> (toutes). Le seul réglage qui déplace des "
+    "chiffres est <b>« surplus »</b> : cette branche ne prend que ce dont les "
+    "autres n'ont pas voulu, ce qui permet d'envoyer un sous-produit au "
+    "recyclage jusqu'à saturation et le reste à la torchère.",
+    "<b>Filtrer sur un objet ne change rien, ici.</b> Une ligne ne porte qu'un "
+    "objet : filtrer une branche sur celui qu'elle transporte déjà revient à "
+    "« n'importe lequel », et la filtrer sur un autre la ferme complètement — "
+    "ce qui est signalé. Poser des filtres en attendant un effet sur les débits "
+    "n'en produira aucun ; c'est le surplus qu'il faut. Et le jeu ne filtre que "
+    "les convoyeurs : il n'existe pas de jonction de pipeline intelligente.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
     "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",

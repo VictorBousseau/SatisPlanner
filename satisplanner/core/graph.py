@@ -22,7 +22,14 @@ from typing import Annotated, Any, Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from satisplanner.core import constants
-from satisplanner.core.models import AttachmentRole, GameData, ItemForm, Purity, UnknownClassError
+from satisplanner.core.models import (
+    AttachmentRole,
+    GameData,
+    ItemForm,
+    Purity,
+    SplitterMode,
+    UnknownClassError,
+)
 
 # 2 added a clock speed to extractors and machines. Reading a version 1 document
 # needs no conversion -- the field defaults to 100 % -- but the bump is what makes
@@ -34,7 +41,11 @@ from satisplanner.core.models import AttachmentRole, GameData, ItemForm, Purity,
 # 5 made splitters and mergers nodes of their own, and with them the rule that a
 # port carries as many lines as there are buildings on the node. A document from
 # before it has both to gain: the migration inserts what the layout implied.
-SCHEMA_VERSION: Final = 5
+# 6 gave a splitter a mode and its branches filters. A document from before it has
+# neither -- every splitter is a standard one, which is what it was -- but one
+# that has them must not be opened by a build that would ignore an overflow
+# branch and show the wrong figures without a word.
+SCHEMA_VERSION: Final = 6
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -181,6 +192,13 @@ class OutputNode(_NodeBase):
     is_sink: bool = False
 
 
+# What a branch of a smart or programmable splitter may be set to, besides the
+# class of an item. Neither can be mistaken for a class name: every one of those
+# starts with `Desc_`, and a test holds that to be true of the shipped catalogue.
+ANY_BRANCH: Final = "*"
+OVERFLOW_BRANCH: Final = "+"
+
+
 class _PassThroughNode(_NodeBase):
     """A splitter or a merger: one item in, the same item out, nothing kept.
 
@@ -198,9 +216,22 @@ class _PassThroughNode(_NodeBase):
 
 
 class SplitterNode(_PassThroughNode):
-    """One line in, up to three out, split equally between the ones connected."""
+    """One line in, up to three out, split equally between the ones connected.
+
+    A smart or programmable splitter says something more about each branch. What
+    can be said is in :data:`ANY_BRANCH` and :data:`OVERFLOW_BRANCH`, or the class
+    of an item; ``filters`` says it, keyed by the node at the far end of the branch.
+
+    **Keyed by the target and not by the line** on purpose. A line's identifier is
+    an accident of the order the document was assembled in and is rewritten by a
+    paste; the node at the other end is what the user pointed at, it survives a
+    change of belt tier, and a splitter cannot have two branches to the same place
+    -- that would be the same line twice, which is already refused.
+    """
 
     kind: Literal[NodeKind.SPLITTER] = NodeKind.SPLITTER
+    mode: SplitterMode = SplitterMode.STANDARD
+    filters: dict[str, str] = Field(default_factory=dict)
 
 
 class MergerNode(_PassThroughNode):
@@ -789,6 +820,30 @@ def pass_through_item(node: Node, graph: FactoryGraph) -> str | None:
     return next(iter(items)) if len(items) == 1 else None
 
 
+def branch_filter(node: Node, target_id: str) -> str:
+    """What one branch of a splitter is set to, as one of the three answers.
+
+    :data:`ANY_BRANCH` unless the node says otherwise, which is what makes the
+    standard splitter the case of the programmable one where nothing was written:
+    a standard splitter has no filters at all, and a programmable one whose
+    branches are all "any" resolves through the very same code.
+    """
+    if not isinstance(node, SplitterNode) or node.mode is SplitterMode.STANDARD:
+        return ANY_BRANCH
+    return node.filters.get(target_id, ANY_BRANCH)
+
+
+def branch_carries(node: Node, target_id: str, item_class: str) -> bool:
+    """Whether this branch lets ``item_class`` through at all.
+
+    A branch filtered on something the line never carries is a branch nothing ever
+    goes down. It is not an error -- the user may be building towards something --
+    but it is worth a diagnostic, and it is certainly not a route out.
+    """
+    setting = branch_filter(node, target_id)
+    return setting in (ANY_BRANCH, OVERFLOW_BRANCH, item_class)
+
+
 def unit_count(node: Node) -> float | None:
     """How many buildings this node stands for, or ``None`` when it is not a bank.
 
@@ -820,11 +875,22 @@ def attachment_building(node: Node, item_class: str | None, game_data: GameData)
     """
     if not isinstance(node, SplitterNode | MergerNode) or item_class is None:
         return None
-    role = AttachmentRole.SPLIT if isinstance(node, SplitterNode) else AttachmentRole.MERGE
     item = game_data.items.get(item_class)
     if item is None:
         return None
-    attachment = game_data.attachment_for(item.form, role)
+    if isinstance(node, SplitterNode):
+        if item.form.is_fluid:
+            # A fluid has one junction and it filters nothing. A fluid splitter set
+            # to anything but standard is therefore a building that does not exist;
+            # the diagnostics say so, and here the honest answer is nothing at all
+            # rather than the junction dressed up as a smart one.
+            if node.mode is not SplitterMode.STANDARD:
+                return None
+            attachment = game_data.attachment_for(item.form, AttachmentRole.SPLIT)
+        else:
+            attachment = game_data.attachment_for(item.form, AttachmentRole.SPLIT, node.mode)
+    else:
+        attachment = game_data.attachment_for(item.form, AttachmentRole.MERGE)
     return None if attachment is None else attachment.class_name
 
 

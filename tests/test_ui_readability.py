@@ -20,7 +20,7 @@ from satisplanner.core.models import GameData
 from satisplanner.ui.item_colours import DEFAULT_FAMILY_COLOURS, ItemPalette, text_colour_on
 from satisplanner.ui.main_window import MainWindow
 from satisplanner.ui.preferences import Preferences, PreferencesDialog
-from satisplanner.ui.table_panel import COLUMN_INPUTS
+from satisplanner.ui.table_panel import COLUMN_INPUTS, COLUMN_RATIO
 from tests.conftest import load_graph, temporary_settings
 
 
@@ -108,7 +108,9 @@ def test_a_percentage_reads_the_same_everywhere(window: MainWindow) -> None:
     model = window.table_panel.model
     row = model.row_of("smelter")
     assert row is not None
-    ratio_cell = model.data(model.index(row, 11), int(Qt.ItemDataRole.DisplayRole))
+    # Named rather than counted: a column added in the middle should not make this
+    # test read the one next door and pass on the wrong cell.
+    ratio_cell = model.data(model.index(row, COLUMN_RATIO), int(Qt.ItemDataRole.DisplayRole))
     assert ratio_cell == expected
 
     messages = [item.message for item in report.diagnostics]

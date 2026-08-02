@@ -50,6 +50,7 @@ from typing import Final
 
 from satisplanner.core import constants, validation
 from satisplanner.core.graph import (
+    OVERFLOW_BRANCH,
     PASS_THROUGH_KINDS,
     Edge,
     ExternalSourceNode,
@@ -65,6 +66,8 @@ from satisplanner.core.graph import (
     StorageNode,
     WaterExtractorNode,
     attachment_building,
+    branch_carries,
+    branch_filter,
     condensation_order,
     generator_input_rates,
     machine_building,
@@ -231,6 +234,19 @@ class _Solver:
             for node in self._sorted_nodes
             if isinstance(node, SplitterNode | MergerNode)
         }
+        # Branches a filter has closed, and branches that only take refusals.
+        # Both are settled by the document alone, so both are settled once.
+        self._closed = frozenset(
+            edge.id
+            for edge in self._sorted_edges
+            if not branch_carries(graph.node(edge.source), edge.target, edge.item_class)
+        )
+        self._overflow = frozenset(
+            edge.id
+            for edge in self._sorted_edges
+            if edge.id not in self._closed
+            and branch_filter(graph.node(edge.source), edge.target) == OVERFLOW_BRANCH
+        )
         self._drained = self._draining_ports()
         self._deferred = self._conduits_to_sinks()
         self.limits: dict[str, float] = {
@@ -371,7 +387,7 @@ class _Solver:
             settled = True
             for edge in self._sorted_edges:
                 port = (edge.source, edge.item_class)
-                if port in drained:
+                if port in drained or edge.id in self._closed:
                     continue
                 target = self.graph.node(edge.target)
                 if not isinstance(target, SplitterNode | MergerNode) or (
@@ -465,6 +481,8 @@ class _Solver:
             settled = True
             for node_id in sorted(conduits):
                 for edge in self.out_edges[node_id]:
+                    if edge.id in self._closed:
+                        continue
                     target = self.graph.node(edge.target)
                     if isinstance(target, OutputNode | StorageNode) or edge.target in conduits:
                         continue
@@ -609,7 +627,7 @@ class _Solver:
         total = 0.0
         sink = False
         for edge in self.out_edges[node_id]:
-            if edge.item_class != item or edge.target in seen:
+            if edge.item_class != item or edge.target in seen or edge.id in self._closed:
                 continue
             demand, reaches_sink = self._reachable_demand(edge.target, item, seen | {node_id})
             total += demand
@@ -694,10 +712,19 @@ class _Solver:
         flows = {edge.id: 0.0 for edge in self.graph.edges}
         self.leftovers = {}
         for item in self._items_in_order:
-            item_edges = self._edges_by_item[item]
+            # A branch a filter has closed is left out of the allocation entirely.
+            # Nothing goes down it, so it neither takes a share nor holds one back.
+            item_edges = [
+                edge for edge in self._edges_by_item[item] if edge.id not in self._closed
+            ]
             item_supplies = supplies.get(item, {})
             item_flows, bound = allocate(
-                item_supplies, caps.get(item, {}), item_edges, self.limits, self._deferred
+                item_supplies,
+                caps.get(item, {}),
+                item_edges,
+                self.limits,
+                self._deferred,
+                self._overflow,
             )
             self.line_bound = self.line_bound or bound
             flows.update(item_flows)
@@ -1069,6 +1096,7 @@ def allocate(
     edges: Sequence[Edge],
     limits: Mapping[str, float] | None = None,
     deferred: frozenset[str] = frozenset(),
+    overflow: frozenset[str] = frozenset(),
 ) -> tuple[dict[str, float], bool]:
     """Share each producer's output between the consumers it is wired to.
 
@@ -1091,6 +1119,13 @@ def allocate(
     a fitting. Its ceiling is still enforced when its turn comes -- unlike a real
     sink's, which is not one.
 
+    ``overflow`` names **lines** rather than consumers: the branches of a splitter
+    set to take only what the other branches refused. It is the same idea and it is
+    deliberately the same mechanism -- a second round over what is left -- because
+    "surplus" is a place in the queue and nothing else. That is what lets the
+    residue go to the recycler until it is full and the rest to the flare, without
+    a rule of its own anywhere in the solver.
+
     ``limits`` caps each line by its transport tier. Deterministic: producers,
     consumers and edges are all walked in sorted order.
 
@@ -1108,21 +1143,18 @@ def allocate(
     remaining_line = {
         edge.id: math.inf if limits is None else limits.get(edge.id, math.inf) for edge in ordered
     }
-    served_now = {node for node, cap in caps.items() if math.isfinite(cap) and node not in deferred}
-    finite = {node: cap for node, cap in caps.items() if node in served_now}
-    later = {node: cap for node, cap in caps.items() if node not in served_now}
+    # One ceiling dictionary for both rounds, so that a branch served late into a
+    # consumer already partly filled sees what is left of it rather than all of it.
+    remaining_cap = dict(caps)
+    held_back = {node for node, cap in caps.items() if not math.isfinite(cap)} | set(deferred)
+    now = [edge for edge in ordered if edge.target not in held_back and edge.id not in overflow]
+    last = [edge for edge in ordered if edge.target in held_back or edge.id in overflow]
 
-    bound = _water_fill(flows, ordered, remaining_supply, dict(finite), remaining_line)
-    if later:
-        # Second pass: the leftovers go to the unlimited absorbers, and to the
-        # conduits that lead only to them, each still held to its own ceiling.
-        leftovers = {
-            node_id: value for node_id, value in remaining_supply.items() if value > FLOW_EPSILON
-        }
-        sink_edges = [edge for edge in ordered if edge.target in later]
-        bound |= _water_fill(flows, sink_edges, leftovers, dict(later), remaining_line)
-        for node_id, value in leftovers.items():
-            remaining_supply[node_id] = value
+    bound = _water_fill(flows, now, remaining_supply, remaining_cap, remaining_line)
+    if last:
+        # Second pass: what nobody could take goes to the unlimited absorbers, to
+        # the conduits that lead only to them, and to the overflow branches.
+        bound |= _water_fill(flows, last, remaining_supply, remaining_cap, remaining_line)
     return flows, bound
 
 

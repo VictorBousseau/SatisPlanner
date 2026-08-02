@@ -195,12 +195,25 @@ def _four_to_five(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     return json.loads(graph.model_dump_json()), done.notes()
 
 
+def _five_to_six(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Schema 5 to 6: a splitter gained a mode and its branches gained filters.
+
+    Nothing to write, and this time that is the point being made: a splitter from
+    before is a **standard** splitter, which is exactly what the field defaults to,
+    and a standard splitter is the case of the programmable one where nothing has
+    been written on any branch. The figures are therefore untouched, which is what
+    a lot that adds modes owes the factories that use none of them.
+    """
+    return payload, []
+
+
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
 MIGRATIONS: Final[dict[int, Step]] = {
     1: _one_to_two,
     2: _two_to_three,
     3: _three_to_four,
     4: _four_to_five,
+    5: _five_to_six,
 }
 
 

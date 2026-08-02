@@ -15,6 +15,8 @@ from enum import StrEnum
 from typing import Final
 
 from satisplanner.core.graph import (
+    ANY_BRANCH,
+    OVERFLOW_BRANCH,
     ExternalSourceNode,
     GeneratorNode,
     MachineNode,
@@ -33,6 +35,7 @@ from satisplanner.core.models import (
     Item,
     ItemForm,
     Purity,
+    SplitterMode,
 )
 
 # Default rate offered when the user drops an "import from outside" node. It is only
@@ -46,6 +49,27 @@ PURITY_LABELS: Final[dict[Purity, str]] = {
     Purity.NORMAL: "Normal",
     Purity.PURE: "Pur",
 }
+
+# The same one place for the three splitters, in the order the game unlocks them.
+SPLITTER_MODE_LABELS: Final[dict[SplitterMode, str]] = {
+    SplitterMode.STANDARD: "Standard",
+    SplitterMode.SMART: "Intelligent",
+    SplitterMode.PROGRAMMABLE: "Programmable",
+}
+
+# And for what may be written on a branch, besides the name of an item.
+BRANCH_LABELS: Final[dict[str, str]] = {
+    ANY_BRANCH: "n'importe lequel",
+    OVERFLOW_BRANCH: "surplus",
+}
+
+
+def branch_label(setting: str, game_data: GameData) -> str:
+    """How a branch's setting reads on a node, in a menu and in a message."""
+    if setting in BRANCH_LABELS:
+        return BRANCH_LABELS[setting]
+    item = game_data.items.get(setting)
+    return item.display_name_fr if item else setting
 
 
 class EntryKind(StrEnum):
@@ -209,6 +233,11 @@ def build_entries(game_data: GameData) -> list[PaletteEntry]:
     return entries
 
 
+def mode_for(role: AttachmentRole) -> SplitterMode | None:
+    """The mode a freshly dropped attachment starts in: plain, or none at all."""
+    return SplitterMode.STANDARD if role is AttachmentRole.SPLIT else None
+
+
 def _attachments(game_data: GameData) -> list[PaletteEntry]:
     """One splitter and one merger, whatever the form of what will run through them.
 
@@ -228,16 +257,15 @@ def _attachments(game_data: GameData) -> list[PaletteEntry]:
         names = [
             game_data.buildings[attachment.class_name].display_name_fr
             for attachment in sorted(game_data.attachments.values(), key=lambda a: a.class_name)
-            if role in attachment.roles and attachment.class_name in game_data.buildings
+            if role in attachment.roles
+            and attachment.class_name in game_data.buildings
+            and attachment.splitter_mode in (None, SplitterMode.STANDARD)
         ]
-        icon = next(
-            (
-                attachment.class_name
-                for attachment in sorted(game_data.attachments.values(), key=lambda a: a.class_name)
-                if role in attachment.roles and not attachment.form.is_fluid
-            ),
-            "",
-        )
+        # Dropped as the plain one, on a belt. The mode is a property of the node
+        # and is changed there, exactly as a generator's fuel is: offering three
+        # rows would be asking for a decision before the line even exists.
+        plain = game_data.attachment_for(ItemForm.SOLID, role, mode_for(role))
+        icon = plain.class_name if plain else ""
         building = game_data.buildings.get(icon)
         verb = "sortir" if kind is EntryKind.SPLITTER else "entrer"
         entries.append(

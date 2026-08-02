@@ -40,6 +40,8 @@ class DiagnosticCode(StrEnum):
     INCOMPATIBLE_RECIPE = "incompatible_recipe"
     UNCONNECTED_NODE = "unconnected_node"
     AMBIGUOUS_BUFFER = "ambiguous_buffer"
+    # Something written on the branch of a splitter that cannot do what it says.
+    BRANCH_FILTER = "branch_filter"
     BUFFER_FILLING = "buffer_filling"
     BUFFER_DRAINING = "buffer_draining"
     NOT_SUSTAINABLE = "not_sustainable"

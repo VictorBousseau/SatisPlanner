@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from satisplanner.core import constants
-from satisplanner.core.models import AttachmentRole, ItemForm, Recipe
+from satisplanner.core.models import AttachmentRole, ItemForm, Recipe, SplitterMode
 from satisplanner.data.docs_parser import (
     DocsFileError,
     GameDataset,
@@ -329,10 +329,12 @@ def test_storages_expose_slots_for_solids_and_volume_for_fluids(dataset: GameDat
 
 
 def test_line_attachments_are_parsed_with_their_roles(dataset: GameDataset) -> None:
-    """Splitter, merger and pipe junction, each with the job it can do."""
+    """Three splitters, a merger and a pipe junction, each with the job it can do."""
     attachments = {attachment.class_name: attachment for attachment in dataset.attachments}
     assert set(attachments) == {
         "Build_ConveyorAttachmentSplitter_C",
+        "Build_ConveyorAttachmentSplitterSmart_C",
+        "Build_ConveyorAttachmentSplitterProgrammable_C",
         "Build_ConveyorAttachmentMerger_C",
         "Build_PipelineJunction_Cross_C",
     }
@@ -343,10 +345,25 @@ def test_line_attachments_are_parsed_with_their_roles(dataset: GameDataset) -> N
     assert junction.form is ItemForm.LIQUID
 
 
-def test_smart_and_priority_variants_stay_out_of_scope(dataset: GameDataset) -> None:
-    """They are in the fixture on purpose: programmable routing is V2."""
+def test_the_three_splitters_are_told_apart_by_their_mode(dataset: GameDataset) -> None:
+    """Nothing else in the row says which is which, and they do not cost the same."""
+    attachments = {attachment.class_name: attachment for attachment in dataset.attachments}
+    plain = attachments["Build_ConveyorAttachmentSplitter_C"]
+    smart = attachments["Build_ConveyorAttachmentSplitterSmart_C"]
+    programmable = attachments["Build_ConveyorAttachmentSplitterProgrammable_C"]
+    assert plain.splitter_mode is SplitterMode.STANDARD
+    assert smart.splitter_mode is SplitterMode.SMART
+    assert programmable.splitter_mode is SplitterMode.PROGRAMMABLE
+    # A merger has no modes, and neither has a junction: the game has no filtering
+    # one, so ``None`` says that rather than "the standard one".
+    assert attachments["Build_ConveyorAttachmentMerger_C"].splitter_mode is None
+    assert attachments["Build_PipelineJunction_Cross_C"].splitter_mode is None
+
+
+def test_the_priority_merger_stays_out_of_scope(dataset: GameDataset) -> None:
+    """It is in the fixture on purpose: it is the merger's answer to the smart
+    splitter, and it is not modelled."""
     classes = {attachment.class_name for attachment in dataset.attachments}
-    assert "Build_ConveyorAttachmentSplitterSmart_C" not in classes
     assert "Build_ConveyorAttachmentMergerPriority_C" not in classes
 
 
@@ -354,6 +371,8 @@ def test_attachments_use_the_french_labels_of_the_game(dataset: GameDataset) -> 
     """ "Groupeur", not the "fusionneur" of a translation done by hand."""
     names = {building.class_name: building.display_name_fr for building in dataset.buildings}
     assert names["Build_ConveyorAttachmentSplitter_C"] == "Répartiteur de convoyeurs"
+    assert names["Build_ConveyorAttachmentSplitterSmart_C"] == "Répartiteur intelligent"
+    assert names["Build_ConveyorAttachmentSplitterProgrammable_C"] == "Répartiteur programmable"
     assert names["Build_ConveyorAttachmentMerger_C"] == "Groupeur de convoyeurs"
     assert names["Build_PipelineJunction_Cross_C"] == "Jonction de pipeline"
 

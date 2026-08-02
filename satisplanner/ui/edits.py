@@ -21,6 +21,8 @@ from dataclasses import dataclass
 
 from satisplanner.core import constants, formatting
 from satisplanner.core.graph import (
+    ANY_BRANCH,
+    OVERFLOW_BRANCH,
     ExternalSourceNode,
     GeneratorNode,
     MachineNode,
@@ -32,8 +34,14 @@ from satisplanner.core.graph import (
     StorageNode,
     WaterExtractorNode,
 )
-from satisplanner.core.models import Purity, UnknownClassError
-from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices, fuel_choices
+from satisplanner.core.models import Purity, SplitterMode, UnknownClassError
+from satisplanner.ui.catalogue import (
+    PURITY_LABELS,
+    SPLITTER_MODE_LABELS,
+    branch_label,
+    extractor_choices,
+    fuel_choices,
+)
 from satisplanner.ui.commands import SetNodeFieldCommand, SetTransportCommand
 from satisplanner.ui.document import FactoryDocument
 
@@ -233,6 +241,73 @@ def set_fuel(document: FactoryDocument, node_id: str, fuel_class: str) -> str | 
     document.undo_stack.push(
         SetNodeFieldCommand(
             document, node_id, "fuel_class", fuel_class, f"carburant : {allowed[fuel_class]}"
+        )
+    )
+    return None
+
+
+def set_splitter_mode(
+    document: FactoryDocument, node_id: str, mode: SplitterMode | str
+) -> str | None:
+    """Standard, smart or programmable: a choice of building, and of vocabulary.
+
+    Going back to standard **clears what was written**, and does it in the same
+    command so that one undo puts it all back. Keeping the filters would leave a
+    document whose figures do not match what is drawn on it -- a standard splitter
+    shares equally whatever any branch claims -- and that is the one outcome worth
+    avoiding here.
+    """
+    node = document.graph.node(node_id)
+    if not isinstance(node, SplitterNode):
+        return "Seul un répartiteur a un mode."
+    try:
+        wanted = SplitterMode(mode)
+    except ValueError:
+        return f"Mode inconnu : {mode}"
+    if node.mode is wanted:
+        return None
+    label = SPLITTER_MODE_LABELS[wanted]
+    document.undo_stack.beginMacro(f"{node_id} : répartiteur {label.lower()}")
+    document.undo_stack.push(
+        SetNodeFieldCommand(document, node_id, "mode", wanted, f"répartiteur {label.lower()}")
+    )
+    if wanted is SplitterMode.STANDARD and node.filters:
+        document.undo_stack.push(
+            SetNodeFieldCommand(document, node_id, "filters", {}, "réglages de branches effacés")
+        )
+    document.undo_stack.endMacro()
+    return None
+
+
+def set_branch_filter(
+    document: FactoryDocument, node_id: str, target_id: str, setting: str
+) -> str | None:
+    """Write on one branch of a splitter: an item, "any", or "overflow".
+
+    Refused on a standard splitter rather than silently promoting it: which of the
+    three buildings is placed is the user's decision and it has a price.
+    """
+    node = document.graph.node(node_id)
+    if not isinstance(node, SplitterNode):
+        return "Seul un répartiteur a des branches réglables."
+    if node.mode is SplitterMode.STANDARD:
+        return "Un répartiteur standard ne se règle pas : passez-le en intelligent."
+    if not any(edge.target == target_id for edge in document.graph.outgoing(node_id)):
+        return "Ce nœud n'est pas une branche de ce répartiteur."
+    if setting not in (ANY_BRANCH, OVERFLOW_BRANCH) and setting not in document.game_data.items:
+        return f"Objet inconnu : {setting}"
+    if node.filters.get(target_id, ANY_BRANCH) == setting:
+        return None
+    fresh = {key: value for key, value in node.filters.items() if key != target_id}
+    if setting != ANY_BRANCH:
+        fresh[target_id] = setting
+    document.undo_stack.push(
+        SetNodeFieldCommand(
+            document,
+            node_id,
+            "filters",
+            dict(sorted(fresh.items())),
+            f"branche vers {target_id} : {branch_label(setting, document.game_data)}",
         )
     )
     return None

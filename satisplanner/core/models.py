@@ -76,6 +76,20 @@ class AttachmentRole(StrEnum):
     MERGE = "merge"
 
 
+class SplitterMode(StrEnum):
+    """Which of the three splitters this is, which is a choice of building.
+
+    They share a shape -- one line in, three out -- and differ in what may be
+    written on a branch. Standard says nothing; smart filters one branch; the
+    programmable one filters every branch. The order below is the order they
+    unlock in, and it is the order a menu shows them in.
+    """
+
+    STANDARD = "standard"
+    SMART = "smart"
+    PROGRAMMABLE = "programmable"
+
+
 class _Row(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -275,6 +289,11 @@ class Attachment(_Row):
     # trunk). Mirrored by ``core.constants.ATTACHMENT_BRANCHES``, which is what the
     # graph validates against when there is no catalogue to hand.
     branches: int
+    # Which of the three splitters this is, or ``None`` for anything that is not
+    # one. A pipe junction is ``None`` and not ``STANDARD``: the game has no
+    # filtering junction, and saying "standard" would suggest there is a smart one
+    # to upgrade to.
+    splitter_mode: SplitterMode | None = None
 
 
 class BuildingCost(_Row):
@@ -430,16 +449,30 @@ class GameData(BaseModel):
         total = each * math.ceil(buildings) if each else 0
         return {shard.class_name: total} if total else {}
 
-    def attachment_for(self, form: ItemForm, role: AttachmentRole) -> Attachment | None:
+    def attachment_for(
+        self,
+        form: ItemForm,
+        role: AttachmentRole,
+        mode: SplitterMode | None = None,
+    ) -> Attachment | None:
         """The splitter, merger or junction this form uses for that role.
 
         Solids and fluids use different hardware, and a pipe junction does both
         jobs, so the lookup is by form and role rather than by class name.
+
+        ``mode`` picks between the three conveyor splitters and must be ``None``
+        for anything else -- a merger has no modes and a pipe junction has none
+        either, so asking for a smart one returns nothing rather than the ordinary
+        one. That is the answer a caller wants: the game has no filtering junction,
+        and quietly handing back the plain one would price a building that cannot
+        do the job.
         """
         candidates = [
             attachment
             for attachment in self.attachments.values()
-            if attachment.form.is_fluid is form.is_fluid and role in attachment.roles
+            if attachment.form.is_fluid is form.is_fluid
+            and role in attachment.roles
+            and attachment.splitter_mode is mode
         ]
         return min(candidates, key=lambda a: a.class_name) if candidates else None
 

@@ -46,12 +46,18 @@ from satisplanner.core.graph import (
     MachineNode,
     Node,
     ResourceNode,
+    SplitterNode,
     WaterExtractorNode,
 )
 from satisplanner.core.results import FactoryReport, LimitingFactor, NodeSolution
 from satisplanner.ui import edits, theme
 from satisplanner.ui.binding import DocumentBinding
-from satisplanner.ui.catalogue import PURITY_LABELS, extractor_choices, fuel_choices
+from satisplanner.ui.catalogue import (
+    PURITY_LABELS,
+    SPLITTER_MODE_LABELS,
+    extractor_choices,
+    fuel_choices,
+)
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.edits import quantity_of
 
@@ -94,10 +100,11 @@ COLUMN_CLOCK: Final = 4
 COLUMN_PURITY: Final = 5
 COLUMN_EXTRACTOR: Final = 6
 COLUMN_FUEL: Final = 7
-COLUMN_INPUTS: Final = 8
-COLUMN_OUTPUTS: Final = 9
-COLUMN_LIMITING: Final = 10
-COLUMN_RATIO: Final = 11
+COLUMN_MODE: Final = 8
+COLUMN_INPUTS: Final = 9
+COLUMN_OUTPUTS: Final = 10
+COLUMN_LIMITING: Final = 11
+COLUMN_RATIO: Final = 12
 
 HEADERS: Final[tuple[str, ...]] = (
     "Nœud",
@@ -108,6 +115,7 @@ HEADERS: Final[tuple[str, ...]] = (
     "Pureté",
     "Extracteur",
     "Carburant",
+    "Mode",
     "Entrées /min",
     "Sorties /min",
     "Facteur limitant",
@@ -122,6 +130,7 @@ COLUMN_WIDTHS: Final[dict[int, int]] = {
     COLUMN_PURITY: 80,
     COLUMN_EXTRACTOR: 120,
     COLUMN_FUEL: 120,
+    COLUMN_MODE: 130,
     COLUMN_INPUTS: 170,
     COLUMN_OUTPUTS: 170,
     COLUMN_LIMITING: 135,
@@ -233,6 +242,8 @@ class NodeTableModel(QAbstractTableModel):
             return base | Qt.ItemFlag.ItemIsEditable
         if index.column() == COLUMN_FUEL and isinstance(node, GeneratorNode):
             return base | Qt.ItemFlag.ItemIsEditable
+        if index.column() == COLUMN_MODE and isinstance(node, SplitterNode):
+            return base | Qt.ItemFlag.ItemIsEditable
         return base
 
     def data(self, index: Index, role: int = int(Qt.ItemDataRole.DisplayRole)) -> Any:
@@ -254,6 +265,8 @@ class NodeTableModel(QAbstractTableModel):
             return node.extractor_class if isinstance(node, ResourceNode) else None
         if role == Qt.ItemDataRole.EditRole and column == COLUMN_FUEL:
             return node.fuel_class if isinstance(node, GeneratorNode) else None
+        if role == Qt.ItemDataRole.EditRole and column == COLUMN_MODE:
+            return node.mode.value if isinstance(node, SplitterNode) else None
         if role == _ROLE_CHOICES:
             return self._choices(node, column)
         if role == _ROLE_NODE_ID:
@@ -288,6 +301,8 @@ class NodeTableModel(QAbstractTableModel):
                 if not isinstance(node, GeneratorNode):
                     return "—"
                 return self._item_name(node.fuel_class)
+            case _ if column == COLUMN_MODE:
+                return SPLITTER_MODE_LABELS[node.mode] if isinstance(node, SplitterNode) else "—"
             case _ if column == COLUMN_INPUTS:
                 if solution is None:
                     return "—"
@@ -319,6 +334,8 @@ class NodeTableModel(QAbstractTableModel):
         """What a cell of this column accepts, for the delegate's combo box."""
         if isinstance(node, GeneratorNode) and column == COLUMN_FUEL:
             return fuel_choices(self.document.game_data, node.generator_class)
+        if isinstance(node, SplitterNode) and column == COLUMN_MODE:
+            return [(mode.value, label) for mode, label in SPLITTER_MODE_LABELS.items()]
         if not isinstance(node, ResourceNode):
             return []
         if column == COLUMN_PURITY:
@@ -393,6 +410,8 @@ class NodeTableModel(QAbstractTableModel):
             return self._through(edits.set_extractor(self.document, node.id, str(value)))
         if index.column() == COLUMN_FUEL:
             return self._through(edits.set_fuel(self.document, node.id, str(value)))
+        if index.column() == COLUMN_MODE:
+            return self._through(edits.set_splitter_mode(self.document, node.id, str(value)))
         if index.column() != COLUMN_QUANTITY:
             return False
         return self._through(edits.set_quantity(self.document, node.id, _number(value)))
@@ -507,9 +526,9 @@ class NodeTablePanel(QWidget):
         # given room and the rest scroll, rather than every column being unreadable.
         for column, width in COLUMN_WIDTHS.items():
             self.view.setColumnWidth(column, width)
-        # Purity, extractor and fuel are chosen from a list, never typed.
+        # Purity, extractor, fuel and mode are chosen from a list, never typed.
         self.choice_delegate = ChoiceDelegate(self.view)
-        for column in (COLUMN_PURITY, COLUMN_EXTRACTOR, COLUMN_FUEL):
+        for column in (COLUMN_PURITY, COLUMN_EXTRACTOR, COLUMN_FUEL, COLUMN_MODE):
             self.view.setItemDelegateForColumn(column, self.choice_delegate)
         self.view.selectionModel().selectionChanged.connect(self._announce_selection)
 

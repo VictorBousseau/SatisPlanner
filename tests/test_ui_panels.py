@@ -14,13 +14,13 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
-from satisplanner.core.graph import MachineNode, StorageNode
-from satisplanner.core.models import GameData
+from satisplanner.core.graph import MachineNode, SplitterNode, StorageNode
+from satisplanner.core.models import GameData, SplitterMode
 from satisplanner.core.results import DiagnosticCode, Severity
 from satisplanner.data import factory_file
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry
 from satisplanner.ui.main_window import MainWindow
-from satisplanner.ui.table_panel import COLUMN_LABEL, COLUMN_QUANTITY
+from satisplanner.ui.table_panel import COLUMN_LABEL, COLUMN_MODE, COLUMN_QUANTITY
 from tests.conftest import load_graph, temporary_settings
 
 
@@ -682,3 +682,40 @@ def test_a_node_dragged_in_one_go_is_one_undo_step(window: MainWindow) -> None:
     assert window.document.graph.node(node_id).position != origin
     window.document.undo_stack.undo()
     assert window.document.graph.node(node_id).position == origin
+
+
+def test_the_mode_column_edits_through_the_same_door(window: MainWindow) -> None:
+    """A combo in the table, the same delegate as the fuel, the same edit function.
+
+    The row is found by identifier and the column by name: a table that grew a
+    column in the middle should not make this test edit the one next door.
+    """
+    window.document.reset(load_graph("byproduct_routing"))
+    model = window.table_panel.model
+    row = model.row_of("tri")
+    assert row is not None
+    cell = model.index(row, COLUMN_MODE)
+
+    assert model.data(cell, int(Qt.ItemDataRole.DisplayRole)) == "Programmable"
+    assert model.flags(cell) & Qt.ItemFlag.ItemIsEditable
+    assert ("smart", "Intelligent") in model.data(cell, int(Qt.ItemDataRole.UserRole) + 1)
+
+    assert model.setData(cell, "standard", int(Qt.ItemDataRole.EditRole))
+    node = window.document.graph.node("tri")
+    assert isinstance(node, SplitterNode)
+    assert node.mode is SplitterMode.STANDARD
+    assert node.filters == {}, "repasser en standard efface ce qui était écrit"
+
+    # And it went on the undo stack like every other edit in this application.
+    window.document.undo_stack.undo()
+    node = window.document.graph.node("tri")
+    assert isinstance(node, SplitterNode)
+    assert node.mode is SplitterMode.PROGRAMMABLE
+
+
+def test_a_node_without_a_mode_shows_a_dash(window: MainWindow) -> None:
+    window.document.reset(load_graph("byproduct_routing"))
+    model = window.table_panel.model
+    row = model.row_of("recyclage")
+    assert row is not None
+    assert model.data(model.index(row, COLUMN_MODE), int(Qt.ItemDataRole.DisplayRole)) == "—"
