@@ -7,6 +7,7 @@ in each layer is what stops the two from drifting apart.
 Qt-free, like everything in ``core``.
 """
 
+import unicodedata
 from typing import Final
 
 from satisplanner.core.models import Item
@@ -92,3 +93,18 @@ def duration(minutes: float) -> str:
     if minutes < _MINUTES_PER_HOUR:
         return f"{number(minutes)} min"
     return f"{number(minutes / _MINUTES_PER_HOUR)} h"
+
+
+def of(name: str) -> str:
+    """``de X`` or ``d'X``, whichever French wants in front of this word.
+
+    Six lines rather than a sentence that reads "de Ordinateur". The rule is the
+    ordinary one -- elision before a vowel and before a mute h -- and the list of
+    aspirated h words the game uses is empty, so there is nothing to except.
+    """
+    stripped = "".join(
+        char
+        for char in unicodedata.normalize("NFKD", name[:1].casefold())
+        if not unicodedata.combining(char)
+    )
+    return f"d'{name}" if stripped in "aeiouyh" else f"de {name}"

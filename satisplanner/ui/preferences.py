@@ -62,6 +62,9 @@ KEY_RECENT_FILES: Final = "recent_files"
 KEY_DEPLOYED: Final = "deployed_rendering"
 KEY_DEPLOYED_CEILING: Final = "deployed_ceiling"
 KEY_ITEM_PALETTE: Final = "item_palette"
+# Recipes the generator must use, by item. A preference and not a document:
+# somebody who always smelts iron the same way says so once, not once per file.
+KEY_RECIPE_CHOICES: Final = "recipe_choices"
 
 DEFAULT_MAX_RECENT: Final = 8
 MAX_RECENT_LIMIT: Final = 30
@@ -124,6 +127,19 @@ class Preferences:
     @default_pipe.setter
     def default_pipe(self, class_name: str) -> None:
         self.settings.setValue(KEY_PIPE, class_name)
+
+    @property
+    def recipe_choices(self) -> dict[str, str]:
+        """Which recipe the generator makes each item with, where it was told."""
+        from satisplanner.ui.generate import decode_choices
+
+        return decode_choices(self._string(KEY_RECIPE_CHOICES))
+
+    @recipe_choices.setter
+    def recipe_choices(self, choices: dict[str, str]) -> None:
+        from satisplanner.ui.generate import encode_choices
+
+        self.settings.setValue(KEY_RECIPE_CHOICES, encode_choices(choices))
 
     @property
     def icon_directory(self) -> Path | None:

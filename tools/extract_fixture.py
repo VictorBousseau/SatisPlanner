@@ -89,6 +89,22 @@ KEEP: Final[frozenset[str]] = frozenset(
         # not pipes, so a byproduct routing test needs a byproduct on a belt.
         "Recipe_LiquidFuel_C",
         "Recipe_Computer_C",
+        # -- the heavy modular frame's chain, seven levels deep. It is the target
+        # the generator is cross-checked on: a shallow chain would not exercise
+        # the sharing of an intermediate between two branches.
+        "Desc_Stone_C",
+        "Desc_Cement_C",
+        "Desc_SteelPipe_C",
+        "Desc_SteelPlate_C",
+        "Desc_SteelPlateReinforced_C",
+        "Desc_ModularFrame_C",
+        "Desc_ModularFrameHeavy_C",
+        "Recipe_Concrete_C",
+        "Recipe_SteelPipe_C",
+        "Recipe_SteelBeam_C",
+        "Recipe_EncasedIndustrialBeam_C",
+        "Recipe_ModularFrame_C",
+        "Recipe_ModularFrameHeavy_C",
         "Recipe_Cable_C",
         "Recipe_Wire_C",
         "Recipe_CircuitBoard_C",

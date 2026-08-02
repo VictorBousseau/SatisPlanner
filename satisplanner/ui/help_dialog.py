@@ -127,6 +127,17 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "il partage également entre ses branches et il est compté dans la liste de "
     "courses. Une entrée et une sortie d'usine sont la frontière du modèle et pas "
     "des bâtiments : elles n'ont pas de limite.",
+    "<b>Générer une usine</b> développe une cible — « deux cadres modulaires "
+    "lourds par minute » — en machines, lignes et raccords, par la recette "
+    "standard sauf là où vous en imposez une autre. Deux variantes : ratios "
+    "exacts, avec des machines en nombre décimal, ou arrondi au bâtiment "
+    "entier, constructible tel quel, avec un conteneur là où l'arrondi crée "
+    "un surplus. Ce qui en sort est une usine ordinaire, modifiable "
+    "immédiatement.",
+    "Ce que le générateur ne peut pas savoir, il le dit : <b>les gisements sont "
+    "posés en pureté normale avec le premier extracteur venu</b>, parce que ce "
+    "qui se trouve sur votre carte n'est écrit nulle part dans les données du "
+    "jeu. Réglez la pureté et l'extracteur, le nombre suivra.",
     "Un répartiteur se règle : <b>standard</b>, <b>intelligent</b> (une branche "
     "réglée) ou <b>programmable</b> (toutes). Le seul réglage qui déplace des "
     "chiffres est <b>« surplus »</b> : cette branche ne prend que ce dont les "

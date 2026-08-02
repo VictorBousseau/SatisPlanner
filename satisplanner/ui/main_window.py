@@ -61,6 +61,7 @@ from satisplanner.core import formatting, interface
 from satisplanner.core.graph import SCHEMA_VERSION as DOCUMENT_SCHEMA_VERSION
 from satisplanner.core.graph import FactoryGraph
 from satisplanner.core.models import GameData
+from satisplanner.core.planner import PlanError
 from satisplanner.core.results import FactoryReport, Severity
 from satisplanner.data import db, factory_file, module_file
 from satisplanner.data.factory_file import FILE_FILTER, FILE_SUFFIX, FactoryFileError
@@ -72,6 +73,7 @@ from satisplanner.ui.catalogue import EntryKind, PaletteEntry, build_entries
 from satisplanner.ui.diagnostics_panel import DiagnosticsPanel
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.document_tab import DocumentTab
+from satisplanner.ui.generate import GenerateDialog
 from satisplanner.ui.help_dialog import HelpDialog, shortcut_rows
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.item_card import ItemCard
@@ -445,6 +447,7 @@ class MainWindow(QMainWindow):
         self._build_file_actions()
         self._build_edit_actions()
         self._build_view_actions()
+        self._build_generator_actions()
         self._build_module_actions()
         self._build_help_actions()
 
@@ -616,6 +619,39 @@ class MainWindow(QMainWindow):
         # Actions reachable only by their shortcut still have to belong to a widget
         # that is visible, or Qt never delivers the key.
         self.addAction(self.search_action)
+
+    def _build_generator_actions(self) -> None:
+        self.generate_action = _action(
+            self, "Générer une usine depuis un objectif...", "Ctrl+G", self.generate_factory
+        )
+        menu = self.menuBar().addMenu("&Générer")
+        self.menus.append(menu)
+        menu.addAction(self.generate_action)
+
+    def generate_factory(self) -> DocumentTab | None:
+        """Ask for a target and open the factory it implies, in a tab of its own.
+
+        In its own tab because generating is not editing: the factory the user was
+        looking at stays exactly where it was, and the generated one arrives as an
+        ordinary document -- savable, editable, undoable -- rather than as anything
+        that would have to be turned back into one.
+        """
+        dialog = GenerateDialog(self.game_data, self.preferences, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        try:
+            graph, notes = dialog.generate()
+        except PlanError as exc:
+            QMessageBox.warning(self, "Objectif irréalisable", str(exc))
+            return None
+        tab = self._reusable_tab() or self.new_tab()
+        self.select_tab(tab)
+        tab.document.adopt(graph)
+        tab.document.solve_now()
+        self.refresh_title()
+        QMessageBox.information(self, "Usine générée", _paragraphs(notes))
+        self.statusBar().showMessage(notes[0], 8000)
+        return tab
 
     def _build_module_actions(self) -> None:
         self.save_module_action = _action(
@@ -1266,6 +1302,11 @@ class MainWindow(QMainWindow):
             "Coffee Stain Studios. Aucun logo ni élément de marque du jeu n'est "
             "reproduit dans cette application.",
         )
+
+
+def _paragraphs(lines: list[str]) -> str:
+    """The generation report as one message, a blank line between each finding."""
+    return "\n\n".join(lines)
 
 
 def _action(

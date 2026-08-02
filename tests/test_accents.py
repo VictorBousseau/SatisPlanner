@@ -309,6 +309,8 @@ IDENTIFIERS: dict[str, frozenset[str]] = {
     # table shows them. Renaming them would change what a new document looks like on
     # disk for no reader's benefit.
     "canvas.py": frozenset({"generateur", "entree", "repartiteur"}),
+    # The generator writes the same prefixes into the factories it produces.
+    "planner.py": frozenset({"entree", "entree-"}),
     # A serialised diagnostic code, read back from reports.
     "results.py": frozenset({"deficit"}),
     # Real files the self-check writes next to the executable.

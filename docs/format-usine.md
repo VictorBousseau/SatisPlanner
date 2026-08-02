@@ -328,6 +328,28 @@ et la nouvelle part.
 
 ---
 
+## 4 bis. Ce qu'une usine générée a de particulier
+
+**Rien.** « Générer une usine depuis un objectif » écrit un `factory.json` comme
+n'importe quel autre : mêmes types de nœuds, mêmes lignes, mêmes raccords, mêmes
+règles de port. Il n'y a pas de champ « généré », pas de mode à quitter, et rien
+dans le fichier ne dit d'où il vient.
+
+Deux choses s'y reconnaissent quand même, et c'est voulu :
+
+- les identifiants viennent du nom français de l'objet — `plaque-de-fer`,
+  `gisement-minerai-de-fer`, `sortie-ordinateur`, `tampon-cable` ;
+- les gisements sont en **pureté normale avec le premier extracteur venu**. Ce
+  n'est pas une estimation, c'est une valeur par défaut : ce qui se trouve sur la
+  carte n'est écrit nulle part dans les données du jeu, et le rapport de génération
+  le dit en toutes lettres.
+
+Les nombres de machines sont **décimaux** dans la variante « ratios exacts » — le
+modèle l'a toujours permis — et entiers dans la variante arrondie, qui pose un
+conteneur partout où l'arrondi produit un surplus, et nulle part ailleurs.
+
+---
+
 ## 5. Ce que l'exemple donne
 
 Résolu contre les données du jeu 1.2 :

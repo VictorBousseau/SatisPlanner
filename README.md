@@ -429,35 +429,43 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
    groupeurs sont donc des nœuds, posés et comptés là où ils sont, coût de construction compris. Un
    partage en arbre réel ne donne des parts égales que lorsque le nombre de lignes se ramène à des
    moitiés et des tiers : 2, 3, 4, 6, 9 oui, 5 et 7 non — et c'est le jeu qui est ainsi.
-10. **Le répartiteur standard est le cas particulier du programmable**, pas une seconde
+   En revanche **les convoyeurs et les tuyaux ne sont pas chiffrés** : leur coût se paie à la
+   longueur, l'outil ne connaît aucune distance, et une estimation tirée d'une longueur moyenne
+   serait un chiffre inventé posé au milieu de chiffres exacts. Un blanc qui se voit vaut mieux
+   qu'un total qu'on croit complet.
+10. **Une usine générée est une usine ordinaire.** « Deux cadres modulaires lourds par minute »
+   se développe récursivement en machines, lignes et raccords, sans solveur et sans optimisation :
+   recette standard partout sauf là où l'utilisateur en impose une autre, et le même résultat à
+   l'octet près à chaque fois. Ce qui en sort se modifie, s'enregistre et s'annule comme le reste.
+   La vérification est un **contrôle croisé** : l'usine est résolue par le moteur, et ce qu'elle
+   consomme en matières premières est confronté au coût brut que la fiche de l'objet calcule par un
+   tout autre chemin. Les deux tombent d'accord à la décimale sur quatre objets de profondeurs
+   différentes.
+11. **Le répartiteur standard est le cas particulier du programmable**, pas une seconde
    implémentation. Un programmable dont toutes les branches sont en « n'importe lequel » rend les
    mêmes chiffres au bit près, par le même code. Ce qui change les débits est le mode **surplus** :
    une branche qui ne prend que ce dont les autres n'ont pas voulu, servie en dernier par le même
    mécanisme que les puits illimités. Une ligne porte un objet, donc filtrer une branche sur autre
    chose la ferme — c'est signalé, pas deviné — et le jeu ne filtre que les convoyeurs : il n'y a
    pas de jonction de pipeline intelligente.
-   En revanche **les convoyeurs et les tuyaux ne sont pas chiffrés** : leur coût se paie à la
-   longueur, l'outil ne connaît aucune distance, et une estimation tirée d'une longueur moyenne
-   serait un chiffre inventé posé au milieu de chiffres exacts. Un blanc qui se voit vaut mieux
-   qu'un total qu'on croit complet.
-10. **La palette est un modèle, pas une liste d'objets.** Construire l'icône de chaque entrée à
+12. **La palette est un modèle, pas une liste d'objets.** Construire l'icône de chaque entrée à
     l'ouverture coûtait neuf millisecondes fois sept cents, soit une fenêtre figée neuf secondes.
     Qt ne demande au modèle que les lignes qu'il s'apprête à peindre.
-11. **Le surcadençage est proportionnel sur le débit et exponentiel sur l'électricité.**
+13. **Le surcadençage est proportionnel sur le débit et exponentiel sur l'électricité.**
     L'exposant est **lu dans les données** (`mPowerConsumptionExponent`), jamais codé en dur : le
     jeu utilise 1,321929 pour tout ce qui produit et 1,6 ailleurs. À 250 %, une machine consomme
     donc environ 3,36 fois son nominal, et exactement 2,5 fois à 200 % — l'exposant vaut log₂(2,5),
     ce qui n'est pas un hasard. Le nombre d'éclats se déduit de `mExtraPotential` ; seul le nombre
     d'emplacements (trois) n'est pas exporté et vit dans `core/constants.py`, avec un test qui
     vérifie que la borne de 250 % reste égale à ce que trois éclats achètent réellement.
-12. **Chaque champ modifiable n'a qu'une implémentation, pas trois qui s'accordent.**
+14. **Chaque champ modifiable n'a qu'une implémentation, pas trois qui s'accordent.**
     `ui/edits.py` porte la validation et la commande ; le menu contextuel, la cellule du tableau
     et le double-clic sur le nœud l'appellent tous les trois. La première version en avait deux,
     écrites pour donner le même résultat et vérifiées par un test — ce qui tient à trois champs
     et se casse au quatrième. Le test correspondant ne compare pas des résultats mais **les
     libellés des commandes empilées par les trois chemins** : c'est la seule chose qui puisse
     prouver qu'il n'y a bien qu'une porte.
-13. **La consommation compte les machines à l'arrêt, la production ne compte que ce qui brûle.**
+15. **La consommation compte les machines à l'arrêt, la production ne compte que ce qui brûle.**
     L'asymétrie est volontaire. Côté consommation c'est un **dimensionnement au pire cas et non
     une mesure du jeu** : les fichiers ne déclarent qu'une consommation nominale par bâtiment et
     aucune consommation de veille — le seul second chiffre du jeu,
@@ -465,13 +473,13 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
     hors périmètre et désigne le bas de la plage d'une recette *en marche*. Inventer une valeur
     réduite serait pire que compter au maximum. Côté production, en revanche, la donnée est sans
     ambiguïté : un générateur sans carburant ne brûle rien et ne produit rien.
-14. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
+16. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
     diagnostic d'erreur ne se traduit pas par un taux réduit, et c'est délibéré : en jeu, un
     déficit ne ralentit pas l'usine, il déclenche une coupure générale jusqu'à intervention
     manuelle. Afficher « tout à zéro » n'apprendrait rien et un bridage partiel serait une
     invention. Le test qui compte n'est pas que les chiffres soient justes, c'est que la même
     usine résolue avec et sans assez de générateurs donne exactement les mêmes débits.
-15. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
+17. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
     coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
     écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
     affichant la même image coûte seize millisecondes.
@@ -484,8 +492,9 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 - Paliers supérieurs : Mélangeur, Convertisseur, Encodeur quantique, Accélérateur de particules,
   aluminium, azote, nucléaire — et le générateur géothermique, qui n'a pas d'intrant et dépend
   d'un emplacement de la carte.
-- **Mode objectif descendant** : « je veux tant d'Ordinateurs par minute », résolu par un solveur
-  linéaire plutôt que par le point fixe actuel.
+- **Choix automatique des recettes alternatives** dans le mode objectif : le générateur suit la
+  recette standard sauf indication contraire, et choisir la meilleure sous contrainte demande un
+  programme linéaire, donc une dépendance.
 - **Répartiteur intelligent à trois sorties filtrées** : le jeu en règle les trois, une par objet,
   et le programmable en accepte plusieurs par sortie. Le modèle actuel n'en règle qu'une pour
   l'intelligent et une valeur par sortie pour le programmable, ce qui est plus restrictif.
