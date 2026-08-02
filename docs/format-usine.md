@@ -24,10 +24,10 @@ Un `.sfp` est une **archive ZIP** contenant jusqu'à trois membres :
 
 ```json
 {
-  "application_version": "1.1.0",
+  "application_version": "2.0.0",
   "game_version": "1.2",
-  "schema_version": 4,
-  "saved_at": "2026-07-26T18:42:11+00:00"
+  "schema_version": 6,
+  "saved_at": "2026-08-02T18:42:11+00:00"
 }
 ```
 
@@ -35,6 +35,23 @@ Un `.sfp` est une **archive ZIP** contenant jusqu'à trois membres :
 par quelles conversions le document doit passer. Un fichier annonçant une version
 **supérieure** à celle que connaît la build est refusé avec une phrase, jamais
 ouvert de travers.
+
+Le schéma courant est le **6**. Les versions successives, et ce que chacune a
+ajouté :
+
+| Schéma | Ce qui change | Conversion à l'ouverture |
+| --- | --- | --- |
+| 1 | l'origine | — |
+| 2 | la cadence des machines et des extracteurs | rien à faire : la cadence prend 100 % |
+| 3 | le nœud `generator` apparaît | rien à faire : un document d'avant n'en a pas |
+| 4 | `show_deployed` par nœud | rien à faire |
+| 5 | les répartiteurs et les groupeurs deviennent des nœuds | **oui** : les raccords que la disposition supposait sont matérialisés |
+| 6 | le mode d'un répartiteur et les filtres de ses branches | rien à faire : tout répartiteur ancien est un `standard` |
+
+Un numéro est incrémenté même quand il n'y a rien à convertir. C'est le seul moyen
+qu'une build ancienne refuse un fichier récent par une phrase plutôt qu'en ignorant
+en silence un champ qu'elle ne connaît pas — un répartiteur en mode « surplus » lu
+par une build du schéma 5 afficherait des chiffres faux sans un mot.
 
 Il existe aussi un **code de partage**, qui transporte exactement le même
 `factory.json` sous forme de texte : le préfixe `SFP1:` suivi du JSON compressé et
@@ -314,10 +331,12 @@ La capacité du tier est une **contrainte, pas une remarque** : un Mk.1 aliment�
 480/min en transporte 60 et refoule le reste en amont.
 
 **Une ligne de trop se raccorde par un répartiteur, qui est un nœud comme un
-autre.** Dans l'exemple les 240 lingots partent en trois lignes, et il n'y a aucun
-raccord : le nœud compte huit fonderies, donc huit sorties, et trois lignes y
-tiennent largement. Il en faudrait un si la même usine était dessinée avec deux
-fonderies.
+autre.** L'exemple montre les deux cas côte à côte. Les 240 lingots de fer partent
+en trois lignes **sans aucun raccord** : le nœud compte huit fonderies, donc huit
+sorties, et trois lignes y tiennent largement. La fonderie de cuivre, elle, est
+seule : elle n'a qu'une sortie, et ses deux lignes passent donc par un répartiteur,
+qui leur donne 15 et 15. Ses deux gisements se rejoignent symétriquement par un
+groupeur, parce qu'une fonderie seule n'a aussi qu'une entrée.
 
 Un fichier écrit avant le schéma 5 est converti à l'ouverture : les raccords que sa
 disposition supposait sont matérialisés, les lignes reprises à travers eux. Un
@@ -356,13 +375,16 @@ Résolu contre les données du jeu 1.2 :
 
 | | |
 | --- | --- |
-| Minerai consommé | 240 minerai de fer/min, 30 charbon/min |
+| Solides bruts consommés | 240 minerai de fer/min, 30 minerai de cuivre/min, 30 charbon/min |
 | Fluides | 90 m³ d'eau/min |
-| Sorties | 80 lingots/min |
-| Rejets assumés | 80 lingots/min |
-| Électricité | 60,673 MW consommés, 150 MW produits |
-| Liste de courses | 8 fonderies, 1 Foreuse Mk.2, 1 pompe, 2 centrales, 1 conteneur, aucun raccord |
+| Sorties | 80 lingots de fer/min, 30 lingots de cuivre/min |
+| Rejets assumés | 80 lingots de fer/min |
+| Électricité | 68,673 MW consommés, 150 MW produits |
+| Liste de courses | 9 fonderies, 1 Foreuse Mk.2, 2 Foreuses Mk.1, 1 pompe, 2 centrales, 1 conteneur, 1 répartiteur, 1 groupeur |
 | Diagnostic | tampon en remplissage, +80/min, saturé en 1 h |
+
+Tous les nœuds tournent à 100 % et rien n'est en erreur : c'est ce que la suite de
+tests vérifie à chaque exécution, pas seulement que le fichier se charge.
 
 L'électricité est un **compteur, pas une contrainte** : consommation et production
 sont affichées côte à côte, et un déficit ne bride aucun débit.
@@ -380,3 +402,40 @@ Les noms de classes (`Desc_*`, `Build_*`, `Recipe_*`) sont ceux du jeu. Ceux que
 la base embarquée ne connaît pas font tomber le nœud concerné, avec un avertissement
 qui les nomme et un document marqué comme **partiel** — l'application demande alors
 confirmation avant de réécrire par-dessus le fichier d'origine.
+
+---
+
+## 7. Le module : le `.sfm`
+
+Un module est un morceau d'usine rangé sous un nom. La bibliothèque vit dans
+`%LOCALAPPDATA%\SatisPlanner\modules\`, **un fichier par module**, en JSON UTF-8 :
+
+```json
+{
+  "module_version": 1,
+  "name": "Plaque de fer 40/min",
+  "description": "Deux constructeurs sur un banc de fonderies",
+  "saved_at": "2026-08-02T18:42:11+00:00",
+  "inputs": { "Desc_IronIngot_C": 60.0 },
+  "outputs": { "Desc_IronPlate_C": 40.0 },
+  "thumbnail": null,
+  "code": "SFP1:eJx..."
+}
+```
+
+**La charge utile est un code de partage**, pas un second format. C'est tout le
+choix de conception : le code sait déjà se comprimer, refuser une version future et
+— par `migrate()` — relire un document écrit par une build ancienne. Un module
+enregistré aujourd'hui continuera donc de s'ouvrir quand un type de nœud sera
+ajouté, sans que la bibliothèque ait à en entendre parler.
+
+`module_version` est la version de l'**enveloppe** — les champs autour du code — et
+non du document à l'intérieur, qui porte la sienne. Elle vaut 1 et n'a pas bougé.
+
+`inputs` et `outputs` sont une **étiquette**, calculée une fois à l'enregistrement
+en résolvant le module seul, entrées servies et sorties écoulées. Sans quoi un
+module pris au milieu d'une chaîne s'annoncerait « produit zéro ». Inséré dans une
+usine qui l'affame, il en fera moins.
+
+Un fichier illisible coûte **un** module et une phrase qui le nomme, jamais la
+bibliothèque : la lecture continue au fichier suivant.

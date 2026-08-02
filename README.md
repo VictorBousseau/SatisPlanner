@@ -37,8 +37,14 @@ Autant le dire avant d'ouvrir la fenêtre.
   quand le meilleur convoyeur plafonne à 1200 — mais ils décident du partage.
 - **Hors périmètre V1** : Mélangeur, Convertisseur, Encodeur quantique, Accélérateur de
   particules, nucléaire, extracteur de puits de ressources, Clean Pipeline.
-- **Le nombre de machines est une saisie**, pas un résultat. « Je veux 5 Ordinateurs par minute,
-  dimensionne l'usine » est le mode descendant, et il relève de la V2.
+- **Le nombre de machines est une saisie**, pas un résultat — sauf si vous demandez l'inverse.
+  « Je veux 2 Cadres modulaires lourds par minute » est le **mode objectif**, et il construit
+  l'usine ; mais il n'**optimise** rien. Il suit la recette standard, ou celle que vous imposez,
+  sans jamais chercher la meilleure combinaison d'alternatives : cela demanderait un programme
+  linéaire, donc une dépendance, et c'est de la V2.
+- **Il ne connaît pas votre carte.** Une usine générée pose ses gisements en pureté normale avec
+  le premier extracteur venu, et le dit. Rien dans les fichiers du jeu ne sait où sont vos nœuds
+  ni ce qu'ils valent.
 
 ## Installation
 
@@ -113,6 +119,23 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
   raccorde par tuyauterie et subit les mêmes contraintes de capacité et de contre-pression que
   n'importe quelle autre. Les débits sont déduits de la puissance produite et de la valeur
   énergétique de l'item, jamais codés en dur.
+- **Raccords** : un **répartiteur** et un **groupeur** se posent depuis la section « Raccords » de
+  la palette. Un répartiteur prend une ligne et en ressort jusqu'à trois, un groupeur fait
+  l'inverse ; ils ne brident rien et ne gardent rien, mais ils décident du partage. Le **mode** se
+  lit sur le nœud sans un clic et se change par clic droit ou par la colonne du tableau :
+  **standard**, **intelligent** (une branche réglée) ou **programmable** (toutes). Le seul réglage
+  qui déplace des chiffres est **« surplus »** — cette branche ne prend que ce dont les autres
+  n'ont pas voulu — parce qu'une ligne ne porte qu'un objet : filtrer une branche sur ce qu'elle
+  transporte déjà ne change rien, et la filtrer sur autre chose la ferme. Les trois bâtiments ne
+  coûtent pas la même chose, et les matériaux de construction suivent.
+- **Générer une usine** (`Ctrl+G`) : « 2 Cadres modulaires lourds par minute » et l'usine se
+  développe seule, dans un onglet neuf — machines, lignes, raccords, gisements et sorties. Deux
+  variantes : **ratios exacts**, avec des machines en nombre décimal et tout à 100 %, ou **arrondi
+  au bâtiment entier**, constructible tel quel, avec un conteneur là où l'arrondi crée un surplus.
+  Une recette peut être **imposée par objet** — c'est là que les alternatives entrent, par choix et
+  non par calcul — et ce choix est retenu d'une session à l'autre. Ce qui en sort est une usine
+  ordinaire : modifiable, enregistrable, annulable. Le rapport de génération dit en tête ce qui
+  reste à régler, à commencer par la pureté des gisements.
 - **Édition en place** : **double-clic sur une valeur affichée sur un nœud** — nombre de machines,
   cadence, pureté, extracteur, carburant, débit d'un apport externe, stock d'un tampon — ou sur une
   ligne pour son tier. Entrée valide, Échap annule, une valeur hors domaine est refusée **sans être
@@ -179,7 +202,9 @@ Une usine s'enregistre en `.sfp` : une archive ZIP contenant `factory.json`, un 
 
 Le format est décrit champ par champ dans [`docs/format-usine.md`](docs/format-usine.md), avec un
 exemple complet et fonctionnel — [`docs/exemple-usine.json`](docs/exemple-usine.json), couvrant les
-sept types de nœuds — que la suite de tests charge, pour qu'il ne puisse pas se périmer en silence.
+**neuf** types de nœuds — que la suite de tests charge, résout et vérifie à 100 % partout, pour
+qu'il ne puisse pas se périmer en silence. Le même document décrit aussi le `.sfm` de la
+bibliothèque de modules, dont la charge utile est un code de partage et non un second format.
 
 Le même graphe se partage en une ligne de texte, `SFP1:<base64url(zlib(json))>`, avec « copier le
 code » et « importer depuis un code ». Un code tronqué, corrompu, mal collé ou venu d'une version
@@ -197,6 +222,15 @@ la première fois avec la cadence : un fichier de schéma 1 s'ouvre tel quel, la
 valeur par défaut de 100 %, et le document est noté comme converti. Le numéro de schéma a été
 incrémenté malgré l'absence de conversion à faire, pour qu'une V1 refuse un fichier V1.1 par une
 phrase plutôt que par une erreur de validation.
+
+Le schéma courant est le **6**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
+premier qui puisse déplacer un chiffre : les répartiteurs qu'une disposition supposait sont
+matérialisés, les lignes reprises à travers eux, et un partage en 5 ou en 7 cesse d'être égal
+parce qu'il ne l'est pas dans le jeu. Le relevé des vingt-et-une usines de référence, avec
+l'ancienne et la nouvelle part de chaque branche touchée, est dans
+[`docs/migration-repartiteurs.md`](docs/migration-repartiteurs.md). Le passage du 5 au 6 ne fait
+rien, et c'est le propos : un répartiteur écrit avant les modes est un `standard`, et un standard
+est le cas du programmable où rien n'est écrit sur aucune branche.
 
 Exports : PNG du canvas, PDF avec le canvas en première page et, au choix, les totaux et les
 diagnostics en seconde.

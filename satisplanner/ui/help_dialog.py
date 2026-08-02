@@ -99,6 +99,17 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "sélectionne et centre le nœud ou la ligne concernée",
     ),
     (
+        "Générer ▸ Générer une usine depuis un objectif",
+        "développe « tant de cet objet par minute » en une usine entière, dans un "
+        "onglet neuf. Une recette imposée par objet est retenue d'une fois sur "
+        "l'autre ; le rapport dit ce qu'il reste à régler",
+    ),
+    (
+        "Palette, section Raccords",
+        "un répartiteur et un groupeur se posent comme n'importe quel autre nœud, "
+        "et leur mode se règle par clic droit ou par la colonne du tableau",
+    ),
+    (
         "Modules ▸ Enregistrer la sélection comme module",
         "range le morceau sélectionné dans la bibliothèque, avec ses débits d'entrée "
         "et de sortie calculés sur le module seul. Depuis un onglet ouvert sur un "
@@ -121,12 +132,33 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "La cadence multiplie le débit à l'identique et l'électricité en loi de "
     "puissance : à 250 %, une machine produit 2,5 fois plus et consomme environ "
     "3,36 fois plus.",
+    "<b>Le nombre de machines est ce que vous saisissez</b>, jamais ce que l'outil "
+    "décide. En regard, il vous dit combien sont réellement utiles compte tenu de "
+    "ce qui arrive, et l'écart entre les deux. Pour prendre le problème par "
+    "l'autre bout — « je veux tant par minute » —, c'est <b>Générer une usine</b>.",
+    "<b>Un sous-produit sans issue arrête la machine entièrement.</b> Une recette "
+    "qui produit deux choses doit voir partir les deux : sans quoi le nœud tombe à "
+    "0 %, comme en jeu où la machine se bouche. Ce blocage se juge sur la "
+    "topologie et non sur le débit — une sortie qui n'absorbe qu'une partie ne "
+    "bloque pas, elle exerce une contre-pression et le taux descend.",
+    "<b>La capacité d'une ligne est une contrainte, pas une remarque.</b> Un "
+    "convoyeur Mk.1 alimenté à 480/min en transporte 60 et refoule le reste en "
+    "amont. Le diagnostic donne les deux chiffres — porté et demandé — parce que "
+    "c'est le second qui nomme le tier à installer, et il est calculé par une "
+    "résolution jumelle sans plafond, pas estimé.",
     "<b>Un port porte une ligne</b>, et un nœud a autant de ports qu'il a de "
     "bâtiments : huit fonderies ont huit sorties, une seule en a une. Pour en "
     "faire partir davantage, posez un répartiteur — c'est un nœud comme un autre, "
     "il partage également entre ses branches et il est compté dans la liste de "
     "courses. Une entrée et une sortie d'usine sont la frontière du modèle et pas "
     "des bâtiments : elles n'ont pas de limite.",
+    "<b>Le partage est max-min, pas proportionnel.</b> Chaque branche reçoit une "
+    "part égale, et ce qu'une branche saturée ne peut pas prendre est repartagé "
+    "également entre les autres : 60 lingots pour deux consommateurs qui en "
+    "demandent 30 et 60 donnent 30 et 30 — le petit est servi entièrement — et non "
+    "20 et 40, qui feraient boiter les deux. Et un arbre réel ne donne des parts "
+    "égales que lorsque le nombre de branches se ramène à des moitiés et des "
+    "tiers : <b>2, 3, 4, 6 et 9 oui, 5 et 7 non</b>. C'est le jeu qui est ainsi.",
     "<b>Générer une usine</b> développe une cible — « deux cadres modulaires "
     "lourds par minute » — en machines, lignes et raccords, par la recette "
     "standard sauf là où vous en imposez une autre. Deux variantes : ratios "

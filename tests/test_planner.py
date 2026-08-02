@@ -29,6 +29,7 @@ from satisplanner.core.graph import (
     port_line_budget,
 )
 from satisplanner.core.models import GameData, Purity
+from satisplanner.core.results import FactoryReport
 
 # Four depths, from a two-step chain to a seven-level one.
 TARGETS: list[tuple[str, float]] = [
@@ -39,7 +40,7 @@ TARGETS: list[tuple[str, float]] = [
 ]
 
 
-def consumed(report: engine.FactoryReport) -> dict[str, float]:
+def consumed(report: FactoryReport) -> dict[str, float]:
     """Raw resources the solved factory really eats, solids and fluids together."""
     return {
         name: round(rate, 6)

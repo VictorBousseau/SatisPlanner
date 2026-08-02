@@ -91,6 +91,87 @@
       ],
       "item_class": "Desc_IronIngot_C",
       "is_sink": true
+    },
+    {
+      "kind": "resource",
+      "id": "gisement2",
+      "label": "Gisement de cuivre est",
+      "position": [
+        -640.0,
+        -560.0
+      ],
+      "item_class": "Desc_OreCopper_C",
+      "extractor_class": "Build_MinerMk1_C",
+      "purity": "impure",
+      "count": 1.0,
+      "clock_speed": 0.5
+    },
+    {
+      "kind": "resource",
+      "id": "gisement3",
+      "label": "Gisement de cuivre ouest",
+      "position": [
+        -640.0,
+        -740.0
+      ],
+      "item_class": "Desc_OreCopper_C",
+      "extractor_class": "Build_MinerMk1_C",
+      "purity": "impure",
+      "count": 1.0,
+      "clock_speed": 0.5
+    },
+    {
+      "kind": "merger",
+      "id": "groupeur1",
+      "position": [
+        -400.0,
+        -640.0
+      ],
+      "item_class": null
+    },
+    {
+      "kind": "machine",
+      "id": "machine2",
+      "position": [
+        -240.0,
+        -640.0
+      ],
+      "recipe_class": "Recipe_IngotCopper_C",
+      "machine_count": 1.0,
+      "clock_speed": 1.0
+    },
+    {
+      "kind": "splitter",
+      "id": "repartiteur1",
+      "position": [
+        160.0,
+        -640.0
+      ],
+      "item_class": null,
+      "mode": "standard",
+      "filters": {}
+    },
+    {
+      "kind": "output",
+      "id": "sortie2",
+      "label": "Vers l'atelier de fil",
+      "position": [
+        560.0,
+        -740.0
+      ],
+      "item_class": "Desc_CopperIngot_C",
+      "is_sink": false
+    },
+    {
+      "kind": "output",
+      "id": "sortie3",
+      "label": "Vers l'atelier de tole",
+      "position": [
+        560.0,
+        -560.0
+      ],
+      "item_class": "Desc_CopperIngot_C",
+      "is_sink": false
     }
   ],
   "edges": [
@@ -135,6 +216,48 @@
       "target": "generateur1",
       "item_class": "Desc_Water_C",
       "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e7",
+      "source": "gisement2",
+      "target": "groupeur1",
+      "item_class": "Desc_OreCopper_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e8",
+      "source": "gisement3",
+      "target": "groupeur1",
+      "item_class": "Desc_OreCopper_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e9",
+      "source": "groupeur1",
+      "target": "machine2",
+      "item_class": "Desc_OreCopper_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e10",
+      "source": "machine2",
+      "target": "repartiteur1",
+      "item_class": "Desc_CopperIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e11",
+      "source": "repartiteur1",
+      "target": "sortie2",
+      "item_class": "Desc_CopperIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e12",
+      "source": "repartiteur1",
+      "target": "sortie3",
+      "item_class": "Desc_CopperIngot_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
     }
   ]
 }

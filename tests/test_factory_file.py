@@ -16,6 +16,7 @@ from satisplanner.core.graph import (
     FactoryGraph,
     GeneratorNode,
     MachineNode,
+    NodeKind,
     StorageNode,
 )
 from satisplanner.core.models import GameData
@@ -466,7 +467,15 @@ def test_the_documented_example_is_still_a_valid_factory(game_data: GameData) ->
     graph = FactoryGraph.model_validate_json(path.read_text(encoding="utf-8"))
 
     assert graph.schema_version == SCHEMA_VERSION
-    assert len({node.kind for node in graph.nodes}) == 7, "les sept types doivent y être"
+    kinds = {node.kind for node in graph.nodes}
+    assert kinds == set(NodeKind), "les neuf types doivent y être"
     report = engine.solve(graph, game_data)
     assert report.converged
     assert not report.has_errors(), "l'exemple de référence ne doit rien avoir de casse"
+    # The table in ``format-usine.md`` says every node runs at 100 %. A reference
+    # example that quietly settles at 80 % somewhere would teach the wrong thing
+    # about the very rule it exists to show.
+    starved = [
+        solution.node_id for solution in report.nodes if solution.ratio < 1.0 - 1e-9
+    ]
+    assert not starved, f"l'exemple doit tourner à 100 % partout : {starved}"

@@ -83,7 +83,9 @@ def test_the_budget_follows_the_machine_count(game_data: GameData) -> None:
     graph = fed_bank(game_data, 1)
     assert exits(graph, game_data, "bank", 3) == 1
 
-    graph.node("bank").machine_count = 3
+    bank = graph.node("bank")
+    assert isinstance(bank, MachineNode)
+    bank.machine_count = 3
     assert exits(graph, game_data, "bank", 3) == 2, "les deux places libérées, pas une de plus"
     assert len(graph.outgoing("bank")) == 3
 

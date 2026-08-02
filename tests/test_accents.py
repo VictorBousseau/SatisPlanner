@@ -405,6 +405,17 @@ def test_every_source_file_is_utf_8(path: Path) -> None:
 
 DOCUMENTS = ("README.md", "docs/format-usine.md")
 
+# File names in this repository are deliberately ASCII, so a document that links to
+# ``docs/migration-repartiteurs.md`` is not misspelling a French word -- it is naming
+# a path. Stripping paths keeps the check on the prose, which is the whole point of
+# it; anything left outside a path is still read word by word.
+_PATH_LIKE = re.compile(r"[\w./-]+\.(?:md|json|py|ps1|sqlite|sfp|sfm|png|pdf)\b")
+
+
+def prose_of(line: str) -> str:
+    """The line without the file names in it."""
+    return _PATH_LIKE.sub(" ", line)
+
 
 @pytest.mark.parametrize("name", DOCUMENTS)
 def test_the_documentation_is_written_in_french_too(name: str) -> None:
@@ -415,7 +426,7 @@ def test_the_documentation_is_written_in_french_too(name: str) -> None:
     offences = [
         (number, word)
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
-        for word in PATTERN.findall(line)
+        for word in PATTERN.findall(prose_of(line))
     ]
     assert not offences, "\n".join(
         f"  ligne {number} : « {word} » devrait s'écrire « {accented(word)} »"
