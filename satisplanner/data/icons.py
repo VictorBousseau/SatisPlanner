@@ -11,6 +11,8 @@ the UI layer.
 
 import logging
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
@@ -72,3 +74,61 @@ class IconIndex:
 
     def __len__(self) -> int:
         return len(self._by_name)
+
+
+class IconSupply(StrEnum):
+    """Why the index holds what it holds. Three answers, and two of them look alike."""
+
+    # Files were found. Nothing to say beyond how many.
+    PRESENT = "present"
+    # None found, and the application is packaged: this is the ``-NoAssets`` build,
+    # which ships without the game's icons on purpose. Nominal.
+    PUBLISHABLE_BUILD = "publishable_build"
+    # None found, running from sources: the directory is not versioned, so a clone
+    # simply does not carry it. Nominal too -- but for a completely different
+    # reason, and one the user can act on.
+    NOT_EXTRACTED = "not_extracted"
+
+
+@dataclass(frozen=True)
+class IconStatus:
+    """What the icon situation is, in a form both a log line and a dialog can use.
+
+    It exists because "no icons" was one message for two situations, and the two
+    call for opposite reactions. A packaged ``-NoAssets`` build has nothing to fix.
+    A source checkout has an extraction to run, and nothing on screen said so --
+    which is exactly how somebody installs the project on a second machine and
+    concludes the icons are broken.
+    """
+
+    indexed: int
+    supply: IconSupply
+    roots: tuple[Path, ...]
+
+    def sentence(self) -> str:
+        """One line of French, suitable for a log, a dialog or the self-check."""
+        match self.supply:
+            case IconSupply.PRESENT:
+                return f"{self.indexed} fichier(s) d'icône indexé(s)"
+            case IconSupply.PUBLISHABLE_BUILD:
+                return (
+                    "aucune icône du jeu embarquée (variante publiable) : "
+                    "tout est dessiné, ce qui est le fonctionnement nominal"
+                )
+            case IconSupply.NOT_EXTRACTED:
+                return (
+                    "aucune icône : le dossier n'est pas versionné, donc un clone ne "
+                    "l'emporte pas. Tout est dessiné, ce qui fonctionne ; pour avoir "
+                    "les icônes du jeu, voir la procédure FModel du README"
+                )
+
+
+def status(index: IconIndex) -> IconStatus:
+    """Read the situation off the index and off how the application was started."""
+    if len(index):
+        supply = IconSupply.PRESENT
+    elif paths.is_frozen():
+        supply = IconSupply.PUBLISHABLE_BUILD
+    else:
+        supply = IconSupply.NOT_EXTRACTED
+    return IconStatus(indexed=len(index), supply=supply, roots=index.roots)

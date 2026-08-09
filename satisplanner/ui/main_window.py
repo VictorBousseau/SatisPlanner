@@ -1363,7 +1363,11 @@ class MainWindow(QMainWindow):
             f"<b>SatisPlanner {__version__}</b><br>"
             f"Données de jeu : Satisfactory {db.GAME_VERSION} "
             f"(schéma de base {db.SCHEMA_VERSION}, schéma de fichier "
-            f"{DOCUMENT_SCHEMA_VERSION})<br><br>"
+            f"{DOCUMENT_SCHEMA_VERSION})<br>"
+            # Said here because nothing else on screen distinguishes "I have no
+            # icons" from "the generated fallback is working as designed", and
+            # somebody installing on a second machine reads the second as the first.
+            f"Icônes : {self.icons.status.sentence()}<br><br>"
             "Planificateur d'usines théoriques. L'outil raisonne en <b>débits</b>, pas en "
             "géométrie 3D : ni distances, ni élévations, ni hauteur de refoulement des "
             f"pompes.<br><br>{journal}"

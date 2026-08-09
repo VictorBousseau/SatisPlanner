@@ -27,6 +27,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from satisplanner import __version__, paths
 from satisplanner.data import db, factory_file
+from satisplanner.data.icons import IconSupply
 from satisplanner.ui.catalogue import EntryKind
 from satisplanner.ui.main_window import MainWindow
 
@@ -100,14 +101,23 @@ class SelfCheck:
         return f"{len(entries)} entrée(s) affichée(s) sur {len(self.window.entries)}"
 
     def _icons(self) -> str:
-        """Both backends: files if there are any, and the drawing that never fails."""
+        """Both backends: files if there are any, and the drawing that never fails.
+
+        The empty case used to read "variante publiable" whatever the truth, which
+        is wrong and misleading on an installation from sources -- there is no
+        variant there, only a directory that a clone does not carry. The two are
+        told apart by :func:`satisplanner.data.icons.status`, and this line just
+        reports what it says.
+        """
         provider = self.window.icons
         drawn = provider.generate("Desc_Verification_C", "Vérification")
         assert not drawn.isNull(), "le repli généré ne dessine rien"
-        indexed = len(provider.index)
-        if indexed:
-            return f"{indexed} fichier(s) indexé(s), repli généré opérationnel"
-        return "aucun fichier d'icône (variante publiable) : tout est dessiné, ce qui est normal"
+        status = provider.status
+        if status.supply is IconSupply.PRESENT:
+            return f"{status.indexed} fichier(s) indexé(s), repli généré opérationnel"
+        # No suffix: the sentence already says everything is drawn, and repeating it
+        # would make the one line somebody reads twice as long as it needs to be.
+        return status.sentence()
 
     def _french(self) -> str:
         """Qt's own strings, which live in a file the packaging can quietly drop.

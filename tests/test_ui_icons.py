@@ -6,11 +6,13 @@ redistributed -- so the fallback is tested as a feature rather than as a safety 
 
 from pathlib import Path
 
+import pytest
 from PySide6.QtGui import QColor, QImage, QPixmap
 from pytestqt.qtbot import QtBot
 
+from satisplanner import paths
 from satisplanner.core.models import GameData
-from satisplanner.data.icons import IconIndex
+from satisplanner.data.icons import IconIndex, IconSupply
 from satisplanner.ui.icon_provider import IconProvider, initials, stable_hue
 
 
@@ -142,3 +144,59 @@ def test_the_generated_pixmap_honours_the_requested_size(qtbot: QtBot) -> None:
     del qtbot
     pixmap: QPixmap = IconProvider(IconIndex(), size=32).generate("X", "Test")
     assert pixmap.deviceIndependentSize().toSize().width() == 32
+
+
+# --------------------------------------------------------------------------- #
+# Saying which of the two "no icons" this is
+# --------------------------------------------------------------------------- #
+
+
+def test_files_found_says_how_many(qtbot: QtBot, tmp_path: Path, game_data: GameData) -> None:
+    del qtbot
+    item = game_data.item("Desc_OreIron_C")
+    assert item.icon_file is not None
+    _write_icon(tmp_path, item.icon_file, QColor("#112233"))
+
+    status = IconProvider(IconIndex([tmp_path])).status
+    assert status.supply is IconSupply.PRESENT
+    assert status.indexed == 1
+    assert "1 fichier" in status.sentence()
+
+
+def test_an_empty_index_from_sources_names_the_clone_and_not_a_variant(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The confusion this lot exists to remove.
+
+    Running from a checkout, "no icons" means the directory is not versioned and a
+    clone did not bring it. Saying "variante publiable" there is simply false --
+    there is no variant, and there is something the user can do about it.
+    """
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    status = IconProvider(IconIndex()).status
+    assert status.supply is IconSupply.NOT_EXTRACTED
+    assert "versionné" in status.sentence()
+    assert "publiable" not in status.sentence()
+    assert "FModel" in status.sentence(), "il faut dire quoi faire, pas seulement quoi"
+
+
+def test_an_empty_index_when_packaged_is_the_publishable_variant(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Packaged with no icons is the ``-NoAssets`` build, and nothing is wrong."""
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    status = IconProvider(IconIndex()).status
+    assert status.supply is IconSupply.PUBLISHABLE_BUILD
+    assert "publiable" in status.sentence()
+    assert "nominal" in status.sentence()
+
+
+def test_the_two_empty_cases_do_not_share_a_sentence(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The property that matters, stated so it cannot regress into one message."""
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    from_sources = IconProvider(IconIndex()).status.sentence()
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    packaged = IconProvider(IconIndex()).status.sentence()
+    assert from_sources != packaged

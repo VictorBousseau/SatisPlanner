@@ -23,6 +23,7 @@ from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from satisplanner.core.models import Building, Item
+from satisplanner.data import icons
 from satisplanner.data.icons import IconIndex, default_icon_roots
 
 logger = logging.getLogger(__name__)
@@ -70,14 +71,31 @@ class IconProvider:
         self.size = size
         self._cache: dict[str, QIcon] = {}
         self._generated: set[str] = set()
+        # Read off the index, and settled once: what is on disk does not change
+        # while the application runs, and a provider built for a test carries the
+        # honest answer for the index it was given.
+        self.status = icons.status(self.index)
 
     @classmethod
     def from_default_roots(
         cls, size: int = ICON_SIZE, user_directory: Path | None = None
     ) -> "IconProvider":
-        """The provider the application runs with: embedded icons, then the user's."""
+        """The provider the application runs with: embedded icons, then the user's.
+
+        The situation is written to the log at ``INFO`` rather than ``DEBUG``, and
+        as a sentence rather than a count. "0 fichier indexé" in a debug line is
+        the same thing the application said when everything was fine, and telling
+        the two apart is the whole point of :func:`icons.status`.
+        """
         provider = cls(IconIndex(default_icon_roots(user_directory)), size)
-        logger.debug("%d fichier(s) d'icône indexé(s)", len(provider.index))
+        provider.status = icons.status(provider.index)
+        logger.info("icônes : %s", provider.status.sentence())
+        if provider.status.supply is icons.IconSupply.NOT_EXTRACTED:
+            logger.warning(
+                "aucun dossier d'icônes : cherché dans %s",
+                ", ".join(str(root) for root in default_icon_roots(user_directory))
+                or "aucun dossier existant",
+            )
         return provider
 
     # ------------------------------------------------------------------ public

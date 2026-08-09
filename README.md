@@ -83,6 +83,38 @@ Vérifications :
 .venv/Scripts/python.exe -m mypy
 ```
 
+### Les icônes n'arrivent pas avec le clone, et c'est voulu
+
+**Après un `git clone`, `satisplanner/resources/icons/` n'existe pas.** Ce n'est pas un
+incident : le dossier est dans le `.gitignore` parce que les icônes appartiennent à Coffee
+Stain Studios et ne sont pas redistribuables. L'application démarre et fonctionne
+normalement — chaque classe sans fichier est dessinée par le repli génératif, qui est un
+mode de fonctionnement nominal — mais les vignettes seront des carrés colorés à initiales.
+
+Pour avoir les icônes du jeu sur une machine, il faut les extraire de **son propre
+exemplaire du jeu**, avec la procédure FModel décrite plus bas, puis déposer l'export dans
+l'un des deux dossiers que l'application indexe :
+
+| Dossier | Ce qu'il sert |
+|---------|---------------|
+| `satisplanner/resources/icons/` | c'est celui-là qui part dans l'exe complet |
+| `%LOCALAPPDATA%\SatisPlanner\icons\` | ou le dossier désigné dans les préférences |
+
+L'arborescence interne n'a aucune importance : l'index est **récursif et par nom de
+fichier**. Gardez la structure que FModel produit.
+
+Compteur de vérification, à la racine du dépôt :
+
+```bash
+.venv\Scripts\python.exe -c 'from satisplanner.data import db; from satisplanner.data.icons import IconIndex, default_icon_roots; g = db.load_game_data_from_file(db.default_database_path()); x = IconIndex(default_icon_roots()); print(len(x), sum(x.resolve(o.icon_file) is None for o in g.items.values()), sum(x.resolve(o.icon_file) is None for o in g.buildings.values()))'
+```
+
+Trois nombres : fichiers indexés, objets au repli, bâtiments au repli. Sur un clone nu,
+`0 195 32`. **Aide ▸ À propos** dit la même chose en une phrase, et le journal l'écrit à
+chaque démarrage — c'est ce qui distingue « je n'ai pas d'icônes » de « le repli
+fonctionne comme prévu », deux situations qui se ressemblent à l'écran et n'appellent pas
+la même réaction.
+
 ## Utilisation
 
 Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
@@ -282,7 +314,21 @@ ont été indexés. Pour savoir lesquels manquent encore, la régénération de 
 .venv/Scripts/python.exe -m satisplanner.data.build --game-dir "C:\...\Satisfactory" --icons-dir "C:\mon\export"
 ```
 
-`satisplanner/resources/icons/` est ignoré par git et n'est **jamais** versionné.
+`satisplanner/resources/icons/` est ignoré par git et n'est **jamais** versionné. C'est la
+raison d'être de la variante `-NoAssets`, et c'est aussi pourquoi une seconde machine
+installée par `git clone` démarre sans icônes : voir « Les icônes n'arrivent pas avec le
+clone » dans la section Installation.
+
+Les **icônes de bâtiments** demandent une attention de plus. Le jeu ne les déclare qu'en
+`_512` — `IconDesc_SmelterMk1_512` et non `_256` — alors que la base attend le nom en
+`_256`. Après l'export, renommez-les :
+
+```bash
+Get-ChildItem -Recurse -Filter '*_512.png' | Rename-Item -NewName { $_.Name -replace '_512\.png$','_256.png' }
+```
+
+Sans ce renommage les 32 bâtiments restent au repli quoi qu'on exporte, et le compteur
+ci-dessus le montre : son troisième nombre ne descend pas.
 
 ## Données du jeu
 
