@@ -52,6 +52,37 @@ class _DocumentCommand(QUndoCommand):
         self.document.touch()
 
 
+class SetAttachmentModeCommand(_DocumentCommand):
+    """Switch a document between the simple and the faithful mode, in one step.
+
+    The whole graph is kept on both sides rather than the conversion being run
+    backwards. Materialising and dissolving are not inverses -- a tree is a shape
+    and a port is not, so the round trip loses which branch got a third -- and an
+    undo that "recomputed" the previous state would hand back a factory subtly
+    unlike the one the user had. Keeping both is a few kilobytes and is exactly
+    right; the same reasoning is why a paste keeps its nodes.
+    """
+
+    def __init__(
+        self, document: FactoryDocument, after: FactoryGraph, label: str
+    ) -> None:
+        super().__init__(document, label)
+        self.before = document.graph.model_copy(deep=True)
+        self.after = after
+
+    def redo(self) -> None:
+        self._swap(self.after)
+
+    def undo(self) -> None:
+        self._swap(self.before)
+
+    def _swap(self, graph: FactoryGraph) -> None:
+        # Not ``adopt``: that is for a factory arriving from outside and it clears
+        # the history, which would take this very command with it.
+        self.document.graph = graph.model_copy(deep=True)
+        self._done()
+
+
 class AddNodeCommand(_DocumentCommand):
     """Drop a node on the canvas."""
 

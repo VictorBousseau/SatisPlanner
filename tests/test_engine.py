@@ -9,6 +9,7 @@ import pytest
 
 from satisplanner.core import constants, engine
 from satisplanner.core.graph import (
+    AttachmentMode,
     ExternalSourceNode,
     FactoryGraph,
     GraphError,
@@ -120,7 +121,7 @@ def test_a_node_with_a_port_per_machine_needs_no_splitter(game_data: GameData) -
     shopping list of a balanced factory shorter than it used to be: eight smelters
     feeding eight consumers need nothing between them.
     """
-    graph = FactoryGraph()
+    graph = FactoryGraph(attachment_mode=AttachmentMode.FAITHFUL)
     graph.add_node(ExternalSourceNode(id="src", item_class="Desc_OreIron_C", rate_per_minute=60))
     graph.add_node(MachineNode(id="bank", recipe_class="Recipe_IngotIron_C", machine_count=2))
     belt = "Build_ConveyorBeltMk3_C"
@@ -139,7 +140,7 @@ def test_a_node_with_a_port_per_machine_needs_no_splitter(game_data: GameData) -
 
 def test_fluids_use_a_pipe_junction_rather_than_a_splitter(game_data: GameData) -> None:
     """The same node on a pipe is a junction, because that is the building for it."""
-    graph = FactoryGraph()
+    graph = FactoryGraph(attachment_mode=AttachmentMode.FAITHFUL)
     graph.add_node(ExternalSourceNode(id="well", item_class="Desc_Water_C", rate_per_minute=120))
     graph.add_node(SplitterNode(id="tee"))
     pipe = "Build_PipelineMK2_C"

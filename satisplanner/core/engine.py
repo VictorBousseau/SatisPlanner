@@ -75,7 +75,7 @@ from satisplanner.core.graph import (
     storage_item,
     unit_count,
 )
-from satisplanner.core.models import GameData
+from satisplanner.core.models import AttachmentRole, GameData, SplitterMode
 from satisplanner.core.results import (
     FLOW_EPSILON,
     BufferSolution,
@@ -1060,8 +1060,9 @@ class _Solver:
             if solution.building_class is None:
                 continue
             count = math.ceil(solution.machine_count or 1.0)
-            # Splitters and mergers are counted where they are placed now, so they
-            # keep a heading of their own rather than being deduced from the lines.
+            # A fitting somebody drew is counted where it stands; a fitting nobody
+            # drew is worked out from the lines below. Either way it ends up under
+            # the same heading, because either way it is a building to put down.
             basket = attachments if solution.kind in PASS_THROUGH_KINDS else buildings
             basket[solution.building_class] = basket.get(solution.building_class, 0) + count
             if basket is attachments:
@@ -1071,6 +1072,10 @@ class _Solver:
                     solution.clock_speed, solution.machine_count
                 ).items():
                     shards[item] = shards.get(item, 0) + needed
+
+        if not self.graph.is_faithful:
+            for class_name, units in self._implied_attachments().items():
+                attachments[class_name] = attachments.get(class_name, 0) + units
 
         belts: dict[int, int] = {}
         pipes: dict[int, int] = {}
@@ -1088,6 +1093,55 @@ class _Solver:
             attachments=dict(sorted(attachments.items())),
             power_shards=dict(sorted(shards.items())),
         )
+
+    def _implied_attachments(self) -> dict[str, int]:
+        """Fittings a simple-mode document needs but does not draw.
+
+        Two lines leaving one node with the same item means the player has to split
+        that output, and two arriving means a merge. The count follows from the
+        number of lines alone -- a splitter serves three, so each unit adds two.
+
+        This is where the two modes give different totals, and the difference is
+        real rather than an inconsistency. Here the count is what the drawing
+        *implies*, worked out per port, in the cheapest chaining there is. In the
+        faithful mode it is what somebody actually placed, and a factory drawn by
+        hand may well use more: a tree built for symmetry, or a fitting kept where
+        a machine count later dropped. A rise on switching to faithful is therefore
+        the drawing telling you something the deduction could not.
+
+        The standard splitter is always the one costed. A smart or a programmable
+        one cannot be implied -- nothing in a simple document says a branch was
+        meant to be filtered, and there would be nothing to read it off.
+        """
+        totals: dict[str, int] = {}
+        for node in self.graph.sorted_nodes():
+            for role, edges in (
+                (AttachmentRole.SPLIT, self.out_edges[node.id]),
+                (AttachmentRole.MERGE, self.in_edges[node.id]),
+            ):
+                lines: dict[str, int] = {}
+                for edge in edges:
+                    lines[edge.item_class] = lines.get(edge.item_class, 0) + 1
+                for item_class, count in sorted(lines.items()):
+                    item = self.game_data.items.get(item_class)
+                    if item is None:
+                        continue
+                    # A pipe junction has no mode at all, so asking it for a
+                    # standard one would come back empty and price nothing.
+                    mode = (
+                        SplitterMode.STANDARD
+                        if role is AttachmentRole.SPLIT and not item.form.is_fluid
+                        else None
+                    )
+                    attachment = self.game_data.attachment_for(item.form, role, mode)
+                    if attachment is None:
+                        continue
+                    units = attachment.units_for(count)
+                    if units:
+                        totals[attachment.class_name] = (
+                            totals.get(attachment.class_name, 0) + units
+                        )
+        return dict(sorted(totals.items()))
 
 
 def allocate(

@@ -19,10 +19,11 @@ import logging
 import math
 from dataclasses import dataclass
 
-from satisplanner.core import constants, formatting
+from satisplanner.core import attachments, constants, formatting
 from satisplanner.core.graph import (
     ANY_BRANCH,
     OVERFLOW_BRANCH,
+    AttachmentMode,
     ExternalSourceNode,
     GeneratorNode,
     MachineNode,
@@ -42,7 +43,11 @@ from satisplanner.ui.catalogue import (
     extractor_choices,
     fuel_choices,
 )
-from satisplanner.ui.commands import SetNodeFieldCommand, SetTransportCommand
+from satisplanner.ui.commands import (
+    SetAttachmentModeCommand,
+    SetNodeFieldCommand,
+    SetTransportCommand,
+)
 from satisplanner.ui.document import FactoryDocument
 
 logger = logging.getLogger(__name__)
@@ -311,3 +316,52 @@ def set_branch_filter(
         )
     )
     return None
+
+
+ATTACHMENT_MODE_LABELS: dict[AttachmentMode, str] = {
+    AttachmentMode.SIMPLE: "simple",
+    AttachmentMode.FAITHFUL: "fidèle",
+}
+
+
+@dataclass(frozen=True)
+class ModeChange:
+    """The outcome of a bascule: what it did, or why it did nothing."""
+
+    refusal: str | None = None
+    notes: tuple[str, ...] = ()
+
+    @property
+    def happened(self) -> bool:
+        return self.refusal is None
+
+
+def set_attachment_mode(
+    document: FactoryDocument, mode: AttachmentMode | str
+) -> ModeChange:
+    """Move the whole document between the two modes, as **one** undo step.
+
+    The bascule is not an edit of a node, so it does not go through
+    :class:`SetNodeFieldCommand`; but it is the same principle -- one door, one
+    command, and the menu, the shortcut and any future button all come through
+    here. The conversion itself belongs to the domain layer and is not repeated:
+    :func:`satisplanner.core.attachments.switch_mode` does it and says what moved.
+    """
+    try:
+        wanted = AttachmentMode(mode)
+    except ValueError:
+        return ModeChange(refusal=f"Mode inconnu : {mode}")
+    if wanted is document.graph.attachment_mode:
+        return ModeChange(notes=())
+
+    after = document.graph.model_copy(deep=True)
+    try:
+        notes = attachments.switch_mode(after, wanted)
+    except attachments.ModeRefusedError as refused:
+        return ModeChange(refusal=str(refused))
+
+    label = ATTACHMENT_MODE_LABELS[wanted]
+    document.undo_stack.push(
+        SetAttachmentModeCommand(document, after, f"passage en mode {label}")
+    )
+    return ModeChange(notes=tuple(notes))

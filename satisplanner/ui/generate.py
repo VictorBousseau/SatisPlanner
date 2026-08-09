@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from satisplanner.core import breakdown, planner
-from satisplanner.core.graph import FactoryGraph
+from satisplanner.core.graph import AttachmentMode, FactoryGraph
 from satisplanner.core.models import GameData
 from satisplanner.ui.catalogue import fold
 from satisplanner.ui.preferences import Preferences
@@ -235,8 +235,14 @@ class GenerateDialog(QDialog):
         self.preferences.recipe_choices = self.choices
         super().accept()
 
-    def generate(self) -> tuple[FactoryGraph, list[str]]:
+    def generate(
+        self, mode: AttachmentMode = AttachmentMode.SIMPLE
+    ) -> tuple[FactoryGraph, list[str]]:
         """The factory and what the generator has to say about it.
+
+        ``mode`` is the mode of the document being generated into: what comes out
+        is an ordinary factory, so it obeys the rule of the document it lands in
+        rather than one of its own.
 
         Raises :class:`~satisplanner.core.planner.PlanError` with a French sentence,
         which the caller shows as it is: a target that cannot be built is an answer,
@@ -247,7 +253,7 @@ class GenerateDialog(QDialog):
         made = planner.plan(
             self.game_data, item_class, self.rate.value(), self.choices, rounded=self.is_rounded()
         )
-        graph = planner.build(self.game_data, made)
+        graph = planner.build(self.game_data, made, mode)
         return graph, planner.report(self.game_data, made, rounded=self.is_rounded())
 
 

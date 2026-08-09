@@ -34,9 +34,9 @@ from pathlib import Path
 from typing import Any, Final
 
 from satisplanner import __version__
-from satisplanner.core import attachments
 from satisplanner.core.graph import (
     SCHEMA_VERSION,
+    AttachmentMode,
     ExternalSourceNode,
     FactoryGraph,
     GeneratorNode,
@@ -172,27 +172,20 @@ def _three_to_four(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
 def _four_to_five(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Schema 4 to 5: splitters and mergers became nodes, and ports became finite.
 
-    The first step that actually writes something, and the first that can move a
-    figure. A document from before this has three lines leaving a port that only
-    ever had one, because until now the splitter between them was deduced from the
-    lines and never drawn. It is drawn now, so it is built now: the tree goes in,
-    the lines are laid again through it, and the shares it gives are the shares a
-    real tree gives. See :mod:`satisplanner.core.attachments` for why they are not
-    forced back to what they were.
+    **Nothing to write any more, and that is a reversal worth stating.** For one
+    version this step inserted the tree of splitters that a port with three lines
+    on it implied, because the rule had become the build's and every document had
+    to obey it. Schema 7 made the rule the document's own instead, so a document
+    from before the rule existed keeps the shape it was drawn in and opens in the
+    **simple** mode -- which is precisely the mode it was written under. Converting
+    it would change its figures to answer a question its author never asked.
 
-    Refusing to convert and asking for the factory to be redrawn by hand was never
-    an option, so a payload this cannot read is handed back untouched: the loader
-    behind it says what is wrong with it far better than a half-migration would.
+    The materialisation itself has not gone anywhere: it is what the bascule to the
+    faithful mode runs, on demand, with the same report. See
+    :func:`_six_to_seven`, which is where a document that *was* converted gets its
+    mode.
     """
-    try:
-        graph = FactoryGraph.model_validate(payload)
-    except (GraphError, ValueError):
-        logger.debug("charge utile illisible : conversion des raccords ignorée")
-        return payload, []
-    done = attachments.materialise(graph)
-    if not done.changes:
-        return payload, []
-    return json.loads(graph.model_dump_json()), done.notes()
+    return payload, []
 
 
 def _five_to_six(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -207,6 +200,32 @@ def _five_to_six(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     return payload, []
 
 
+def _six_to_seven(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Schema 6 to 7: the port rule became a property of the document.
+
+    The mode is read off what the document already contains, and the reading is
+    not a guess. A document written under schema 5 or 6 was written by a build in
+    which the rule was absolute, so its fittings are there because they had to be:
+    it is **faithful**. A document from before that never had them and was drawn
+    under the old rule: it is **simple**, which is the default and so needs no
+    writing at all.
+
+    The walk cannot see where it started, only where it is, and that is why this
+    step looks at the nodes rather than at a version number: a document carrying a
+    splitter node could only have been written by a build that made them nodes.
+    An empty schema-6 document has no fittings to look at, and simple is then the
+    right answer for the same reason it is the right default -- nothing has been
+    drawn that the rule would constrain.
+    """
+    if any(node.get("kind") in ("splitter", "merger") for node in payload.get("nodes", [])):
+        payload = {**payload, "attachment_mode": AttachmentMode.FAITHFUL.value}
+        return payload, [
+            "document ouvert en mode fidèle : il contient des raccords explicites, "
+            "donc la règle « un port porte une ligne » s'y applique."
+        ]
+    return payload, []
+
+
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
 MIGRATIONS: Final[dict[int, Step]] = {
     1: _one_to_two,
@@ -214,6 +233,7 @@ MIGRATIONS: Final[dict[int, Step]] = {
     3: _three_to_four,
     4: _four_to_five,
     5: _five_to_six,
+    6: _six_to_seven,
 }
 
 

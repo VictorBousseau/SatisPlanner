@@ -16,6 +16,7 @@ from pytestqt.qtbot import QtBot
 
 from satisplanner.core.graph import (
     OVERFLOW_BRANCH,
+    AttachmentMode,
     MachineNode,
     ResourceNode,
     SplitterNode,
@@ -23,7 +24,7 @@ from satisplanner.core.graph import (
 )
 from satisplanner.core.models import GameData, ItemForm, Purity, SplitterMode
 from satisplanner.core.results import LimitingFactor
-from satisplanner.ui import theme
+from satisplanner.ui import edits, theme
 from satisplanner.ui.canvas import FactoryScene, snapped
 from satisplanner.ui.canvas_items import ANY_ITEM
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry, build_entries
@@ -463,6 +464,9 @@ def test_a_splitter_is_placed_from_the_palette_and_takes_the_item_of_its_line(
     not make the application harder to use.
     """
     _, smelter = iron_chain(scene)
+    # The port budget is the faithful mode's rule, so the document is put in it by
+    # the door the menu uses -- there is no other way to reach it.
+    assert edits.set_attachment_mode(scene.document, AttachmentMode.FAITHFUL).happened
     fork = place(scene, EntryKind.SPLITTER, "Build_ConveyorAttachmentSplitter_C", 1200, 0)
     node = scene.document.graph.node(fork)
     assert isinstance(node, SplitterNode)

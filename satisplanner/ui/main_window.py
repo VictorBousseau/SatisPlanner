@@ -34,6 +34,7 @@ from typing import Final
 from PySide6.QtCore import QRectF, QSettings, Qt
 from PySide6.QtGui import (
     QAction,
+    QActionGroup,
     QCloseEvent,
     QGuiApplication,
     QKeySequence,
@@ -59,14 +60,14 @@ from PySide6.QtWidgets import (
 from satisplanner import __version__, logging_setup
 from satisplanner.core import formatting, interface
 from satisplanner.core.graph import SCHEMA_VERSION as DOCUMENT_SCHEMA_VERSION
-from satisplanner.core.graph import FactoryGraph
+from satisplanner.core.graph import AttachmentMode, FactoryGraph
 from satisplanner.core.models import GameData
 from satisplanner.core.planner import PlanError
 from satisplanner.core.results import FactoryReport, Severity
 from satisplanner.data import db, factory_file, module_file
 from satisplanner.data.factory_file import FILE_FILTER, FILE_SUFFIX, FactoryFileError
 from satisplanner.data.module_file import FactoryModule, ModuleError
-from satisplanner.ui import clipboard, exporters, theme
+from satisplanner.ui import clipboard, edits, exporters, theme
 from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.canvas import MAX_SCALE, FactoryScene, FactoryView
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry, build_entries
@@ -400,6 +401,9 @@ class MainWindow(QMainWindow):
         self.undo_group.setActiveStack(document.undo_stack)
 
         self.refresh_title()
+        # The mode belongs to the document, so the ticked entry follows the tabs
+        # exactly as the panels do.
+        self.refresh_attachment_mode()
         if document.report is not None:
             self._show_report_summary(document.report)
         # The table is shared, so it shows the selection of whichever canvas is in
@@ -448,6 +452,7 @@ class MainWindow(QMainWindow):
         self._build_edit_actions()
         self._build_view_actions()
         self._build_generator_actions()
+        self._build_attachment_mode_actions()
         self._build_module_actions()
         self._build_help_actions()
 
@@ -640,7 +645,9 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
         try:
-            graph, notes = dialog.generate()
+            # In the mode of the document it is generated from: what comes out is an
+            # ordinary factory, and an ordinary factory obeys its own document.
+            graph, notes = dialog.generate(self.document.graph.attachment_mode)
         except PlanError as exc:
             QMessageBox.warning(self, "Objectif irréalisable", str(exc))
             return None
@@ -652,6 +659,68 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Usine générée", _paragraphs(notes))
         self.statusBar().showMessage(notes[0], 8000)
         return tab
+
+    def _build_attachment_mode_actions(self) -> None:
+        """Two exclusive entries rather than one toggle.
+
+        A toggle says what will happen next, which is the wrong thing to read on a
+        setting that changes the figures: what a user needs to see at a glance is
+        which mode this factory is *in*, and a checked entry says that even when
+        nobody remembers what the other one was called.
+        """
+        menu = self.menuBar().addMenu("&Raccords")
+        self.menus.append(menu)
+        self.attachment_mode_actions: dict[AttachmentMode, QAction] = {}
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        for mode, label, hint in (
+            (
+                AttachmentMode.SIMPLE,
+                "Mode simple (raccords déduits)",
+                "Un port porte autant de lignes qu'on veut ; les raccords sont "
+                "comptés dans la liste de courses sans être dessinés.",
+            ),
+            (
+                AttachmentMode.FAITHFUL,
+                "Mode fidèle (raccords explicites)",
+                "Un port porte une ligne, comme dans le jeu : au-delà il faut un "
+                "répartiteur ou un groupeur, et on le pose.",
+            ),
+        ):
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setStatusTip(hint)
+            action.setActionGroup(group)
+            action.triggered.connect(
+                lambda _checked=False, chosen=mode: self.set_attachment_mode(chosen)
+            )
+            menu.addAction(action)
+            self.attachment_mode_actions[mode] = action
+
+    def refresh_attachment_mode(self) -> None:
+        """Tick the entry the document being looked at is actually in.
+
+        Called from :meth:`_activate` and after a bascule, and never at build time:
+        the menus are put together before the first tab exists.
+        """
+        if self._active is None:
+            return
+        current = self.document.graph.attachment_mode
+        for mode, action in self.attachment_mode_actions.items():
+            action.setChecked(mode is current)
+
+    def set_attachment_mode(self, mode: AttachmentMode) -> bool:
+        """Switch the current factory between the two modes, reporting what moved."""
+        change = edits.set_attachment_mode(self.document, mode)
+        if change.refusal is not None:
+            QMessageBox.warning(self, "Bascule refusée", change.refusal)
+            self.refresh_attachment_mode()
+            return False
+        self.refresh_attachment_mode()
+        if change.notes:
+            QMessageBox.information(self, "Raccords", _paragraphs(list(change.notes)))
+            self.statusBar().showMessage(change.notes[0], 8000)
+        return True
 
     def _build_module_actions(self) -> None:
         self.save_module_action = _action(

@@ -45,7 +45,12 @@ from satisplanner.core.models import (
 # neither -- every splitter is a standard one, which is what it was -- but one
 # that has them must not be opened by a build that would ignore an overflow
 # branch and show the wrong figures without a word.
-SCHEMA_VERSION: Final = 6
+# 7 made the port rule of 5 a property of the document rather than of the build.
+# Designing wants abstraction and building wants fidelity, and the same person
+# wants both on different days; what they must not want is the same file read two
+# ways. The mode is therefore in the document and travels with it, because it
+# changes the figures -- which is exactly what a colour preference does not do.
+SCHEMA_VERSION: Final = 7
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -60,6 +65,30 @@ class GraphError(Exception):
     different exceptions for the same rule depending on whether the graph was being
     loaded or edited. Anything else propagates untouched.
     """
+
+
+class AttachmentMode(StrEnum):
+    """Whether this document draws its splitters and mergers, or implies them.
+
+    **SIMPLE** is the default for a new factory and the behaviour this application
+    had before fittings became nodes: a port carries as many lines as you like, the
+    max-min share happens at the port itself, and the shopping list works out how
+    many splitters that would take. It is the mode for thinking about rates.
+
+    **FAITHFUL** is the rule of the game: one line per port, and a second line off
+    the same port needs a fitting you place and see. It is the mode for building.
+
+    The two are not two solvers. A fitting is an ordinary node with a nameplate,
+    so the faithful mode is the same code with more nodes in the graph, and the
+    simple mode is the same code with none -- every mechanism a splitter needs
+    (:meth:`_Solver._size_pass_throughs`, the deferred conduits, the branch
+    filters) is keyed on there being one, and costs nothing when there is not.
+    The only thing that genuinely differs is who counts the fittings, and that is
+    the shopping list.
+    """
+
+    SIMPLE = "simple"
+    FAITHFUL = "faithful"
 
 
 class NodeKind(StrEnum):
@@ -348,8 +377,16 @@ class FactoryGraph(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: int = SCHEMA_VERSION
+    # Defaulted to SIMPLE so that a new factory is drawn without ceremony, and so
+    # that a document written before the field existed reads as what it was.
+    attachment_mode: AttachmentMode = AttachmentMode.SIMPLE
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
+
+    @property
+    def is_faithful(self) -> bool:
+        """Whether the port rule applies to this document."""
+        return self.attachment_mode is AttachmentMode.FAITHFUL
 
     @model_validator(mode="after")
     def _check_references(self) -> Self:
@@ -644,7 +681,15 @@ def port_line_budget(node: Node, *, is_output: bool) -> int | None:
 
 
 def _check_line_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
-    """Refuse a line the node has no port left for, and say what to insert."""
+    """Refuse a line the node has no port left for, and say what to insert.
+
+    Only in the faithful mode. In the simple one a port carries as many lines as
+    the user cares to draw and the fittings are worked out for the shopping list
+    afterwards -- which is the whole point of the mode, and the single place in
+    the domain layer where the two differ.
+    """
+    if not graph.is_faithful:
+        return
     for node_id, is_output in ((edge.source, True), (edge.target, False)):
         node = graph.node(node_id)
         budget = port_line_budget(node, is_output=is_output)

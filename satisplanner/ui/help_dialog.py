@@ -99,6 +99,12 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
         "sélectionne et centre le nœud ou la ligne concernée",
     ),
     (
+        "Raccords ▸ Mode simple / Mode fidèle",
+        "bascule toute l'usine, en une seule annulation. Vers le fidèle, les arbres "
+        "de raccords sont posés ; vers le simple, ils sont dissous. Ce qui change "
+        "de débit est dit port par port",
+    ),
+    (
         "Générer ▸ Générer une usine depuis un objectif",
         "développe « tant de cet objet par minute » en une usine entière, dans un "
         "onglet neuf. Une recette imposée par objet est retenue d'une fois sur "
@@ -146,7 +152,27 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "amont. Le diagnostic donne les deux chiffres — porté et demandé — parce que "
     "c'est le second qui nomme le tier à installer, et il est calculé par une "
     "résolution jumelle sans plafond, pas estimé.",
-    "<b>Un port porte une ligne</b>, et un nœud a autant de ports qu'il a de "
+    "<b>Chaque usine est en mode simple ou en mode fidèle</b>, et le réglage est "
+    "dans le document, pas dans les préférences : une usine partagée s'ouvre chez "
+    "le destinataire dans le mode où elle a été pensée, sinon les chiffres "
+    "changeraient. Le <b>mode simple</b> — celui d'une usine neuve — laisse un port "
+    "porter autant de lignes qu'on veut et partage également entre elles ; c'est le "
+    "mode pour réfléchir aux débits. Le <b>mode fidèle</b> applique la règle du jeu, "
+    "un port une ligne, et vous fait poser les raccords ; c'est le mode pour "
+    "construire. Menu <b>Raccords</b>, et la bascule s'annule.",
+    "<b>La liste de courses compte les raccords dans les deux modes, et pas de la "
+    "même façon.</b> En simple ils sont <b>déduits</b> : quatre lignes sur un port "
+    "en demandent deux, dans le chaînage le plus économe. En fidèle ils sont "
+    "<b>comptés là où ils sont posés</b>, et une usine dessinée à la main en utilise "
+    "souvent davantage — un arbre bâti pour la symétrie, un raccord resté en place "
+    "après qu'un nombre de machines a baissé. Un total qui monte en basculant n'est "
+    "donc pas une incohérence : c'est le dessin qui dit quelque chose que la "
+    "déduction ne pouvait pas savoir.",
+    "Un raccord <b>intelligent ou programmable interdit le retour au mode "
+    "simple</b>, et l'application le refuse en le nommant plutôt que de l'effacer. "
+    "Le filtrage et le surplus n'existent que parce que le raccord existe ; perdre "
+    "un routage de sous-produit sans l'avoir voulu serait pire qu'un refus.",
+    "<b>Un port porte une ligne</b> en mode fidèle, et un nœud a autant de ports qu'il a de "
     "bâtiments : huit fonderies ont huit sorties, une seule en a une. Pour en "
     "faire partir davantage, posez un répartiteur — c'est un nœud comme un autre, "
     "il partage également entre ses branches et il est compté dans la liste de "

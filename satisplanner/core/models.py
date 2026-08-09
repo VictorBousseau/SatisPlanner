@@ -295,6 +295,25 @@ class Attachment(_Row):
     # to upgrade to.
     splitter_mode: SplitterMode | None = None
 
+    def units_for(self, lines: int) -> int:
+        """How many of these it takes to serve ``lines`` lines off one port.
+
+        A splitter turns one line into three, so chaining a second one onto a
+        branch buys two more: the count is ``ceil((lines - 1) / (branches - 1))``.
+        One line needs none.
+
+        This is the **simple mode's** answer, and it is deliberately not the same
+        question as the faithful mode's. There the fittings are nodes somebody drew
+        and the list counts what is on the canvas; here nobody drew them, and the
+        list says how many the drawing implies. How they would be chained is
+        geometry, which is out of scope -- so the count is as far as this can
+        honestly go, and it is exactly as far as it went before the fittings
+        became nodes.
+        """
+        if lines <= 1 or self.branches <= 1:
+            return 0
+        return math.ceil((lines - 1) / (self.branches - 1))
+
 
 class BuildingCost(_Row):
     """What one of a building costs to put down, from the game's own build recipe.

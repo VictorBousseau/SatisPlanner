@@ -30,6 +30,7 @@ from typing import Final
 
 from satisplanner.core import constants, formatting
 from satisplanner.core.graph import (
+    AttachmentMode,
     Edge,
     FactoryGraph,
     MergerNode,
@@ -37,6 +38,7 @@ from satisplanner.core.graph import (
     SplitterNode,
     port_line_budget,
 )
+from satisplanner.core.models import SplitterMode
 
 BRANCHES: Final = constants.ATTACHMENT_BRANCHES
 
@@ -531,12 +533,316 @@ def _fresh_edge_id(graph: FactoryGraph) -> str:
     return f"e{index}"
 
 
+# --------------------------------------------------------------------------- #
+# Taking the trees back out
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class Dissolution:
+    """Everything a document lost on its way back to the simple mode."""
+
+    removed: tuple[str, ...] = ()
+    changes: tuple[PortChange, ...] = ()
+
+    @property
+    def uneven(self) -> tuple[PortChange, ...]:
+        """Ports whose lines used to carry different amounts and now carry the same."""
+        return tuple(change for change in self.changes if not change.was_even)
+
+    def notes(self) -> list[str]:
+        """The same report as a materialisation, read the other way round."""
+        if not self.removed:
+            return []
+        notes = [
+            f"{len(self.removed)} raccord(s) dissous. Ils ne sont plus des nœuds ; "
+            f"ils sont de nouveau déduits des lignes et comptés à ce titre dans la "
+            f"liste de courses."
+        ]
+        uneven = self.uneven
+        if not uneven:
+            notes.append(
+                "Tous les partages étaient en arbre équilibré : les débits sont "
+                "identiques à ceux d'avant la bascule."
+            )
+            return notes
+        notes.append(
+            "Un port sans raccord partage également, ce qu'un arbre réel ne fait pas "
+            "toujours. Les ports suivants redeviennent égaux et leurs débits changent :"
+        )
+        notes.extend(f"    {_describe_back(change)}" for change in uneven)
+        return notes
+
+
+def _describe_back(change: PortChange) -> str:
+    before = ", ".join(formatting.percent(share) for share in change.shares)
+    after = formatting.percent(1.0 / change.lines)
+    side = "sortie" if change.is_output else "entrée"
+    return (
+        f"{change.node_id}, {side} de {change.lines} lignes : "
+        f"{before} auparavant, {after} chacune désormais."
+    )
+
+
+def non_standard_splitters(graph: FactoryGraph) -> list[str]:
+    """Splitters that say something a simple document has no way of saying.
+
+    A smart or programmable splitter carries a filter and, more to the point, a
+    surplus branch -- an order of service that only exists because the fitting
+    exists. Dissolving it would silently turn "the residue goes to the recycler
+    until it is full and the rest to the flare" into "half each", which is a
+    routing decision quietly deleted. The bascule is refused rather than warned
+    about: a refusal costs a menu entry, and the other costs somebody their
+    byproduct handling on a factory they will not re-read.
+    """
+    return sorted(
+        node.id
+        for node in graph.nodes
+        if isinstance(node, SplitterNode) and node.mode is not SplitterMode.STANDARD
+    )
+
+
+def dissolve(graph: FactoryGraph) -> Dissolution:
+    """Take every splitter and merger out, joining what they joined. Edits in place.
+
+    The inverse of :func:`materialise`, and deliberately not its mirror image: a
+    tree is a shape, and a port is not, so going back throws information away. What
+    is thrown away is exactly the shape -- which branch got a third and which got a
+    sixth -- and that is what :class:`Dissolution` reports, port by port, with the
+    shares as they were and as they will be.
+
+    Each surviving line takes the **smallest tier along the path it replaces**. A
+    chain carries what its narrowest segment carries, so anything else would hand
+    the user a line that claims more than the fittings it stands in for ever did.
+    On a round trip it is the identity: a trunk laid by :func:`materialise` takes
+    the tier its own leaves already had.
+    """
+    fittings = {
+        node.id for node in graph.nodes if isinstance(node, SplitterNode | MergerNode)
+    }
+    if not fittings:
+        return Dissolution()
+
+    changes = _shares_before(graph, fittings)
+    kept = [edge for edge in graph.sorted_edges() if edge.source not in fittings]
+    joined: list[Edge] = []
+    for edge in kept:
+        if edge.target not in fittings:
+            joined.append(edge)
+            continue
+        for target, transport in _through(graph, edge, fittings):
+            joined.append(
+                Edge(
+                    id=f"{edge.id}-{len(joined)}",
+                    source=edge.source,
+                    target=target,
+                    item_class=edge.item_class,
+                    transport_class=transport,
+                )
+            )
+
+    graph.nodes = [node for node in graph.nodes if node.id not in fittings]
+    graph.edges = _renumbered(joined)
+    return Dissolution(tuple(sorted(fittings)), tuple(changes))
+
+
+def _through(
+    graph: FactoryGraph, edge: Edge, fittings: set[str]
+) -> list[tuple[str, str]]:
+    """Real nodes reachable past this line, each with the tier of its narrowest hop.
+
+    Breadth-first over the fittings alone, with a visited set: a ring of splitters
+    closed on itself contributes nothing and does not come round again. A tier is
+    compared by *name* nowhere -- the smallest is decided by the caller's own
+    ordering below, which is the order the lines were laid in.
+    """
+    found: dict[str, str] = {}
+    seen: set[str] = set()
+    queue: list[tuple[str, str]] = [(edge.target, edge.transport_class)]
+    while queue:
+        node_id, narrowest = queue.pop(0)
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+        for onward in sorted(graph.outgoing(node_id), key=lambda other: other.id):
+            if onward.item_class != edge.item_class:
+                continue
+            tier = _narrower(narrowest, onward.transport_class)
+            if onward.target in fittings:
+                queue.append((onward.target, tier))
+            elif onward.target not in found:
+                found[onward.target] = tier
+    return sorted(found.items())
+
+
+def _narrower(first: str, second: str) -> str:
+    """The smaller of two transport classes, without a catalogue to rank them.
+
+    There is none here for the same reason :func:`_common_transport` has none: a
+    document is converted before any game data is read. The class names of the
+    game's belts and pipes end in their tier -- ``ConveyorBeltMk3`` -- so the digit
+    in the name is what ranks them, and where there is no digit to compare the
+    first line's own tier is kept rather than a guess being made.
+    """
+    ranks = [_tier_digit(name) for name in (first, second)]
+    if ranks[0] is None or ranks[1] is None or ranks[0] <= ranks[1]:
+        return first
+    return second
+
+
+def _tier_digit(transport_class: str) -> int | None:
+    for marker in ("Mk", "MK", "mk"):
+        head, sign, tail = transport_class.partition(marker)
+        digits = "".join(character for character in tail if character.isdigit())
+        if sign and digits:
+            _ = head
+            return int(digits)
+    return None
+
+
+def _shares_before(graph: FactoryGraph, fittings: set[str]) -> list[PortChange]:
+    """What each crowded port really gave its lines, read off the fittings in place.
+
+    Computed by walking the trees that are actually there rather than by rebuilding
+    the one :func:`share_tree` would have made. A user is free to have edited a
+    tree after it was inserted, and what has to be reported is what their document
+    does, not what it would have done untouched.
+    """
+    changes: list[PortChange] = []
+    for node in graph.sorted_nodes():
+        if node.id in fittings:
+            continue
+        for is_output in (True, False):
+            grouped: dict[str, list[Edge]] = {}
+            for edge in graph.outgoing(node.id) if is_output else graph.incoming(node.id):
+                if (edge.target if is_output else edge.source) in fittings:
+                    grouped.setdefault(edge.item_class, []).append(edge)
+            for item_class, edges in sorted(grouped.items()):
+                shares = _leaf_shares_in_place(graph, edges, fittings, is_output=is_output)
+                if len(shares) <= 1:
+                    continue
+                budget = port_line_budget(node, is_output=is_output)
+                changes.append(
+                    PortChange(
+                        node_id=node.id,
+                        item_class=item_class,
+                        is_output=is_output,
+                        ports=len(edges) if budget is None else min(budget, len(edges)),
+                        lines=len(shares),
+                        inserted=(),
+                        shares=tuple(shares),
+                    )
+                )
+    return changes
+
+
+def _leaf_shares_in_place(
+    graph: FactoryGraph, edges: Sequence[Edge], fittings: set[str], *, is_output: bool
+) -> list[float]:
+    """The fraction of the port's flow each surviving line ends up with.
+
+    A splitter divides equally between the branches it has; a merger is read the
+    same way from the other side. Only the splitting direction carries a share that
+    can be uneven, which is why a merge comes back with one entry per line and no
+    surprise in it.
+    """
+    shares: list[float] = []
+    trunks = len(edges)
+    for edge in edges:
+        _walk_shares(graph, edge, fittings, 1.0 / trunks, shares, set(), is_output=is_output)
+    return shares
+
+
+def _walk_shares(
+    graph: FactoryGraph,
+    edge: Edge,
+    fittings: set[str],
+    share: float,
+    shares: list[float],
+    seen: set[str],
+    *,
+    is_output: bool,
+) -> None:
+    node_id = edge.target if is_output else edge.source
+    if node_id not in fittings or node_id in seen:
+        shares.append(share)
+        return
+    onward = [
+        other
+        for other in (graph.outgoing(node_id) if is_output else graph.incoming(node_id))
+        if other.item_class == edge.item_class
+    ]
+    if not onward:
+        shares.append(share)
+        return
+    for other in sorted(onward, key=lambda found: found.id):
+        _walk_shares(
+            graph,
+            other,
+            fittings,
+            share / len(onward),
+            shares,
+            seen | {node_id},
+            is_output=is_output,
+        )
+
+
+def _renumbered(edges: Sequence[Edge]) -> list[Edge]:
+    """Fresh sequential identifiers, so a dissolved document reads like a drawn one."""
+    return [
+        Edge(
+            id=f"e{index}",
+            source=edge.source,
+            target=edge.target,
+            item_class=edge.item_class,
+            transport_class=edge.transport_class,
+        )
+        for index, edge in enumerate(edges, start=1)
+    ]
+
+
+class ModeRefusedError(Exception):
+    """The bascule would delete something the target mode cannot express."""
+
+
+def switch_mode(graph: FactoryGraph, mode: AttachmentMode) -> list[str]:
+    """Move a document between the two modes, in place, and say what changed.
+
+    The single door for the bascule, so that both directions are one operation and
+    one undo. Going up runs :func:`materialise` -- the very conversion that used to
+    run on opening an old file, unchanged and with the same report. Going down runs
+    :func:`dissolve`, and refuses outright if any splitter says something the simple
+    mode has no way of saying: see :func:`non_standard_splitters`.
+    """
+    if mode is graph.attachment_mode:
+        return []
+    if mode is AttachmentMode.SIMPLE:
+        blocking = non_standard_splitters(graph)
+        if blocking:
+            msg = (
+                "le mode simple ne connaît ni filtre ni surplus, et ces répartiteurs "
+                f"en portent : {', '.join(blocking)}. Repassez-les en standard pour "
+                "pouvoir basculer, ou restez en mode fidèle."
+            )
+            raise ModeRefusedError(msg)
+        notes = dissolve(graph).notes()
+    else:
+        notes = materialise(graph).notes()
+    graph.attachment_mode = mode
+    return notes
+
+
 __all__ = [
+    "Dissolution",
     "Fan",
     "Materialisation",
+    "ModeRefusedError",
     "PortChange",
+    "dissolve",
     "even_groups",
     "leaf_shares",
     "materialise",
+    "non_standard_splitters",
     "share_tree",
+    "switch_mode",
 ]

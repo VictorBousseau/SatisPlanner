@@ -1,0 +1,1533 @@
+{
+ "allocation": {
+  "diagnostics": [
+   "warning|deficit|large"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 30.0,
+   "e2": 30.0,
+   "e3": 20.0,
+   "e4": 20.0
+  },
+  "final_outputs": {
+   "Desc_IronPlate_C": 40.0
+  },
+  "nodes": {
+   "ingots": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronIngot_C": 60.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "large": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 30.0
+    },
+    "limiting": "inputs",
+    "outputs": {
+     "Desc_IronPlate_C": 20.0
+    },
+    "power_mw": 8.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.5
+   },
+   "out_large": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronPlate_C": 20.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "out_small": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronPlate_C": 20.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "small": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronPlate_C": 20.0
+    },
+    "power_mw": 4.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 12.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_IronIngot_C": 60.0
+  },
+  "shopping_list": {
+   "attachments": {
+    "Build_ConveyorAttachmentSplitter_C": 1
+   },
+   "belts_by_tier": {
+    "1": 3,
+    "2": 1
+   },
+   "buildings": {
+    "Build_ConstructorMk1_C": 3
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "allocation_redistribution": {
+  "diagnostics": [
+   "error|blocked_byproduct|blocked",
+   "warning|surplus|ingots"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 0.0,
+   "e2": 45.0,
+   "e3": 30.0
+  },
+  "final_outputs": {
+   "Desc_IronPlate_C": 30.0
+  },
+  "nodes": {
+   "blocked": {
+    "blocked": [
+     "Desc_IronPlate_C"
+    ],
+    "inputs": {},
+    "limiting": "blocked",
+    "outputs": {},
+    "power_mw": 4.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.0
+   },
+   "ingots": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "outputs",
+    "outputs": {
+     "Desc_IronIngot_C": 45.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.75
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronPlate_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "working": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 45.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronPlate_C": 30.0
+    },
+    "power_mw": 6.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 10.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_IronIngot_C": 45.0
+  },
+  "shopping_list": {
+   "attachments": {
+    "Build_ConveyorAttachmentSplitter_C": 1
+   },
+   "belts_by_tier": {
+    "1": 3
+   },
+   "buildings": {
+    "Build_ConstructorMk1_C": 3
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "backpressure": {
+  "diagnostics": [
+   "warning|backpressure|plastic",
+   "warning|surplus|oil"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 180.0,
+   "e2": 120.0,
+   "e3": 60.0,
+   "e4": 40.0
+  },
+  "final_outputs": {
+   "Desc_LiquidFuel_C": 40.0,
+   "Desc_Plastic_C": 120.0
+  },
+  "nodes": {
+   "fuel_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidFuel_C": 40.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "oil": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "outputs",
+    "outputs": {
+     "Desc_LiquidOil_C": 180.0
+    },
+    "power_mw": 120.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.5
+   },
+   "plastic": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidOil_C": 180.0
+    },
+    "limiting": "outputs",
+    "outputs": {
+     "Desc_HeavyOilResidue_C": 60.0,
+     "Desc_Plastic_C": 120.0
+    },
+    "power_mw": 360.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.5
+   },
+   "plastic_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Plastic_C": 120.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "residual_fuel": {
+    "blocked": [],
+    "inputs": {
+     "Desc_HeavyOilResidue_C": 60.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_LiquidFuel_C": 40.0
+    },
+    "power_mw": 30.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 510.0,
+  "raw_fluids": {
+   "Desc_LiquidOil_C": 180.0
+  },
+  "raw_solids": {},
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "3": 1
+   },
+   "buildings": {
+    "Build_OilPump_C": 3,
+    "Build_OilRefinery_C": 13
+   },
+   "pipes_by_tier": {
+    "1": 2,
+    "2": 1
+   },
+   "power_shards": {}
+  }
+ },
+ "belt_saturation": {
+  "diagnostics": [
+   "warning|line_saturation|e1"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 60.0
+  },
+  "final_outputs": {
+   "Desc_OreIron_C": 60.0
+  },
+  "nodes": {
+   "mine": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "line",
+    "outputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "power_mw": 45.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.125
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 45.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_OreIron_C": 60.0
+  },
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "1": 1
+   },
+   "buildings": {
+    "Build_MinerMk3_C": 1
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "blocked_byproduct": {
+  "diagnostics": [
+   "error|blocked_byproduct|refinery",
+   "warning|surplus|oil"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 0.0,
+   "e2": 0.0
+  },
+  "final_outputs": {},
+  "nodes": {
+   "oil": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "outputs",
+    "outputs": {},
+    "power_mw": 40.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.0
+   },
+   "plastic_out": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "refinery": {
+    "blocked": [
+     "Desc_HeavyOilResidue_C"
+    ],
+    "inputs": {},
+    "limiting": "blocked",
+    "outputs": {},
+    "power_mw": 120.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 160.0,
+  "raw_fluids": {},
+  "raw_solids": {},
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "2": 1
+   },
+   "buildings": {
+    "Build_OilPump_C": 1,
+    "Build_OilRefinery_C": 4
+   },
+   "pipes_by_tier": {
+    "1": 1
+   },
+   "power_shards": {}
+  }
+ },
+ "buffer_draining": {
+  "diagnostics": [
+   "warning|buffer_draining|buffer",
+   "warning|not_sustainable|"
+  ],
+  "discarded_outputs": {
+   "Desc_HeavyOilResidue_C": 10.0
+  },
+  "edges": {
+   "e1": 30.0,
+   "e2": 20.0,
+   "e3": 10.0
+  },
+  "final_outputs": {
+   "Desc_Plastic_C": 20.0
+  },
+  "nodes": {
+   "buffer": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_LiquidOil_C": 30.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "plastic_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Plastic_C": 20.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "refinery": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidOil_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_HeavyOilResidue_C": 10.0,
+     "Desc_Plastic_C": 20.0
+    },
+    "power_mw": 30.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "residue_flare": {
+    "blocked": [],
+    "inputs": {
+     "Desc_HeavyOilResidue_C": 10.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 30.0,
+  "raw_fluids": {},
+  "raw_solids": {},
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "1": 1
+   },
+   "buildings": {
+    "Build_OilRefinery_C": 1,
+    "Build_PipeStorageTank_C": 1
+   },
+   "pipes_by_tier": {
+    "1": 2
+   },
+   "power_shards": {}
+  }
+ },
+ "buffer_filling": {
+  "diagnostics": [
+   "info|buffer_filling|buffer"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 60.0,
+   "e2": 30.0,
+   "e3": 30.0
+  },
+  "final_outputs": {
+   "Desc_IronIngot_C": 30.0
+  },
+  "nodes": {
+   "buffer": {
+    "blocked": [],
+    "inputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_OreIron_C": 30.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "mine": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "power_mw": 5.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "smelter": {
+    "blocked": [],
+    "inputs": {
+     "Desc_OreIron_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronIngot_C": 30.0
+    },
+    "power_mw": 4.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 9.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_OreIron_C": 60.0
+  },
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "1": 3
+   },
+   "buildings": {
+    "Build_MinerMk1_C": 1,
+    "Build_SmelterMk1_C": 1,
+    "Build_StorageContainerMk1_C": 1
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "buffer_to_sink": {
+  "diagnostics": [
+   "info|buffer_filling|buffer"
+  ],
+  "discarded_outputs": {
+   "Desc_IronIngot_C": 120.0
+  },
+  "edges": {
+   "e1": 240.0,
+   "e2": 240.0,
+   "e3": 120.0,
+   "e4": 120.0
+  },
+  "final_outputs": {
+   "Desc_IronIngot_C": 120.0
+  },
+  "nodes": {
+   "buffer": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 240.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronIngot_C": 240.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "deposit": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_OreIron_C": 240.0
+    },
+    "power_mw": 30.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "ingot_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 120.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "ingot_sink": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 120.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "smelter": {
+    "blocked": [],
+    "inputs": {
+     "Desc_OreIron_C": 240.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronIngot_C": 240.0
+    },
+    "power_mw": 32.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 62.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_OreIron_C": 240.0
+  },
+  "shopping_list": {
+   "attachments": {
+    "Build_ConveyorAttachmentSplitter_C": 1
+   },
+   "belts_by_tier": {
+    "5": 4
+   },
+   "buildings": {
+    "Build_MinerMk2_C": 2,
+    "Build_SmelterMk1_C": 8,
+    "Build_StorageContainerMk2_C": 1
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "coal_power": {
+  "diagnostics": [],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 120.0,
+   "e2": 360.0
+  },
+  "final_outputs": {},
+  "nodes": {
+   "coal": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_Coal_C": 120.0
+    },
+    "power_mw": 15.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "generators": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Coal_C": 120.0,
+     "Desc_Water_C": 360.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 600.0,
+    "ratio": 1.0
+   },
+   "pump": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_Water_C": 360.0
+    },
+    "power_mw": 60.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 600.0,
+  "power_total_mw": 75.0,
+  "raw_fluids": {
+   "Desc_Water_C": 360.0
+  },
+  "raw_solids": {
+   "Desc_Coal_C": 120.0
+  },
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "3": 1
+   },
+   "buildings": {
+    "Build_GeneratorCoal_C": 8,
+    "Build_MinerMk2_C": 1,
+    "Build_WaterPump_C": 3
+   },
+   "pipes_by_tier": {
+    "2": 1
+   },
+   "power_shards": {}
+  }
+ },
+ "computer_chain": {
+  "diagnostics": [],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 60.0,
+   "e2": 120.0,
+   "e3": 120.0,
+   "e4": 60.0,
+   "e5": 30.0,
+   "e6": 7.5
+  },
+  "final_outputs": {
+   "Desc_Computer_C": 7.5
+  },
+  "nodes": {
+   "cables": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_Cable_C": 60.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "circuit_boards": {
+    "blocked": [],
+    "inputs": {
+     "Desc_CopperSheet_C": 60.0,
+     "Desc_Plastic_C": 120.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_CircuitBoard_C": 30.0
+    },
+    "power_mw": 60.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "computers": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Cable_C": 60.0,
+     "Desc_CircuitBoard_C": 30.0,
+     "Desc_Plastic_C": 120.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_Computer_C": 7.5
+    },
+    "power_mw": 165.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Computer_C": 7.5
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "plastic": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_Plastic_C": 240.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "sheets": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_CopperSheet_C": 60.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 225.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_Cable_C": 60.0,
+   "Desc_CopperSheet_C": 60.0,
+   "Desc_Plastic_C": 240.0
+  },
+  "shopping_list": {
+   "attachments": {
+    "Build_ConveyorAttachmentSplitter_C": 1
+   },
+   "belts_by_tier": {
+    "1": 4,
+    "2": 2
+   },
+   "buildings": {
+    "Build_AssemblerMk1_C": 4,
+    "Build_ManufacturerMk1_C": 3
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "deficit": {
+  "diagnostics": [
+   "warning|deficit|smelter"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 60.0,
+   "e2": 60.0
+  },
+  "final_outputs": {
+   "Desc_IronIngot_C": 60.0
+  },
+  "nodes": {
+   "mine": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "power_mw": 5.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 60.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "smelter": {
+    "blocked": [],
+    "inputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "limiting": "inputs",
+    "outputs": {
+     "Desc_IronIngot_C": 60.0
+    },
+    "power_mw": 12.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.666666667
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 17.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_OreIron_C": 60.0
+  },
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "1": 2
+   },
+   "buildings": {
+    "Build_MinerMk1_C": 1,
+    "Build_SmelterMk1_C": 3
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "fuel_power": {
+  "diagnostics": [
+   "warning|deficit|residual_fuel"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 120.0,
+   "e2": 80.0,
+   "e3": 40.0,
+   "e4": 20.0,
+   "e5": 6.666666667
+  },
+  "final_outputs": {
+   "Desc_LiquidFuel_C": 6.666666667,
+   "Desc_Plastic_C": 80.0
+  },
+  "nodes": {
+   "fuel_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidFuel_C": 6.666666667
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "generator": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidFuel_C": 20.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 250.0,
+    "ratio": 1.0
+   },
+   "oil": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_LiquidOil_C": 120.0
+    },
+    "power_mw": 40.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "plastic": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidOil_C": 120.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_HeavyOilResidue_C": 40.0,
+     "Desc_Plastic_C": 80.0
+    },
+    "power_mw": 120.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "plastic_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Plastic_C": 80.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "residual_fuel": {
+    "blocked": [],
+    "inputs": {
+     "Desc_HeavyOilResidue_C": 40.0
+    },
+    "limiting": "inputs",
+    "outputs": {
+     "Desc_LiquidFuel_C": 26.666666667
+    },
+    "power_mw": 30.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.666666667
+   }
+  },
+  "power_production_mw": 250.0,
+  "power_total_mw": 190.0,
+  "raw_fluids": {
+   "Desc_LiquidOil_C": 120.0
+  },
+  "raw_solids": {},
+  "shopping_list": {
+   "attachments": {
+    "Build_PipelineJunction_Cross_C": 1
+   },
+   "belts_by_tier": {
+    "3": 1
+   },
+   "buildings": {
+    "Build_GeneratorFuel_C": 1,
+    "Build_OilPump_C": 1,
+    "Build_OilRefinery_C": 5
+   },
+   "pipes_by_tier": {
+    "1": 4
+   },
+   "power_shards": {}
+  }
+ },
+ "iron_plate": {
+  "diagnostics": [],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 60.0,
+   "e2": 60.0,
+   "e3": 40.0
+  },
+  "final_outputs": {
+   "Desc_IronPlate_C": 40.0
+  },
+  "nodes": {
+   "constructor": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 60.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronPlate_C": 40.0
+    },
+    "power_mw": 8.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "mine": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "power_mw": 5.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronPlate_C": 40.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "smelter": {
+    "blocked": [],
+    "inputs": {
+     "Desc_OreIron_C": 60.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronIngot_C": 60.0
+    },
+    "power_mw": 8.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 21.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_OreIron_C": 60.0
+  },
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "1": 3
+   },
+   "buildings": {
+    "Build_ConstructorMk1_C": 2,
+    "Build_MinerMk1_C": 1,
+    "Build_SmelterMk1_C": 2
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "pipe_saturation": {
+  "diagnostics": [
+   "warning|line_saturation|e1"
+  ],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 600.0
+  },
+  "final_outputs": {
+   "Desc_LiquidOil_C": 600.0
+  },
+  "nodes": {
+   "oil": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "line",
+    "outputs": {
+     "Desc_LiquidOil_C": 600.0
+    },
+    "power_mw": 240.0,
+    "power_produced_mw": 0.0,
+    "ratio": 0.833333333
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidOil_C": 600.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 240.0,
+  "raw_fluids": {
+   "Desc_LiquidOil_C": 600.0
+  },
+  "raw_solids": {},
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {},
+   "buildings": {
+    "Build_OilPump_C": 6
+   },
+   "pipes_by_tier": {
+    "2": 1
+   },
+   "power_shards": {}
+  }
+ },
+ "plastic_chain": {
+  "diagnostics": [],
+  "discarded_outputs": {
+   "Desc_HeavyOilResidue_C": 40.0
+  },
+  "edges": {
+   "e1": 120.0,
+   "e2": 80.0,
+   "e3": 40.0
+  },
+  "final_outputs": {
+   "Desc_Plastic_C": 80.0
+  },
+  "nodes": {
+   "oil": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_LiquidOil_C": 120.0
+    },
+    "power_mw": 40.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "plastic_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Plastic_C": 80.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "refinery": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidOil_C": 120.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_HeavyOilResidue_C": 40.0,
+     "Desc_Plastic_C": 80.0
+    },
+    "power_mw": 120.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "residue_flare": {
+    "blocked": [],
+    "inputs": {
+     "Desc_HeavyOilResidue_C": 40.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 160.0,
+  "raw_fluids": {
+   "Desc_LiquidOil_C": 120.0
+  },
+  "raw_solids": {},
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "2": 1
+   },
+   "buildings": {
+    "Build_OilPump_C": 1,
+    "Build_OilRefinery_C": 4
+   },
+   "pipes_by_tier": {
+    "1": 2
+   },
+   "power_shards": {}
+  }
+ },
+ "recycling_loop": {
+  "diagnostics": [],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 30.0,
+   "e2": 30.0,
+   "e3": 30.0,
+   "e4": 30.0,
+   "e5": 30.0,
+   "e6": 30.0
+  },
+  "final_outputs": {
+   "Desc_Plastic_C": 30.0,
+   "Desc_Rubber_C": 30.0
+  },
+  "nodes": {
+   "fuel": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_LiquidFuel_C": 60.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "plastic_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Plastic_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "recycled_plastic": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidFuel_C": 30.0,
+     "Desc_Rubber_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_Plastic_C": 60.0
+    },
+    "power_mw": 30.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "recycled_rubber": {
+    "blocked": [],
+    "inputs": {
+     "Desc_LiquidFuel_C": 30.0,
+     "Desc_Plastic_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_Rubber_C": 60.0
+    },
+    "power_mw": 30.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "rubber_out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Rubber_C": 30.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 60.0,
+  "raw_fluids": {
+   "Desc_LiquidFuel_C": 60.0
+  },
+  "raw_solids": {},
+  "shopping_list": {
+   "attachments": {
+    "Build_ConveyorAttachmentSplitter_C": 2,
+    "Build_PipelineJunction_Cross_C": 1
+   },
+   "belts_by_tier": {
+    "2": 4
+   },
+   "buildings": {
+    "Build_OilRefinery_C": 2
+   },
+   "pipes_by_tier": {
+    "1": 2
+   },
+   "power_shards": {}
+  }
+ },
+ "screws_reinforced_plate": {
+  "diagnostics": [],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 45.0,
+   "e2": 15.0,
+   "e3": 15.0,
+   "e4": 30.0,
+   "e5": 60.0,
+   "e6": 5.0
+  },
+  "final_outputs": {
+   "Desc_IronPlateReinforced_C": 5.0
+  },
+  "nodes": {
+   "assembler": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronPlate_C": 30.0,
+     "Desc_IronScrew_C": 60.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronPlateReinforced_C": 5.0
+    },
+    "power_mw": 15.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "ingots": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronIngot_C": 60.0
+    },
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronPlateReinforced_C": 5.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "plates": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 45.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronPlate_C": 30.0
+    },
+    "power_mw": 6.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "rods": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronIngot_C": 15.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronRod_C": 15.0
+    },
+    "power_mw": 4.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "screws": {
+    "blocked": [],
+    "inputs": {
+     "Desc_IronRod_C": 15.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_IronScrew_C": 60.0
+    },
+    "power_mw": 6.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 31.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_IronIngot_C": 60.0
+  },
+  "shopping_list": {
+   "attachments": {
+    "Build_ConveyorAttachmentSplitter_C": 1
+   },
+   "belts_by_tier": {
+    "1": 5,
+    "2": 1
+   },
+   "buildings": {
+    "Build_AssemblerMk1_C": 1,
+    "Build_ConstructorMk1_C": 5
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ },
+ "steel_chain": {
+  "diagnostics": [],
+  "discarded_outputs": {},
+  "edges": {
+   "e1": 180.0,
+   "e2": 180.0,
+   "e3": 180.0
+  },
+  "final_outputs": {
+   "Desc_SteelIngot_C": 180.0
+  },
+  "nodes": {
+   "coal": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_Coal_C": 180.0
+    },
+    "power_mw": 15.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "foundry": {
+    "blocked": [],
+    "inputs": {
+     "Desc_Coal_C": 180.0,
+     "Desc_OreIron_C": 180.0
+    },
+    "limiting": "none",
+    "outputs": {
+     "Desc_SteelIngot_C": 180.0
+    },
+    "power_mw": 64.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "iron": {
+    "blocked": [],
+    "inputs": {},
+    "limiting": "none",
+    "outputs": {
+     "Desc_OreIron_C": 180.0
+    },
+    "power_mw": 15.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   },
+   "out": {
+    "blocked": [],
+    "inputs": {
+     "Desc_SteelIngot_C": 180.0
+    },
+    "limiting": "none",
+    "outputs": {},
+    "power_mw": 0.0,
+    "power_produced_mw": 0.0,
+    "ratio": 1.0
+   }
+  },
+  "power_production_mw": 0.0,
+  "power_total_mw": 94.0,
+  "raw_fluids": {},
+  "raw_solids": {
+   "Desc_Coal_C": 180.0,
+   "Desc_OreIron_C": 180.0
+  },
+  "shopping_list": {
+   "attachments": {},
+   "belts_by_tier": {
+    "3": 3
+   },
+   "buildings": {
+    "Build_FoundryMk1_C": 4,
+    "Build_MinerMk1_C": 6
+   },
+   "pipes_by_tier": {},
+   "power_shards": {}
+  }
+ }
+}

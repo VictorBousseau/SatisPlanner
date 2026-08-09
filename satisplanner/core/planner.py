@@ -37,6 +37,7 @@ from typing import Final
 from satisplanner.core import breakdown, formatting
 from satisplanner.core.attachments import materialise
 from satisplanner.core.graph import (
+    AttachmentMode,
     Edge,
     ExternalSourceNode,
     FactoryGraph,
@@ -318,26 +319,33 @@ def _levelled(
 # --------------------------------------------------------------------------- #
 
 
-def build(game_data: GameData, made: Plan) -> FactoryGraph:
+def build(
+    game_data: GameData, made: Plan, mode: AttachmentMode = AttachmentMode.SIMPLE
+) -> FactoryGraph:
     """Turn a plan into an ordinary factory: nodes, lines and fittings.
 
     Ordinary is the word that matters. What comes back is a
     :class:`~satisplanner.core.graph.FactoryGraph` like any other -- editable,
-    savable, and subject to every rule the rest of the application enforces. In
-    particular the splitters and mergers its ports need are put in by the very same
-    :func:`~satisplanner.core.attachments.materialise` a document from an older
-    schema goes through: a generated factory that broke the port rule would be an
-    admission that the rule is decorative.
+    savable, and subject to every rule the rest of the application enforces.
+
+    ``mode`` is the mode of the document the user is generating into, and a
+    generated factory obeys its own document's rule rather than one of its own. In
+    the faithful mode the fittings its ports need are put in by the very same
+    :func:`~satisplanner.core.attachments.materialise` the bascule runs: a
+    generated factory that broke the port rule would be an admission that the rule
+    is decorative. In the simple mode there is nothing to put in, and drawing
+    fittings nobody asked for would be the same admission from the other side.
 
     A container goes wherever the plan makes more than it consumes, which only
     happens once something has been rounded up. The surplus is not routed by hand
     either: a container absorbs without limit and is therefore served last, so what
     reaches it is exactly what the consumers could not take.
     """
-    graph = FactoryGraph()
+    graph = FactoryGraph(attachment_mode=mode)
     _place_nodes(game_data, made, graph)
     _lay_lines(game_data, made, graph)
-    materialise(graph)
+    if graph.is_faithful:
+        materialise(graph)
     return graph
 
 
@@ -536,10 +544,15 @@ def _connect(
     chosen = game_data.smallest_transport_for(form, rate) or transports[-1]
     capacity = game_data.transport_capacity(chosen.class_name)
     wanted = max(1, math.ceil(rate / capacity)) if capacity > 0 else 1
-    room = min(
-        port_line_budget(graph.node(source), is_output=True) or wanted,
-        port_line_budget(graph.node(target), is_output=False) or wanted,
-    )
+    # The port budget bounds the doubling only where the document enforces it. In
+    # the simple mode a port takes what it needs, and a rate that wants three belts
+    # gets three -- which is the mode's whole promise.
+    room = wanted
+    if graph.is_faithful:
+        room = min(
+            port_line_budget(graph.node(source), is_output=True) or wanted,
+            port_line_budget(graph.node(target), is_output=False) or wanted,
+        )
     for _ in range(max(1, min(wanted, room))):
         graph.edges.append(
             Edge(

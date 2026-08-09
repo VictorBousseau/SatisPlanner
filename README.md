@@ -31,10 +31,14 @@ Autant le dire avant d'ouvrir la fenêtre.
   intervention manuelle. Afficher tout à zéro n'apprendrait rien, et un bridage partiel serait une
   invention. Les générateurs tournent à 100 % : leur surcadençage suit un exposant différent de
   celui des machines. (V2)
-- **Un port porte une ligne.** Un nœud a autant de ports qu'il a de bâtiments : huit fonderies ont
-  huit sorties, une seule en a une. Au-delà, il faut un répartiteur ou un groupeur, et ce sont des
-  nœuds qu'on pose et qu'on voit. Ils ne sont jamais un goulot — un répartiteur passe 2000 items/min
-  quand le meilleur convoyeur plafonne à 1200 — mais ils décident du partage.
+- **Deux modes, et c'est l'usine qui choisit.** En **simple** — le défaut d'une usine neuve — un
+  port porte autant de lignes qu'on veut, le partage max-min se fait là, et les raccords sont
+  déduits pour la liste de courses sans être dessinés : c'est le mode pour réfléchir aux débits.
+  En **fidèle**, la règle du jeu s'applique — un port, une ligne — et un répartiteur ou un groupeur
+  est un nœud qu'on pose et qu'on voit : c'est le mode pour construire. Le réglage vit dans le
+  document et voyage avec lui, parce qu'il change les chiffres. Les raccords ne sont jamais un
+  goulot — un répartiteur passe 2000 items/min quand le meilleur convoyeur plafonne à 1200 — mais
+  ils décident du partage.
 - **Hors périmètre V1** : Mélangeur, Convertisseur, Encodeur quantique, Accélérateur de
   particules, nucléaire, extracteur de puits de ressources, Clean Pipeline.
 - **Le nombre de machines est une saisie**, pas un résultat — sauf si vous demandez l'inverse.
@@ -457,7 +461,18 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
    recette dans le catalogue et sont en droit de l'y trouver. Ce que l'utilisateur risquait de
    perdre — la disposition de tout le reste — est préservé, et le document est marqué de façon que
    la perte ne puisse pas être propagée au fichier d'origine par inadvertance.
-9. **Un port porte une ligne, et un nœud a autant de ports qu'il a de bâtiments.** `ceil(count)`
+9. **Concevoir et construire ne veulent pas la même chose, donc l'usine dit laquelle.** Le mode
+   des raccords est un champ du document et non une préférence : une usine partagée doit s'ouvrir
+   dans le mode où elle a été pensée, sinon ses chiffres changent chez le destinataire. Ce n'est
+   pas ce qu'on fait d'une palette de couleurs, et c'est justement la différence — celui-ci change
+   les résultats. Les deux modes ne sont **pas deux moteurs** : un raccord est un nœud ordinaire
+   doté d'une plaque signalétique, donc le mode fidèle est le même code avec des nœuds en plus et
+   le mode simple le même code avec aucun. Vérifié plutôt qu'argumenté : les usines de référence
+   résolues en mode simple sont comparées champ par champ à un instantané produit par la build qui
+   précédait les raccords explicites (`tests/fixtures/reports_avant_lot4.json`). La seule chose qui
+   diffère est **qui compte les raccords** — déduits d'un côté, comptés de l'autre — et l'écart est
+   expliqué dans la page d'aide, parce que c'est la question qu'on se pose en basculant.
+10. **Un port porte une ligne, et un nœud a autant de ports qu'il a de bâtiments.** `ceil(count)`
    par objet et par sens : huit fonderies alimentant huit consommateurs n'ont besoin d'aucun
    répartiteur, une seule fonderie en a besoin d'un dès la deuxième ligne. Les répartiteurs et les
    groupeurs sont donc des nœuds, posés et comptés là où ils sont, coût de construction compris. Un
@@ -467,7 +482,7 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
    longueur, l'outil ne connaît aucune distance, et une estimation tirée d'une longueur moyenne
    serait un chiffre inventé posé au milieu de chiffres exacts. Un blanc qui se voit vaut mieux
    qu'un total qu'on croit complet.
-10. **Une usine générée est une usine ordinaire.** « Deux cadres modulaires lourds par minute »
+11. **Une usine générée est une usine ordinaire.** « Deux cadres modulaires lourds par minute »
    se développe récursivement en machines, lignes et raccords, sans solveur et sans optimisation :
    recette standard partout sauf là où l'utilisateur en impose une autre, et le même résultat à
    l'octet près à chaque fois. Ce qui en sort se modifie, s'enregistre et s'annule comme le reste.
@@ -475,31 +490,31 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
    consomme en matières premières est confronté au coût brut que la fiche de l'objet calcule par un
    tout autre chemin. Les deux tombent d'accord à la décimale sur quatre objets de profondeurs
    différentes.
-11. **Le répartiteur standard est le cas particulier du programmable**, pas une seconde
+12. **Le répartiteur standard est le cas particulier du programmable**, pas une seconde
    implémentation. Un programmable dont toutes les branches sont en « n'importe lequel » rend les
    mêmes chiffres au bit près, par le même code. Ce qui change les débits est le mode **surplus** :
    une branche qui ne prend que ce dont les autres n'ont pas voulu, servie en dernier par le même
    mécanisme que les puits illimités. Une ligne porte un objet, donc filtrer une branche sur autre
    chose la ferme — c'est signalé, pas deviné — et le jeu ne filtre que les convoyeurs : il n'y a
    pas de jonction de pipeline intelligente.
-12. **La palette est un modèle, pas une liste d'objets.** Construire l'icône de chaque entrée à
+13. **La palette est un modèle, pas une liste d'objets.** Construire l'icône de chaque entrée à
     l'ouverture coûtait neuf millisecondes fois sept cents, soit une fenêtre figée neuf secondes.
     Qt ne demande au modèle que les lignes qu'il s'apprête à peindre.
-13. **Le surcadençage est proportionnel sur le débit et exponentiel sur l'électricité.**
+14. **Le surcadençage est proportionnel sur le débit et exponentiel sur l'électricité.**
     L'exposant est **lu dans les données** (`mPowerConsumptionExponent`), jamais codé en dur : le
     jeu utilise 1,321929 pour tout ce qui produit et 1,6 ailleurs. À 250 %, une machine consomme
     donc environ 3,36 fois son nominal, et exactement 2,5 fois à 200 % — l'exposant vaut log₂(2,5),
     ce qui n'est pas un hasard. Le nombre d'éclats se déduit de `mExtraPotential` ; seul le nombre
     d'emplacements (trois) n'est pas exporté et vit dans `core/constants.py`, avec un test qui
     vérifie que la borne de 250 % reste égale à ce que trois éclats achètent réellement.
-14. **Chaque champ modifiable n'a qu'une implémentation, pas trois qui s'accordent.**
+15. **Chaque champ modifiable n'a qu'une implémentation, pas trois qui s'accordent.**
     `ui/edits.py` porte la validation et la commande ; le menu contextuel, la cellule du tableau
     et le double-clic sur le nœud l'appellent tous les trois. La première version en avait deux,
     écrites pour donner le même résultat et vérifiées par un test — ce qui tient à trois champs
     et se casse au quatrième. Le test correspondant ne compare pas des résultats mais **les
     libellés des commandes empilées par les trois chemins** : c'est la seule chose qui puisse
     prouver qu'il n'y a bien qu'une porte.
-15. **La consommation compte les machines à l'arrêt, la production ne compte que ce qui brûle.**
+16. **La consommation compte les machines à l'arrêt, la production ne compte que ce qui brûle.**
     L'asymétrie est volontaire. Côté consommation c'est un **dimensionnement au pire cas et non
     une mesure du jeu** : les fichiers ne déclarent qu'une consommation nominale par bâtiment et
     aucune consommation de veille — le seul second chiffre du jeu,
@@ -507,13 +522,13 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
     hors périmètre et désigne le bas de la plage d'une recette *en marche*. Inventer une valeur
     réduite serait pire que compter au maximum. Côté production, en revanche, la donnée est sans
     ambiguïté : un générateur sans carburant ne brûle rien et ne produit rien.
-16. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
+17. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
     diagnostic d'erreur ne se traduit pas par un taux réduit, et c'est délibéré : en jeu, un
     déficit ne ralentit pas l'usine, il déclenche une coupure générale jusqu'à intervention
     manuelle. Afficher « tout à zéro » n'apprendrait rien et un bridage partiel serait une
     invention. Le test qui compte n'est pas que les chiffres soient justes, c'est que la même
     usine résolue avec et sans assez de générateurs donne exactement les mêmes débits.
-17. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
+18. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
     coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
     écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
     affichant la même image coûte seize millisecondes.

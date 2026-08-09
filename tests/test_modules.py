@@ -19,6 +19,7 @@ import pytest
 
 from satisplanner.core import engine, interface
 from satisplanner.core.graph import (
+    AttachmentMode,
     Edge,
     ExternalSourceNode,
     FactoryGraph,
@@ -335,16 +336,21 @@ def test_a_module_written_under_an_older_schema_is_migrated_on_reading(
     assert [node.id for node in module.graph().nodes] == ["plaque1"]
 
 
-def test_a_module_from_before_the_splitters_arrives_with_them(
+def test_a_module_from_before_the_splitters_arrives_as_it_was_saved(
     game_data: GameData, tmp_path: Path
 ) -> None:
-    """Supposed rather than checked would have been the easy mistake here.
+    """A module carries its own mode, and an old one is a simple-mode module.
 
-    A module's payload is a share code and a share code goes through ``migrate``,
-    so the trees a module was missing should be put in by the same door a factory
-    goes through -- with nothing in the library knowing that door exists. This is
-    the proof: a module saved with four lines out of one constructor comes back with
-    the three splitters that shape them.
+    For one version this test asserted the opposite: an old module came back with
+    the tree of splitters its four lines implied, because the port rule was the
+    build's and every document had to obey it. The rule is the document's now, so a
+    module saved before the rule existed arrives in the shape it was saved in and
+    in the mode it was drawn under -- and, being flat, it still shares its four
+    lines equally, which is the figure its author saw.
+
+    This is also the answer to "can a module cross between the two modes": it can,
+    because a module is a document and a document carries its mode. What it must
+    not do is arrive silently reshaped.
     """
     graph = plates(game_data, machines=1)
     graph.nodes.append(ExternalSourceNode(id="lingots", item_class=INGOT, rate_per_minute=30))
@@ -382,12 +388,14 @@ def test_a_module_from_before_the_splitters_arrives_with_them(
 
     inserted = module_file.load_module(path).graph()
 
-    splitters = [node for node in inserted.nodes if isinstance(node, SplitterNode)]
-    assert len(splitters) == 3, "un arbre équilibré à quatre feuilles"
-    assert len(inserted.outgoing("plaque1")) == 1, "une machine, un port"
+    assert not [node for node in inserted.nodes if isinstance(node, SplitterNode)]
+    assert inserted.attachment_mode is AttachmentMode.SIMPLE
+    assert len(inserted.outgoing("plaque1")) == 4, "les quatre lignes telles qu'elles"
     report = engine.solve(inserted, game_data)
     received = [round(report.node(f"sortie{index}").inputs[PLATE], 9) for index in range(4)]
-    assert received == [5.0] * 4, "vingt plaques partagées en quatre par un arbre équilibré"
+    assert received == [5.0] * 4, "vingt plaques partagées en quatre, également"
+    # And the fittings are still on the shopping list -- deduced rather than drawn.
+    assert report.shopping_list.attachments == {"Build_ConveyorAttachmentSplitter_C": 2}
 
 
 def _share_code_at_schema(graph: FactoryGraph, schema_version: int) -> str:

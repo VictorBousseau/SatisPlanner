@@ -13,6 +13,7 @@ import pytest
 
 from satisplanner.core import attachments, constants, engine
 from satisplanner.core.graph import (
+    AttachmentMode,
     ExternalSourceNode,
     FactoryGraph,
     GraphError,
@@ -24,8 +25,18 @@ from satisplanner.core.graph import (
     port_line_budget,
 )
 from satisplanner.core.models import GameData
-from satisplanner.data import factory_file
 from tests.conftest import load_graph
+
+
+def faithful() -> FactoryGraph:
+    """An empty document in the mode this file is about.
+
+    Written out rather than defaulted: the simple mode is what a new factory gets,
+    and every graph below exists to exercise the rule that only the faithful one
+    enforces.
+    """
+    return FactoryGraph(attachment_mode=AttachmentMode.FAITHFUL)
+
 
 BELT = "Build_ConveyorBeltMk3_C"
 SMALL_BELT = "Build_ConveyorBeltMk1_C"
@@ -36,7 +47,7 @@ ORE = "Desc_OreIron_C"
 
 def fed_bank(game_data: GameData, machines: float) -> FactoryGraph:
     """A bank of ``machines`` smelters, fed, with nothing on its output yet."""
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(ExternalSourceNode(id="src", item_class=ORE, rate_per_minute=600))
     graph.add_node(
         MachineNode(id="bank", recipe_class="Recipe_IngotIron_C", machine_count=machines)
@@ -99,7 +110,7 @@ def test_a_fractional_count_is_rounded_up(game_data: GameData) -> None:
 
 def test_the_budget_is_per_item_and_per_direction(game_data: GameData) -> None:
     """A manufacturer has a port per slot, so two products do not share a budget."""
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(ExternalSourceNode(id="oil", item_class="Desc_LiquidOil_C", rate_per_minute=300))
     graph.add_node(MachineNode(id="refinery", recipe_class="Recipe_Plastic_C", machine_count=1))
     graph.connect("oil", "refinery", "Desc_LiquidOil_C", PIPE, game_data)
@@ -141,7 +152,7 @@ def test_a_splitter_has_one_input_and_three_outputs(game_data: GameData) -> None
 
 
 def test_a_merger_is_the_mirror_image(game_data: GameData) -> None:
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(MergerNode(id="join"))
     graph.add_node(OutputNode(id="out", item_class=INGOT))
     for index in range(4):
@@ -225,7 +236,7 @@ def test_the_engine_gives_the_shares_the_tree_promises(game_data: GameData) -> N
 
     Five consumers behind one machine: a third to one, a sixth to each of the rest.
     """
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(ExternalSourceNode(id="src", item_class=INGOT, rate_per_minute=180))
     graph.add_node(SplitterNode(id="top"))
     graph.connect("src", "top", INGOT, BELT, game_data)
@@ -253,7 +264,7 @@ def test_a_merger_shares_its_output_line_when_it_is_saturated(game_data: GameDat
     which is the round robin the building does. Everywhere else a merge simply adds
     up, which is why the migration of merges moves almost no figures.
     """
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(MergerNode(id="join"))
     graph.add_node(OutputNode(id="out", item_class=INGOT))
     for index in range(3):
@@ -276,7 +287,7 @@ def test_a_fitting_never_keeps_anything(game_data: GameData) -> None:
     Conservation is not a rule bolted onto the solver: a splitter offers what it
     took and may take what it pushed, so the fixed point has no other solution.
     """
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(ExternalSourceNode(id="src", item_class=INGOT, rate_per_minute=600))
     graph.add_node(SplitterNode(id="fork"))
     graph.connect("src", "fork", INGOT, BELT, game_data)
@@ -292,7 +303,7 @@ def test_a_fitting_never_keeps_anything(game_data: GameData) -> None:
 
 def test_a_fitting_with_nothing_behind_it_blocks_what_feeds_it(game_data: GameData) -> None:
     """A dead end is a dead end however many fittings stand in front of it."""
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(ExternalSourceNode(id="src", item_class=ORE, rate_per_minute=60))
     graph.add_node(MachineNode(id="bank", recipe_class="Recipe_IngotIron_C", machine_count=1))
     graph.connect("src", "bank", ORE, BELT, game_data)
@@ -306,19 +317,25 @@ def test_a_fitting_with_nothing_behind_it_blocks_what_feeds_it(game_data: GameDa
 
 
 # --------------------------------------------------------------------------- #
-# Migration
+# The bascule
 # --------------------------------------------------------------------------- #
 
 
 # The schema before splitters became nodes. Named rather than derived from the
-# current one: what this exercises is the step that inserts the trees, and that
-# step will not move just because a later one is added.
+# current one: a document from before it opens in the simple mode and stays in the
+# shape it was drawn in, which is what these tests start from.
 BEFORE_ATTACHMENTS = 4
 
 
 def migrated(graph: FactoryGraph) -> tuple[FactoryGraph, list[str]]:
-    payload, notes = factory_file.migrate(graph.model_dump(mode="json"), BEFORE_ATTACHMENTS)
-    return FactoryGraph.model_validate(payload), notes
+    """A simple-mode document taken up to the faithful mode, as the menu does it.
+
+    This used to be the schema-4 migration, which ran on opening and gave nobody a
+    choice. The conversion is the same one; what changed is who asks for it.
+    """
+    lifted = graph.model_copy(deep=True)
+    notes = attachments.switch_mode(lifted, AttachmentMode.FAITHFUL)
+    return lifted, notes
 
 
 def test_an_older_document_gains_the_tree_it_always_implied(game_data: GameData) -> None:
@@ -439,7 +456,7 @@ def test_an_inserted_tree_lands_on_nobody(game_data: GameData) -> None:
 
 
 def test_the_trunk_keeps_the_tier_the_lines_already_used(game_data: GameData) -> None:
-    """No catalogue is in reach during a migration, so no tier is invented."""
+    """No catalogue is in reach during a conversion, so no tier is invented."""
     graph = FactoryGraph()
     graph.add_node(ExternalSourceNode(id="src", item_class=INGOT, rate_per_minute=240))
     graph.add_node(StorageNode(id="buffer", storage_class="Build_StorageContainerMk1_C"))

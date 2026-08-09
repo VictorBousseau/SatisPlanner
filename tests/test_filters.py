@@ -15,6 +15,7 @@ from satisplanner.core import engine
 from satisplanner.core.graph import (
     ANY_BRANCH,
     OVERFLOW_BRANCH,
+    AttachmentMode,
     ExternalSourceNode,
     FactoryGraph,
     MachineNode,
@@ -24,6 +25,17 @@ from satisplanner.core.graph import (
 from satisplanner.core.models import AttachmentRole, GameData, SplitterMode
 from satisplanner.core.results import DiagnosticCode, Severity
 from tests.conftest import load_graph
+
+
+def faithful() -> FactoryGraph:
+    """An empty document in the mode this file is about.
+
+    Written out rather than defaulted: the simple mode is what a new factory gets,
+    and every graph below exists to exercise the rule that only the faithful one
+    enforces.
+    """
+    return FactoryGraph(attachment_mode=AttachmentMode.FAITHFUL)
+
 
 BELT = "Build_ConveyorBeltMk3_C"
 PIPE = "Build_PipelineMK2_C"
@@ -46,7 +58,7 @@ def fan_out(
     exactly served and at 90 they are not: the same factory says one thing about
     sharing and another about priority depending on the figure it is given.
     """
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(ExternalSourceNode(id="src", item_class=INGOT, rate_per_minute=supply))
     graph.add_node(SplitterNode(id="tri", mode=mode, filters=dict(filters)))
     graph.connect("src", "tri", INGOT, BELT, game_data)
@@ -225,7 +237,7 @@ def test_a_fluid_cannot_be_filtered_because_the_game_has_no_such_junction(
     game_data: GameData,
 ) -> None:
     """A choice of the game's, reported rather than modelled around."""
-    graph = FactoryGraph()
+    graph = faithful()
     graph.add_node(ExternalSourceNode(id="puits", item_class="Desc_Water_C", rate_per_minute=120))
     graph.add_node(SplitterNode(id="tri", mode=SplitterMode.SMART))
     graph.connect("puits", "tri", "Desc_Water_C", PIPE, game_data)

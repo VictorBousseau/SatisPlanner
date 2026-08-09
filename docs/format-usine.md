@@ -24,9 +24,9 @@ Un `.sfp` est une **archive ZIP** contenant jusqu'à trois membres :
 
 ```json
 {
-  "application_version": "2.0.0",
+  "application_version": "3.0.0",
   "game_version": "1.2",
-  "schema_version": 6,
+  "schema_version": 7,
   "saved_at": "2026-08-02T18:42:11+00:00"
 }
 ```
@@ -36,7 +36,7 @@ par quelles conversions le document doit passer. Un fichier annonçant une versi
 **supérieure** à celle que connaît la build est refusé avec une phrase, jamais
 ouvert de travers.
 
-Le schéma courant est le **6**. Les versions successives, et ce que chacune a
+Le schéma courant est le **7**. Les versions successives, et ce que chacune a
 ajouté :
 
 | Schéma | Ce qui change | Conversion à l'ouverture |
@@ -45,13 +45,25 @@ ajouté :
 | 2 | la cadence des machines et des extracteurs | rien à faire : la cadence prend 100 % |
 | 3 | le nœud `generator` apparaît | rien à faire : un document d'avant n'en a pas |
 | 4 | `show_deployed` par nœud | rien à faire |
-| 5 | les répartiteurs et les groupeurs deviennent des nœuds | **oui** : les raccords que la disposition supposait sont matérialisés |
+| 5 | les répartiteurs et les groupeurs deviennent des nœuds | rien à faire **depuis le schéma 7** — voir ci-dessous |
 | 6 | le mode d'un répartiteur et les filtres de ses branches | rien à faire : tout répartiteur ancien est un `standard` |
+| 7 | `attachment_mode` : la règle des ports devient celle du document | le mode est lu sur le contenu, rien n'est réécrit |
 
 Un numéro est incrémenté même quand il n'y a rien à convertir. C'est le seul moyen
 qu'une build ancienne refuse un fichier récent par une phrase plutôt qu'en ignorant
 en silence un champ qu'elle ne connaît pas — un répartiteur en mode « surplus » lu
 par une build du schéma 5 afficherait des chiffres faux sans un mot.
+
+**Le passage du 4 au 5 a changé de sens, et c'est le seul revirement de cette
+liste.** Pendant une version il insérait l'arbre de répartiteurs qu'un port à trois
+lignes supposait, parce que la règle était celle de la build et que tout document
+devait s'y plier. Depuis le schéma 7 la règle est celle du document : un fichier
+antérieur garde la forme dans laquelle il a été dessiné et s'ouvre en mode
+**simple**, qui est le mode sous lequel il a été écrit. Le convertir changerait ses
+chiffres pour répondre à une question que son auteur n'a jamais posée.
+
+La matérialisation n'a pas disparu pour autant : c'est ce que fait la bascule vers
+le mode fidèle, à la demande, avec le même rapport port par port.
 
 Il existe aussi un **code de partage**, qui transporte exactement le même
 `factory.json` sous forme de texte : le préfixe `SFP1:` suivi du JSON compressé et
@@ -63,11 +75,34 @@ encodé en base64. C'est ce que copient et collent les commandes de partage.
 
 ```json
 {
-  "schema_version": 4,
+  "schema_version": 7,
+  "attachment_mode": "simple",
   "nodes": [ ... ],
   "edges": [ ... ]
 }
 ```
+
+`attachment_mode` vaut `"simple"` ou `"faithful"`, et c'est le seul champ du
+document qui décide d'une **règle** plutôt que d'une valeur.
+
+| | `simple` (défaut) | `faithful` |
+| --- | --- | --- |
+| Lignes sur un port | autant qu'on veut | une par bâtiment, `ceil(count)` |
+| Partage | max-min, au port | max-min, à travers l'arbre de raccords |
+| Raccords | **déduits** des lignes | **comptés** là où ils sont posés |
+| À quoi ça sert | réfléchir aux débits | construire |
+
+Il est dans le document et non dans les préférences parce qu'il change les
+résultats : une usine partagée doit s'ouvrir chez le destinataire dans le mode où
+elle a été pensée. Une couleur d'objet, elle, n'a aucune raison de voyager.
+
+**Les deux comptes de raccords diffèrent, et ce n'est pas une incohérence.** En
+simple, le compte est ce que le dessin *implique*, calculé port par port dans le
+chaînage le plus économe. En fidèle, c'est ce que quelqu'un a réellement posé — et
+une usine dessinée à la main en utilise souvent davantage : un arbre bâti pour la
+symétrie, un raccord resté en place après qu'un nombre de machines a baissé. Un
+total qui monte en basculant est le dessin qui dit quelque chose que la déduction
+ne pouvait pas savoir.
 
 Rien d'autre : un champ inconnu est **refusé**, pas ignoré. C'est délibéré — une
 faute de frappe dans un nom de champ doit se voir tout de suite et non se traduire
@@ -318,12 +353,13 @@ construction et non découvertes par le solveur :
 - un solide voyage sur un convoyeur, un fluide dans une tuyauterie, jamais l'inverse ;
 - `source` doit produire cet objet, `target` doit le consommer ;
 - une machine a au plus **4 entrées** et **2 sorties** distinctes en *objets* ;
-- **un port porte une ligne**, et un nœud a autant de ports qu'il a de bâtiments :
-  `ceil(count)` par objet et par sens. Huit fonderies ont huit sorties, une seule en
-  a une. Un gisement, une pompe, une machine et un générateur suivent tous cette
-  règle ; un tampon n'a pas de compte, donc il a un port de chaque côté ; une entrée
-  et une sortie d'usine sont la frontière du modèle et pas des bâtiments, donc elles
-  n'ont pas de limite ;
+- **un port porte une ligne** — en mode `faithful` seulement —, et un nœud a autant
+  de ports qu'il a de bâtiments : `ceil(count)` par objet et par sens. Huit fonderies
+  ont huit sorties, une seule en a une. Un gisement, une pompe, une machine et un
+  générateur suivent tous cette règle ; un tampon n'a pas de compte, donc il a un
+  port de chaque côté ; une entrée et une sortie d'usine sont la frontière du modèle
+  et pas des bâtiments, donc elles n'ont pas de limite. En mode `simple` la règle ne
+  s'applique pas et un port porte ce qu'on y dessine ;
 - une ligne ne boucle pas sur son propre nœud ;
 - les identifiants de lignes sont uniques.
 
@@ -338,12 +374,20 @@ seule : elle n'a qu'une sortie, et ses deux lignes passent donc par un répartit
 qui leur donne 15 et 15. Ses deux gisements se rejoignent symétriquement par un
 groupeur, parce qu'une fonderie seule n'a aussi qu'une entrée.
 
-Un fichier écrit avant le schéma 5 est converti à l'ouverture : les raccords que sa
-disposition supposait sont matérialisés, les lignes reprises à travers eux. Un
-partage qui se ramène à des moitiés et des tiers — 2, 3, 4, 6, 9 lignes — donne
-exactement les mêmes débits qu'avant ; un partage en 5 ou en 7 n'est pas égal dans
-le jeu et ne l'est plus ici non plus, et la conversion dit lesquels, avec l'ancienne
-et la nouvelle part.
+**La bascule entre les deux modes** matérialise ou dissout les raccords, dans les
+deux sens et en une seule annulation. Vers le fidèle, les raccords que la
+disposition supposait sont posés et les lignes reprises à travers eux ; un partage
+qui se ramène à des moitiés et des tiers — 2, 3, 4, 6, 9 lignes — donne exactement
+les mêmes débits qu'avant, un partage en 5 ou en 7 n'est pas égal dans le jeu et ne
+l'est plus ici non plus, et le rapport dit lesquels, avec l'ancienne et la nouvelle
+part. Vers le simple, les raccords disparaissent et les lignes redeviennent
+directes ; les mêmes ports redeviennent égaux, et le même rapport le dit dans
+l'autre sens. Chaque ligne rescapée prend le **palier le plus étroit du chemin**
+qu'elle remplace : une chaîne porte ce que porte son maillon le plus fin.
+
+Un répartiteur **intelligent ou programmable interdit le retour au simple**, et
+l'application refuse la bascule en le nommant. Le filtrage et le surplus n'existent
+que parce que le raccord existe ; les dissoudre effacerait un routage sans le dire.
 
 ---
 
@@ -352,7 +396,8 @@ et la nouvelle part.
 **Rien.** « Générer une usine depuis un objectif » écrit un `factory.json` comme
 n'importe quel autre : mêmes types de nœuds, mêmes lignes, mêmes raccords, mêmes
 règles de port. Il n'y a pas de champ « généré », pas de mode à quitter, et rien
-dans le fichier ne dit d'où il vient.
+dans le fichier ne dit d'où il vient. Elle est générée **dans le mode du document
+courant** : en fidèle elle pose ses raccords, en simple elle n'en pose aucun.
 
 Deux choses s'y reconnaissent quand même, et c'est voulu :
 
