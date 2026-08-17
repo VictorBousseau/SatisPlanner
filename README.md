@@ -584,9 +584,49 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 - Somersloop et amplification de production : autre formule, autre travail.
 - Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
   sémantique n'est pas la même. À traiter pour lui-même.
-- Paliers supérieurs : Mélangeur, Convertisseur, Encodeur quantique, Accélérateur de particules,
-  aluminium, azote, nucléaire — et le générateur géothermique, qui n'a pas d'intrant et dépend
-  d'un emplacement de la carte.
+- **Mélangeur et puits de ressource, ensemble** — le prochain lot, et l'ordre est décidé par
+  l'état des lieux plutôt que par l'ordre d'apparition dans le jeu. Le Mélangeur ne demande
+  **aucun code** : `FGBuildableManufacturer` comme la Façonneuse, puissance fixe de 75 MW, même
+  exposant, et ses recettes tiennent dans les 4 entrées et 2 sorties déjà supportées. Deux
+  constantes et une régénération de base. Mais seules 6 de ses 17 recettes sont alimentables
+  aujourd'hui : les autres veulent de l'azote, et **l'azote n'a pas d'extracteur** — il est
+  marqué matière brute comme le fer, à l'état gazeux, et rien dans le périmètre ne peut le
+  sortir du sol. Séparés, chacun des deux déçoit ; ensemble ils ouvrent l'acide nitrique, le
+  système de refroidissement, le cadre modulaire fusionné, et donc la phase 5.
+
+  Deux pièges relevés d'avance, pour ne pas les redécouvrir :
+
+  - **la pureté d'un puits est par satellite**, ce qui contredit une règle écrite noir sur blanc
+    dans la page d'aide et dans `docs/format-usine.md` — « la pureté s'applique à **tous** les
+    extracteurs du nœud ». Elle reste vraie d'un gisement solide et devient fausse d'un puits, ce
+    qui demande un **type de nœud distinct** et non un `ResourceNode` élargi. Les deux documents
+    devront alors énoncer la nuance et non la règle actuelle ;
+  - un puits est un bâtiment **en deux parties** — `Build_FrackingSmasher_C` l'activateur à
+    150 MW, `Build_FrackingExtractor_C` les satellites à 0 MW — ce qu'aucun extracteur du modèle
+    n'est aujourd'hui.
+- **Les trois machines à puissance variable**, en un lot d'un bloc et après le précédent :
+  Convertisseur, Accélérateur de particules, Encodeur quantique. Elles partagent un seul manque
+  et il se paie une fois. Toutes trois sont `FGBuildableManufacturerVariablePower` : leur
+  `mPowerConsumption` vaut **zéro**, et la consommation est portée par la **recette**, sous la
+  forme `constant + facteur` — 250 + 500 pour les granulés de plutonium, 0 + 2000 pour l'éclat de
+  charge synthétique. Le moteur lit aujourd'hui la puissance sur le **bâtiment** et n'a nulle part
+  où mettre un chiffre par recette. C'est le seul vrai manque de modélisation qui reste.
+- **La centrale nucléaire**, et elle casse une hypothèse du moteur plutôt que d'en manquer une.
+  Le catalogue sait déjà fabriquer la **barre d'uranium** par ses deux recettes — la cellule
+  encapsulée a une alternative à la Façonneuse, `Recipe_Alternate_UraniumCell_1_C`, qui ne
+  demande que de l'acide sulfurique — et il sait fabriquer la **cellule de plutonium encastré**
+  et la **barre de plutonium**. Ce qu'il ne sait pas faire, c'est les **brûler** : rien ne
+  consomme une barre. Et les **déchets d'uranium n'ont aucune recette dans le jeu** — ce sont
+  un sous-produit de la centrale, 50 par barre — donc toute la branche plutonium est coupée à
+  sa racine, alors que ses deux derniers maillons sont déjà là et inutilisables.
+
+  Le point de conception : `Build_GeneratorNuclear_C` **produit sur une ligne**, ce qu'aucun
+  générateur du modèle ne fait. `node_output_items` rend un ensemble vide pour un générateur et
+  `PRODUCER_KINDS` ne le contient pas, avec le commentaire « ce qu'il produit est du courant, et
+  le courant ne circule pas sur une ligne ». C'est vrai des trois générateurs en périmètre et
+  faux de la centrale. Son eau d'appoint, en revanche, est déjà modélisée — même
+  `mSupplementalToPowerRatio` que le générateur à charbon.
+- Reste le générateur géothermique, qui n'a pas d'intrant et dépend d'un emplacement de la carte.
 - **Choix automatique des recettes alternatives** dans le mode objectif : le générateur suit la
   recette standard sauf indication contraire, et choisir la meilleure sous contrainte demande un
   programme linéaire, donc une dépendance.

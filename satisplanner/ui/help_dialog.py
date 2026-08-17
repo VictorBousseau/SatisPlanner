@@ -207,6 +207,17 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "ce qui est signalé. Poser des filtres en attendant un effet sur les débits "
     "n'en produira aucun ; c'est le surplus qu'il faut. Et le jeu ne filtre que "
     "les convoyeurs : il n'existe pas de jonction de pipeline intelligente.",
+    "<b>Le brûleur de biomasse n'a pas de chaîne d'alimentation, et ce n'est pas "
+    "un oubli.</b> La biomasse se fabrique <b>à la main</b> dans le jeu, à partir de "
+    "bois, de feuilles ou de mycélium qu'on ramasse : aucune machine ne la produit, "
+    "donc aucune recette ne peut la produire ici. Alimentez-le par un <b>apport "
+    "extérieur</b> au débit que vous vous engagez à tenir. La même remarque vaut "
+    "pour tout ce qui descend de la biomasse — biocarburant solide, puis liquide.",
+    "<b>L'azote est une matière brute qu'aucun extracteur ne sait sortir du sol.</b> "
+    "Il vient d'un puits de ressource, qui n'est pas modélisé ; il n'entre donc que "
+    "par un apport extérieur. C'est ce qui met hors de portée l'acide nitrique, le "
+    "système de refroidissement et le cadre modulaire fusionné, et avec eux la "
+    "dernière phase de l'ascenseur spatial.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
     "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",
