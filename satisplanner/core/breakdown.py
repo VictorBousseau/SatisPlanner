@@ -54,6 +54,31 @@ def consumers(game_data: GameData, item_class: str) -> list[Recipe]:
     return sorted(used, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
 
 
+def unavailable_producers(game_data: GameData, item_class: str) -> list[Recipe]:
+    """Recipes that make this item and that no node can place, in the same order.
+
+    Reads the second mapping, never the first. Nothing computed from these ever
+    reaches a factory: they exist so a card can name what the game has and this
+    version does not, which is the difference between a scope and a hole.
+    """
+    made = [
+        recipe
+        for recipe in game_data.unavailable_recipes.values()
+        if any(slot.item_class == item_class for slot in recipe.products)
+    ]
+    return sorted(made, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
+
+
+def unavailable_consumers(game_data: GameData, item_class: str) -> list[Recipe]:
+    """Recipes that eat this item and that no node can place, in the same order."""
+    used = [
+        recipe
+        for recipe in game_data.unavailable_recipes.values()
+        if any(slot.item_class == item_class for slot in recipe.ingredients)
+    ]
+    return sorted(used, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
+
+
 def standard_recipe(game_data: GameData, item_class: str) -> Recipe | None:
     """The non-alternate recipe for this item, or ``None`` when there is none.
 

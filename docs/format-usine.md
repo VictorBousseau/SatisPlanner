@@ -24,7 +24,7 @@ Un `.sfp` est une **archive ZIP** contenant jusqu'à trois membres :
 
 ```json
 {
-  "application_version": "3.0.0",
+  "application_version": "3.1.0",
   "game_version": "1.2",
   "schema_version": 7,
   "saved_at": "2026-08-02T18:42:11+00:00"

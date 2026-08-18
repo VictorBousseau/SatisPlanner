@@ -13,5 +13,10 @@ game database. Data reaches it by injection.
 # the only interface this application exposes to its own past, and breaking it is
 # what a major number is for. Applying the rule to one feature rather than to six is
 # the point -- a rule that bends for a small change is not a rule.
+#
+# The **database** schema is a different thing and does not move the major number.
+# Widening the catalogue -- the Blender, and keeping the recipes no node can place --
+# took `db.SCHEMA_VERSION` from 7 to 8 and left every saved factory readable, both
+# ways: the file is the interface to the past, and this change does not touch it.
 # (This is not the game's version, which is 1.2 and lives in ``data.db.GAME_VERSION``.)
-__version__ = "3.0.0"
+__version__ = "3.1.0"

@@ -215,9 +215,19 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "pour tout ce qui descend de la biomasse — biocarburant solide, puis liquide.",
     "<b>L'azote est une matière brute qu'aucun extracteur ne sait sortir du sol.</b> "
     "Il vient d'un puits de ressource, qui n'est pas modélisé ; il n'entre donc que "
-    "par un apport extérieur. C'est ce qui met hors de portée l'acide nitrique, le "
-    "système de refroidissement et le cadre modulaire fusionné, et avec eux la "
-    "dernière phase de l'ascenseur spatial.",
+    "par un apport extérieur. Les recettes qui en demandent — acide nitrique, "
+    "système de refroidissement, cadre modulaire fusionné, et avec elles la dernière "
+    "phase de l'ascenseur spatial — sont au catalogue depuis que le Mélangeur y est, "
+    "mais elles ne s'alimentent que de cette façon.",
+    "<b>Ce que le catalogue ne sait pas fabriquer, il le dit.</b> La fiche d'un objet "
+    "montre, grisées et sans bouton pour les poser, les recettes que le jeu possède "
+    "et qu'aucun nœud ne peut porter, avec ce qui les en empêche : une <b>machine que "
+    "cette version ne modélise pas encore</b> — c'est temporaire, et ça se réduira —, "
+    "ou une <b>fabrication à la main</b> à l'atelier d'équipement, qui ne sera jamais "
+    "un nœud d'usine. Un objet qu'<b>aucune recette du jeu</b> ne produit dit d'où il "
+    "vient : ramassé dans le monde, ou tombé d'un bâtiment hors périmètre — les "
+    "déchets d'uranium sortent de la centrale nucléaire, ils ne se ramassent pas. "
+    "Une absence qui ne se nomme pas se lit comme un trou dans les données.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
     "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",

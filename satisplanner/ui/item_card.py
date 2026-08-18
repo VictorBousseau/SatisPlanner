@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from satisplanner.core import breakdown, formatting
-from satisplanner.core.models import GameData, Item, ItemForm, Recipe
+from satisplanner.core.models import GameData, Item, ItemForm, Recipe, RecipeAvailability
 from satisplanner.ui import theme
 from satisplanner.ui.catalogue import fold
 from satisplanner.ui.icon_provider import IconProvider
@@ -54,6 +54,16 @@ FORM_LABELS: Final[dict[ItemForm, str]] = {
     ItemForm.SOLID: "Solide",
     ItemForm.LIQUID: "Liquide",
     ItemForm.GAS: "Gazeux",
+}
+
+# Why a recipe the game has cannot be put on the canvas. Two reasons, and the card
+# must tell them apart: one will go away as the catalogue widens, the other never
+# will, and a reader deciding whether to wait needs to know which is which.
+UNAVAILABLE_REASONS: Final[dict[RecipeAvailability, str]] = {
+    RecipeAvailability.MACHINE_OUT_OF_SCOPE: ("machine que cette version ne modélise pas encore"),
+    RecipeAvailability.HAND_CRAFTED: (
+        "fabrication à la main : cette station ne sera jamais un nœud d'usine"
+    ),
 }
 
 
@@ -76,6 +86,7 @@ def stylesheet() -> str:
     .muted {{ color: {theme.TEXT_MUTED}; }}
     .desc {{ color: {theme.TEXT_MUTED}; font-style: italic; }}
     .place {{ color: {theme.STATE_NOMINAL}; }}
+    h3.outside {{ color: {theme.TEXT_MUTED}; }}
     .warn {{ color: {theme.STATE_STARVED}; }}
     """
 
@@ -91,6 +102,7 @@ def card_html(game_data: GameData, item_class: str) -> str:
     blocks = [
         _identity(item),
         _recipes(game_data, item),
+        _out_of_scope(game_data, item),
         _used_in(game_data, item),
         _raw_cost(game_data, item),
     ]
@@ -127,22 +139,65 @@ def _identity(item: Item) -> str:
 
 def _recipes(game_data: GameData, item: Item) -> str:
     made = breakdown.producers(game_data, item.class_name)
-    if not made:
-        note = (
-            "Ressource brute : elle s'extrait, elle ne se fabrique pas."
-            if item.is_raw_resource
-            else "Aucune recette connue dans le périmètre V1."
+    if made:
+        return "<h2>Fabrication</h2>" + "".join(
+            _one_recipe(game_data, recipe, item.class_name) for recipe in made
         )
-        return f"<h2>Fabrication</h2><p class='muted'>{note}</p>"
-    return "<h2>Fabrication</h2>" + "".join(
-        _one_recipe(game_data, recipe, item.class_name) for recipe in made
+    return f"<h2>Fabrication</h2><p class='muted'>{_nothing_makes_it(game_data, item)}</p>"
+
+
+def _nothing_makes_it(game_data: GameData, item: Item) -> str:
+    """Why no node produces this item -- four answers, and only one is a dead end.
+
+    Saying "no recipe" and stopping is what sent readers to a wiki: it reads as a
+    gap in the data. Each case here names its own cause, and the section that
+    follows lists the recipes the game does have when there are any.
+    """
+    if item.is_raw_resource:
+        return "Ressource brute : elle s'extrait, elle ne se fabrique pas."
+    if breakdown.unavailable_producers(game_data, item.class_name):
+        return "Aucune recette posable dans cette version. Ce que le jeu propose est ci-dessous."
+    if item.byproduct_of_fr:
+        return (
+            f"Aucune recette dans le jeu : cet objet tombe de la "
+            f"{escape(item.byproduct_of_fr)}, un bâtiment que cette version ne modélise "
+            f"pas encore. Il entre donc dans l'usine par un apport extérieur."
+        )
+    return (
+        "Aucune recette dans le jeu : cet objet se ramasse dans le monde. "
+        "Il entre dans l'usine par un apport extérieur."
     )
 
 
-def _one_recipe(game_data: GameData, recipe: Recipe, headline: str) -> str:
-    """One recipe block: what it runs in, what goes in, what comes out."""
+def _out_of_scope(game_data: GameData, item: Item) -> str:
+    """The recipes the game has for this item and that no node can place."""
+    outside = breakdown.unavailable_producers(game_data, item.class_name)
+    if not outside:
+        return ""
+    return "<h2>Recettes hors du périmètre de cette version</h2>" + "".join(
+        _one_recipe(game_data, recipe, item.class_name, placeable=False) for recipe in outside
+    )
+
+
+def _machine_label(game_data: GameData, recipe: Recipe) -> str:
+    """The machine's French name, wherever the catalogue happens to keep it."""
+    if recipe.building_name_fr:
+        return recipe.building_name_fr
     building = game_data.buildings.get(recipe.building_class)
-    machine = building.display_name_fr if building else recipe.building_class
+    return building.display_name_fr if building else recipe.building_class
+
+
+def _one_recipe(
+    game_data: GameData, recipe: Recipe, headline: str, *, placeable: bool = True
+) -> str:
+    """One recipe block: what it runs in, what goes in, what comes out.
+
+    An unplaceable recipe is shown with the same figures -- they are the game's,
+    and hiding them would answer half the question -- but greyed, without the
+    button that would put it on the canvas, and followed by what stops it.
+    """
+    building = game_data.buildings.get(recipe.building_class)
+    machine = _machine_label(game_data, recipe)
     cycles_per_minute = 60.0 / recipe.cycle_seconds if recipe.cycle_seconds > 0 else 0.0
 
     rows: list[str] = []
@@ -168,14 +223,19 @@ def _one_recipe(game_data: GameData, recipe: Recipe, headline: str) -> str:
     marker = ""
     if recipe.is_alternate and "alternative" not in fold(recipe.display_name_fr):
         marker = " <span class='muted'>(alternative)</span>"
-    place = (
-        f"<a class='place' href='{PLACE_SCHEME}:{escape(recipe.class_name)}'>"
-        f"[poser sur le canvas]</a>"
-    )
+    if placeable:
+        tail = (
+            f" &nbsp; <a class='place' href='{PLACE_SCHEME}:{escape(recipe.class_name)}'>"
+            f"[poser sur le canvas]</a>"
+        )
+    else:
+        reason = UNAVAILABLE_REASONS[recipe.availability]
+        tail = f"<br>{escape(reason)}"
+    heading = "h3 class='outside'" if not placeable else "h3"
     return (
-        f"<h3>{escape(recipe.display_name_fr)}{marker}</h3>"
+        f"<{heading}>{escape(recipe.display_name_fr)}{marker}</h3>"
         f"<p class='muted'>{escape(machine)} — cycle de "
-        f"{formatting.number(recipe.cycle_seconds)} s{escape(power)} &nbsp; {place}</p>"
+        f"{formatting.number(recipe.cycle_seconds)} s{escape(power)}{tail}</p>"
         f"<table>{''.join(rows)}</table>"
     )
 
@@ -202,30 +262,45 @@ def _slot_row(
 
 def _used_in(game_data: GameData, item: Item) -> str:
     used = breakdown.consumers(game_data, item.class_name)
-    if not used:
+    outside = breakdown.unavailable_consumers(game_data, item.class_name)
+    if not used and not outside:
         return (
             "<h2>Recettes qui le consomment</h2>"
-            "<p class='muted'>Aucune recette du périmètre V1 ne consomme cet objet.</p>"
+            "<p class='muted'>Aucune recette du jeu ne consomme cet objet.</p>"
         )
-    rows = []
-    for recipe in used:
-        building = game_data.buildings.get(recipe.building_class)
-        machine = building.display_name_fr if building else recipe.building_class
-        cycles = 60.0 / recipe.cycle_seconds if recipe.cycle_seconds > 0 else 0.0
-        amount = sum(
-            slot.amount_per_cycle
-            for slot in recipe.ingredients
-            if slot.item_class == item.class_name
-        )
-        target = recipe.products[0].item_class if recipe.products else item.class_name
+    rows = [_consumer_row(game_data, recipe, item) for recipe in used]
+    if outside:
         rows.append(
-            f"<tr><td><a href='{ITEM_SCHEME}:{escape(target)}'>"
-            f"{escape(recipe.display_name_fr)}</a></td>"
-            f"<td class='muted'>{escape(machine)}</td>"
-            f"<td class='value'>{formatting.number(amount)} / cycle</td>"
-            f"<td class='rate'>{formatting.rate(amount * cycles, item)}</td></tr>"
+            "<tr><td colspan='4' class='muted'><br>Hors du périmètre de cette version :</td></tr>"
         )
+        rows += [_consumer_row(game_data, recipe, item, placeable=False) for recipe in outside]
     return f"<h2>Recettes qui le consomment</h2><table>{''.join(rows)}</table>"
+
+
+def _consumer_row(
+    game_data: GameData, recipe: Recipe, item: Item, *, placeable: bool = True
+) -> str:
+    """One line of the consumers table. Out-of-scope ones carry their machine too:
+    knowing that the Hadron Collider eats this is the answer, not noise."""
+    machine = _machine_label(game_data, recipe)
+    cycles = 60.0 / recipe.cycle_seconds if recipe.cycle_seconds > 0 else 0.0
+    amount = sum(
+        slot.amount_per_cycle for slot in recipe.ingredients if slot.item_class == item.class_name
+    )
+    # An unplaceable recipe is not a link: following it would open the card of a
+    # product this version cannot make, which is a dead end dressed as a path.
+    target = recipe.products[0].item_class if recipe.products else item.class_name
+    name = (
+        f"<a href='{ITEM_SCHEME}:{escape(target)}'>{escape(recipe.display_name_fr)}</a>"
+        if placeable
+        else f"<span class='muted'>{escape(recipe.display_name_fr)}</span>"
+    )
+    return (
+        f"<tr><td>{name}</td>"
+        f"<td class='muted'>{escape(machine)}</td>"
+        f"<td class='value'>{formatting.number(amount)} / cycle</td>"
+        f"<td class='rate'>{formatting.rate(amount * cycles, item)}</td></tr>"
+    )
 
 
 def _raw_cost(game_data: GameData, item: Item) -> str:
@@ -238,9 +313,16 @@ def _raw_cost(game_data: GameData, item: Item) -> str:
             f"<p class='muted'>{escape(cost.cycle_description)}</p>"
         )
     if list(cost.amounts) == [item.class_name]:
-        return (
-            "<h2>Coût en ressources brutes</h2><p class='muted'>C'est déjà une ressource brute.</p>"
+        # The expansion stops at anything it cannot make, and until now it called
+        # all of them raw resources. Uranium waste is not a raw resource, and the
+        # section just above says so: two answers on one page, one of them wrong.
+        note = (
+            "C'est déjà une ressource brute."
+            if item.is_raw_resource
+            else "Le calcul s'arrête ici : rien dans le catalogue ne fabrique cet objet, "
+            "il entre dans l'usine tel quel."
         )
+        return f"<h2>Coût en ressources brutes</h2><p class='muted'>{note}</p>"
     rows = "".join(
         f"<tr><td><a href='{ITEM_SCHEME}:{escape(name)}'>"
         f"{escape(_name_of(game_data, name))}</a></td>"

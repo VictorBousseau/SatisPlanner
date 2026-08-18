@@ -10,7 +10,14 @@ from pathlib import Path
 import pytest
 
 from satisplanner.core import constants
-from satisplanner.core.models import AttachmentRole, ItemForm, Recipe, SplitterMode
+from satisplanner.core.models import (
+    AttachmentRole,
+    ItemForm,
+    Recipe,
+    RecipeAvailability,
+    SplitterMode,
+)
+from satisplanner.data import docs_parser
 from satisplanner.data.docs_parser import (
     DocsFileError,
     GameDataset,
@@ -275,10 +282,89 @@ def test_recycling_loop_recipes_are_present_and_marked_alternate(
 # --------------------------------------------------------------------------- #
 
 
-def test_out_of_scope_recipes_are_dropped(recipes: dict[str, Recipe]) -> None:
-    # Present in the fixture on purpose: a Blender recipe and a build gun recipe.
-    assert "Recipe_NitricAcid_C" not in recipes, "le Melangeur est hors périmètre V1"
+def test_a_building_is_not_a_recipe(recipes: dict[str, Recipe]) -> None:
+    """The build gun makes buildings, and a building is priced, not manufactured."""
     assert "Recipe_Wall_8x4_01_C" not in recipes, "le pistolet n'est pas une machine"
+
+
+def test_the_blender_is_a_machine_like_the_others(recipes: dict[str, Recipe]) -> None:
+    """Nitric acid is the fixture's Blender recipe, and it is placeable now."""
+    acid = recipes["Recipe_NitricAcid_C"]
+    assert acid.building_class == "Build_Blender_C"
+    assert acid.is_placeable
+    # The machine is in the catalogue, so its name is read there and not carried
+    # on the recipe: one name in one place is what keeps two from drifting.
+    assert acid.building_name_fr == ""
+
+
+def test_a_recipe_offered_at_a_bench_stays_a_machine_recipe(
+    recipes: dict[str, Recipe],
+) -> None:
+    """``mProducedIn`` lists several places and the best of them decides.
+
+    The spiked rebar is made at the Constructor *and* at the equipment workshop.
+    Reading the stations in file order would call it hand crafting and hide a
+    recipe the catalogue can perfectly well place -- and most machine recipes are
+    also offered at the automated workbench, so the mistake would be wholesale.
+    """
+    rebar = recipes["Recipe_SpikedRebar_C"]
+    assert rebar.building_class == "Build_ConstructorMk1_C"
+    assert rebar.is_placeable
+
+
+def produced_in(*classes: str) -> str:
+    """An ``mProducedIn`` field, written the way the game writes it."""
+    paths = ",".join(f'"/Game/FactoryGame/Buildable/{name}.{name}"' for name in classes)
+    return f"({paths})"
+
+
+@pytest.mark.parametrize(
+    ("places", "expected"),
+    [
+        (("Build_ConstructorMk1_C",), ("Build_ConstructorMk1_C", RecipeAvailability.PLACEABLE)),
+        (
+            ("Build_HadronCollider_C",),
+            ("Build_HadronCollider_C", RecipeAvailability.MACHINE_OUT_OF_SCOPE),
+        ),
+        (("BP_WorkshopComponent_C",), ("Build_Workshop_C", RecipeAvailability.HAND_CRAFTED)),
+        (("BP_BuildGun_C",), None),
+        (("FGBuildGun",), None),
+        ((), None),
+        # A machine wins over a bench, and a machine in scope wins over one that
+        # is not: both orders are the ones a recipe actually comes in.
+        (
+            ("BP_WorkBenchComponent_C", "Build_ConstructorMk1_C"),
+            ("Build_ConstructorMk1_C", RecipeAvailability.PLACEABLE),
+        ),
+        (
+            ("Build_HadronCollider_C", "Build_ManufacturerMk1_C"),
+            ("Build_ManufacturerMk1_C", RecipeAvailability.PLACEABLE),
+        ),
+    ],
+)
+def test_every_station_is_classified(
+    places: tuple[str, ...], expected: tuple[str, RecipeAvailability] | None
+) -> None:
+    """The four answers, one by one, on entries built for the purpose.
+
+    The shipped fixture holds no Converter and no workshop-only recipe, and adding
+    one would drag its items in behind it. The rule is what matters here, so the
+    rule is what is tested.
+    """
+    assert docs_parser._origin_of({"mProducedIn": produced_in(*places)}) == expected
+
+
+def test_a_station_this_parser_does_not_know_is_named() -> None:
+    """A future game version must not lose a recipe in silence."""
+    warnings: list[str] = []
+    docs_parser._warn_unknown_station(
+        {"ClassName": "Recipe_Imaginaire_C", "mProducedIn": produced_in("Build_Teleporteur_C")},
+        warnings,
+    )
+    assert warnings == [
+        "Recipe_Imaginaire_C : fabriquée seulement dans Build_Teleporteur_C, "
+        "station inconnue et recette ignorée"
+    ]
 
 
 def test_every_recipe_belongs_to_a_v1_machine(dataset: GameDataset) -> None:
@@ -383,7 +469,7 @@ def test_machine_power_draw(dataset: GameDataset) -> None:
     assert power["Build_FoundryMk1_C"] == 16
     assert power["Build_OilRefinery_C"] == 30
     assert power["Build_ManufacturerMk1_C"] == 55
-    assert "Build_Blender_C" not in power, "le Melangeur est hors périmètre V1"
+    assert power["Build_Blender_C"] == 75
 
 
 # --------------------------------------------------------------------------- #

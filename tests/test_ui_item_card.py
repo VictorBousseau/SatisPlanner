@@ -17,6 +17,7 @@ from pytestqt.qtbot import QtBot
 from satisplanner.core import breakdown
 from satisplanner.core.graph import MachineNode
 from satisplanner.core.models import GameData
+from satisplanner.data import db
 from satisplanner.ui.catalogue import EntryKind, PaletteEntry, build_entries
 from satisplanner.ui.item_card import ITEM_SCHEME, PLACE_SCHEME, ItemCard, card_html
 from satisplanner.ui.main_window import MainWindow
@@ -102,6 +103,77 @@ def test_a_byproduct_is_named_as_one(game_data: GameData) -> None:
     page = card_html(game_data, "Desc_Plastic_C")
     assert "Sous-produit" in page
     assert "sidus de p" in page  # "Résidus de pétrole lourd", accents aside
+
+
+# --------------------------------------------- what the catalogue cannot make
+#
+# These read the **shipped** database rather than the fixture slice: the slice
+# holds no Converter recipe and no nuclear plant, and the whole point here is what
+# the card says about machines this version does not model.
+
+
+@pytest.fixture(scope="module")
+def catalogue() -> GameData:
+    return db.load_game_data_from_file(db.default_database_path())
+
+
+def test_an_out_of_scope_recipe_is_shown_with_what_stops_it(catalogue: GameData) -> None:
+    """The plutonium pellet: no placeable recipe, and the game's own recipe below."""
+    page = card_html(catalogue, "Desc_PlutoniumPellet_C")
+    assert "Aucune recette posable dans cette version" in page
+    assert "Recettes hors du périmètre de cette version" in page
+    assert "Accélérateur de particules" in page
+    assert "machine que cette version ne modélise pas encore" in page
+
+
+def test_an_out_of_scope_recipe_cannot_be_put_on_the_canvas(catalogue: GameData) -> None:
+    """No button for it: offering one would promise something the engine refuses."""
+    page = card_html(catalogue, "Desc_PlutoniumPellet_C")
+    assert f"{PLACE_SCHEME}:" not in page
+
+
+def test_the_uranium_cell_shows_its_standard_recipe_and_its_alternate(
+    catalogue: GameData,
+) -> None:
+    """The case that started the lot, read the way a reader reads it.
+
+    Before the Blender, this page carried one line marked "alternate" and nothing
+    else, which reads as a catalogue that has lost a recipe rather than one that
+    is narrower than the game.
+    """
+    page = card_html(catalogue, "Desc_UraniumCell_C")
+    assert "Mélangeur" in page
+    assert "Façonneuse" in page
+    assert "Recettes hors du périmètre" not in page
+    assert page.count(f"{PLACE_SCHEME}:") == 2
+
+
+def test_an_item_with_no_recipe_at_all_names_the_building_it_falls_out_of(
+    catalogue: GameData,
+) -> None:
+    page = card_html(catalogue, "Desc_NuclearWaste_C")
+    assert "Aucune recette dans le jeu" in page
+    assert "Centrale nucléaire" in page
+    assert "se ramasse dans le monde" not in page
+
+
+def test_a_gathered_item_says_it_is_gathered(catalogue: GameData) -> None:
+    page = card_html(catalogue, "Desc_Wood_C")
+    assert "se ramasse dans le monde" in page
+    assert "C'est déjà une ressource brute" not in page
+
+
+def test_only_a_raw_resource_is_called_a_raw_resource(catalogue: GameData) -> None:
+    """The raw-cost section stops at anything it cannot make; it must not rename it."""
+    assert "C'est déjà une ressource brute" in card_html(catalogue, "Desc_OreIron_C")
+    assert "C'est déjà une ressource brute" not in card_html(catalogue, "Desc_NuclearWaste_C")
+
+
+def test_an_out_of_scope_consumer_is_listed_apart(catalogue: GameData) -> None:
+    """Knowing the Particle Accelerator eats this is the answer, not noise."""
+    page = card_html(catalogue, "Desc_NuclearWaste_C")
+    assert "Hors du périmètre de cette version :" in page
+    assert "Accélérateur de particules" in page
 
 
 def test_a_raw_ore_says_it_is_extracted_not_made(game_data: GameData) -> None:

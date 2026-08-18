@@ -30,6 +30,7 @@ from satisplanner.core.models import (
     Pipe,
     PowerShard,
     Recipe,
+    RecipeAvailability,
     RecipeSlot,
     SplitterMode,
     Storage,
@@ -52,7 +53,12 @@ logger = logging.getLogger(__name__)
 # 7 added `attachments.splitter_mode`, which is how the three conveyor splitters
 # are told apart. They differ in what may be written on a branch and in what they
 # cost, and nothing else in the row says which is which.
-SCHEMA_VERSION: Final = 7
+# 8 keeps the recipes no node can place. `recipes.availability` says what stops
+# each one and `recipes.building_name_fr` names the machine the catalogue does not
+# carry; `items.byproduct_of_fr` names the unplaceable building an item drops out
+# of. A recipe dropped at parse time made "outside the scope" and "missing from
+# the data" look the same on screen, which is the one thing a catalogue must not do.
+SCHEMA_VERSION: Final = 8
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -93,7 +99,11 @@ CREATE TABLE items (
     is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1)),
     -- mEnergyValue, normalised: MJ per item for a solid, MJ per m3 for a fluid.
     -- Zero for anything that cannot be burnt.
-    energy_mj       REAL NOT NULL DEFAULT 0
+    energy_mj       REAL NOT NULL DEFAULT 0,
+    -- French name of the out-of-scope building this item falls out of, when no
+    -- recipe at all produces it. Empty for everything else, gathered items
+    -- included: "no recipe" and "picked up off the ground" are not the same fact.
+    byproduct_of_fr TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE buildings (
@@ -119,16 +129,23 @@ CREATE TABLE building_costs (
     PRIMARY KEY (building_class, item_class)
 );
 
+-- Every recipe that makes a part, placeable or not. `building_class` carries no
+-- foreign key any more: an unplaceable recipe names a machine -- or a workbench --
+-- that this catalogue deliberately does not describe, so the key could not
+-- resolve. `building_name_fr` is what replaces the lookup, and only for those rows.
 CREATE TABLE recipes (
     class_name      TEXT PRIMARY KEY,
     display_name    TEXT NOT NULL,
     display_name_fr TEXT NOT NULL,
-    building_class  TEXT NOT NULL REFERENCES buildings (class_name),
+    building_class  TEXT NOT NULL,
     cycle_seconds   REAL NOT NULL,
     is_alternate    INTEGER NOT NULL CHECK (is_alternate IN (0, 1)),
     involves_fluid  INTEGER NOT NULL CHECK (involves_fluid IN (0, 1)),
     product_count   INTEGER NOT NULL,
-    is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1))
+    is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1)),
+    availability     TEXT NOT NULL DEFAULT 'placeable'
+                     CHECK (availability IN ('placeable', 'machine', 'hand')),
+    building_name_fr TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE recipe_ingredients (
@@ -215,6 +232,7 @@ CREATE TABLE power_shards (
 );
 
 CREATE INDEX idx_recipes_building ON recipes (building_class);
+CREATE INDEX idx_recipes_available ON recipes (availability);
 CREATE INDEX idx_ingredients_item ON recipe_ingredients (item_class);
 CREATE INDEX idx_products_item    ON recipe_products (item_class);
 """
@@ -247,7 +265,7 @@ def build_database(dataset: GameDataset, path: Path) -> None:
         _insert_items(connection, dataset.items)
         _insert_buildings(connection, dataset.buildings)
         _insert_building_costs(connection, dataset.building_costs)
-        _insert_recipes(connection, dataset.recipes)
+        _insert_recipes(connection, (*dataset.recipes, *dataset.unavailable_recipes))
         _insert_extractors(connection, dataset.extractors)
         _insert_generators(connection, dataset.generators)
         _insert_belts(connection, dataset.belts)
@@ -282,8 +300,8 @@ def _insert_meta(connection: sqlite3.Connection, dataset: GameDataset) -> None:
 def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> None:
     connection.executemany(
         "INSERT INTO items (class_name, display_name, display_name_fr, description_fr, form,"
-        " stack_size, icon_file, sink_points, is_raw_resource, is_event, energy_mj)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " stack_size, icon_file, sink_points, is_raw_resource, is_event, energy_mj,"
+        " byproduct_of_fr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 item.class_name,
@@ -297,6 +315,7 @@ def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> No
                 int(item.is_raw_resource),
                 int(item.is_event),
                 item.energy_mj,
+                item.byproduct_of_fr,
             )
             for item in items
         ],
@@ -344,8 +363,8 @@ def _slot_rows(recipe: Recipe, slots: tuple[RecipeSlot, ...]) -> list[tuple[obje
 def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...]) -> None:
     connection.executemany(
         "INSERT INTO recipes (class_name, display_name, display_name_fr, building_class,"
-        " cycle_seconds, is_alternate, involves_fluid, product_count, is_event)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " cycle_seconds, is_alternate, involves_fluid, product_count, is_event,"
+        " availability, building_name_fr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 recipe.class_name,
@@ -357,6 +376,8 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...])
                 int(recipe.involves_fluid),
                 recipe.product_count,
                 int(recipe.is_event),
+                recipe.availability.value,
+                recipe.building_name_fr,
             )
             for recipe in recipes
         ],
@@ -488,6 +509,7 @@ def read_items(connection: sqlite3.Connection) -> list[Item]:
             is_raw_resource=bool(row["is_raw_resource"]),
             is_event=bool(row["is_event"]),
             energy_mj=row["energy_mj"],
+            byproduct_of_fr=row["byproduct_of_fr"],
         )
         for row in connection.execute("SELECT * FROM items ORDER BY class_name")
     ]
@@ -525,6 +547,19 @@ def read_building_costs(connection: sqlite3.Connection) -> list[BuildingCost]:
 
 
 def read_recipes(connection: sqlite3.Connection) -> list[Recipe]:
+    """The recipes a node can be placed for -- what the engine is allowed to see."""
+    return _read_recipes(connection, placeable=True)
+
+
+def read_unavailable_recipes(connection: sqlite3.Connection) -> list[Recipe]:
+    """The recipes the game has and no node can place, with what stops each one."""
+    return _read_recipes(connection, placeable=False)
+
+
+def _read_recipes(connection: sqlite3.Connection, *, placeable: bool) -> list[Recipe]:
+    """Both readers go through here so the filter is written once and cannot be
+    forgotten: an unfiltered read would put out-of-scope recipes in front of the
+    engine, and nothing downstream would notice until a factory computed wrong."""
     slots: dict[str, dict[str, list[RecipeSlot]]] = {}
     for table, key in (("recipe_ingredients", "ingredients"), ("recipe_products", "products")):
         query = f"SELECT * FROM {table} ORDER BY recipe_class, slot_index"
@@ -548,8 +583,13 @@ def read_recipes(connection: sqlite3.Connection) -> list[Recipe]:
             ingredients=tuple(slots.get(row["class_name"], {}).get("ingredients", [])),
             products=tuple(slots.get(row["class_name"], {}).get("products", [])),
             is_event=bool(row["is_event"]),
+            availability=RecipeAvailability(row["availability"]),
+            building_name_fr=row["building_name_fr"],
         )
-        for row in connection.execute("SELECT * FROM recipes ORDER BY class_name")
+        for row in connection.execute(
+            "SELECT * FROM recipes WHERE (availability = 'placeable') = ? ORDER BY class_name",
+            (int(placeable),),
+        )
     ]
 
 
@@ -670,6 +710,7 @@ def load_game_data(connection: sqlite3.Connection) -> GameData:
         attachments=read_attachments(connection),
         power_shards=read_power_shards(connection),
         building_costs=read_building_costs(connection),
+        unavailable_recipes=read_unavailable_recipes(connection),
     )
 
 

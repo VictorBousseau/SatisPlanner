@@ -57,6 +57,29 @@ _PURITY_MULTIPLIERS: Mapping[Purity, float] = {
 }
 
 
+class RecipeAvailability(StrEnum):
+    """Whether a node can be placed for a recipe, and if not, what stops it.
+
+    The catalogue keeps **every** recipe the game has, including the ones no node
+    can place. Dropping them at parse time was cheaper but made an absence
+    indistinguishable from a gap in the data: an item card showed one alternate
+    recipe and said nothing about the standard one, so the reader concluded the
+    catalogue was wrong when it was merely narrower than the game.
+
+    Only :data:`PLACEABLE` recipes ever reach the engine -- they live in a separate
+    mapping (:attr:`GameData.unavailable_recipes`) rather than behind a flag any
+    caller could forget to test.
+    """
+
+    PLACEABLE = "placeable"
+    # The machine exists in the game and this version does not model it yet.
+    # Temporary by nature: a value that should disappear as the scope widens.
+    MACHINE_OUT_OF_SCOPE = "machine"
+    # Crafted by hand at the workbench or the equipment workshop. Permanent:
+    # these will never be factory nodes, because they are not machines.
+    HAND_CRAFTED = "hand"
+
+
 class BuildingKind(StrEnum):
     """What a building does, as far as the planner is concerned."""
 
@@ -111,6 +134,13 @@ class Item(_Row):
     # Zero for everything that cannot be burnt. This is what a generator's fuel
     # consumption is derived from, and the litre factor is already applied.
     energy_mj: float = 0.0
+    # French name of the building this item drops out of as a byproduct, when that
+    # building is out of scope and **no recipe at all** produces the item. Uranium
+    # waste is the case: it has no recipe in the game because it falls out of the
+    # nuclear plant, which this version cannot place. Empty for everything else,
+    # including the items that are simply picked up off the ground -- naming the
+    # source is what keeps "no recipe" from reading as "gathered in the world".
+    byproduct_of_fr: str = ""
 
 
 class RecipeSlot(_Row):
@@ -132,6 +162,16 @@ class Recipe(_Row):
     ingredients: tuple[RecipeSlot, ...]
     products: tuple[RecipeSlot, ...]
     is_event: bool = False
+    availability: RecipeAvailability = RecipeAvailability.PLACEABLE
+    # French name of the machine, carried **only** when that machine is absent from
+    # the catalogue. A placeable recipe leaves it empty and the name is read from
+    # ``buildings``, so the two can never drift apart for the rows that have both.
+    building_name_fr: str = ""
+
+    @property
+    def is_placeable(self) -> bool:
+        """Whether a node can be placed for this recipe."""
+        return self.availability is RecipeAvailability.PLACEABLE
 
     @property
     def product_count(self) -> int:
@@ -366,6 +406,10 @@ class GameData(BaseModel):
     # Build costs, by Build_* class. Empty on a catalogue built before schema 6,
     # and the shopping list says so rather than showing a total of nothing.
     building_costs: dict[str, BuildingCost] = Field(default_factory=dict)
+    # Recipes the game has and no node can place. They exist so that a card can
+    # say *why* something is missing; they are deliberately kept out of
+    # ``recipes`` so that no computation can reach them by accident.
+    unavailable_recipes: dict[str, Recipe] = Field(default_factory=dict)
 
     @classmethod
     def from_rows(
@@ -382,6 +426,7 @@ class GameData(BaseModel):
         attachments: Iterable[Attachment] = (),
         power_shards: Iterable[PowerShard] = (),
         building_costs: Iterable[BuildingCost] = (),
+        unavailable_recipes: Iterable[Recipe] = (),
     ) -> Self:
         return cls(
             items={row.class_name: row for row in items},
@@ -395,6 +440,7 @@ class GameData(BaseModel):
             attachments={row.class_name: row for row in attachments},
             power_shards={row.class_name: row for row in power_shards},
             building_costs={row.class_name: row for row in building_costs},
+            unavailable_recipes={row.class_name: row for row in unavailable_recipes},
         )
 
     def item(self, class_name: str) -> Item:

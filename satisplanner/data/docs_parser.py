@@ -40,6 +40,7 @@ from satisplanner.core.models import (
     Pipe,
     PowerShard,
     Recipe,
+    RecipeAvailability,
     RecipeSlot,
     SplitterMode,
     Storage,
@@ -246,19 +247,36 @@ PRODUCTION_MACHINES: Final[frozenset[str]] = frozenset(
         "Build_ManufacturerMk1_C",
         "Build_OilRefinery_C",
         "Build_Packager_C",
+        # The Blender needs not one line of engine: same native class as the
+        # Manufacturer, a fixed draw, the same overclocking exponent, and no
+        # recipe of its own goes beyond the four inputs and two outputs already
+        # supported. It is here because the data says it fits, not the reverse.
+        "Build_Blender_C",
     }
 )
 
-# The build gun. Anything crafted "in" it is a building being put down rather than
-# a part being manufactured, which is exactly how the game states a build cost.
+# The build gun, under both spellings the data uses: a class list normally names
+# the blueprint, but one recipe -- the Space Elevator -- names the native class
+# instead. Anything crafted "in" either is a building being put down rather than a
+# part being manufactured, which is exactly how the game states a build cost.
 BUILD_GUN: Final = "BP_BuildGun_C"
+BUILD_GUN_CLASSES: Final[frozenset[str]] = frozenset({BUILD_GUN, "FGBuildGun"})
 
-# Out of V1 scope on purpose (specification 5.3). Listed rather than inferred so
-# that a machine added by a future game version shows up as unknown instead of
-# being silently swallowed.
+# Stations a player crafts at by hand, mapped to the buildable that carries their
+# display name -- ``mProducedIn`` names a component, and the label lives on the
+# building. Their recipes are kept and shown, never placed: a workbench is not a
+# machine and no throughput can be computed for a pair of hands.
+MANUAL_STATIONS: Final[dict[str, str]] = {
+    "BP_WorkBenchComponent_C": "Build_WorkBench_C",
+    "BP_WorkshopComponent_C": "Build_Workshop_C",
+}
+
+# Machines the game has and this version does not model yet. Listed rather than
+# inferred so that a machine added by a future game version shows up as unknown
+# instead of being silently swallowed. Their recipes are kept and marked, because
+# an absence that says nothing is read as a gap in the data.
 EXCLUDED_MACHINES: Final[frozenset[str]] = frozenset(
     {
-        "Build_Blender_C",
         "Build_Converter_C",
         "Build_HadronCollider_C",
         "Build_QuantumEncoder_C",
@@ -388,6 +406,9 @@ class GameDataset(BaseModel):
     reference_was_preferred: bool
     items: tuple[Item, ...]
     recipes: tuple[Recipe, ...]
+    # Recipes the game has and no node can place: kept so a card can say why
+    # something is missing, kept apart so no computation can reach them.
+    unavailable_recipes: tuple[Recipe, ...] = ()
     buildings: tuple[Building, ...]
     building_costs: tuple[BuildingCost, ...] = ()
     extractors: tuple[Extractor, ...]
@@ -413,6 +434,7 @@ class GameDataset(BaseModel):
             attachments=self.attachments,
             power_shards=self.power_shards,
             building_costs=self.building_costs,
+            unavailable_recipes=self.unavailable_recipes,
         )
 
 
@@ -487,16 +509,48 @@ def parse_items(
     return sorted(items, key=lambda item: item.class_name)
 
 
-def _machine_of(recipe: ClassEntry) -> str | None:
-    """The V1 production machine a recipe runs in, if any.
+def _origin_of(recipe: ClassEntry) -> tuple[str, RecipeAvailability] | None:
+    """Where a recipe is made, and whether a node can be placed for it.
 
-    ``mProducedIn`` also lists manual crafting stations (the build gun, the
-    workbench, the equipment workshop); those are not machines and are ignored.
+    ``None`` means the recipe makes no part at all and belongs in no catalogue: a
+    building put down with the build gun -- its cost is read separately, by
+    :func:`parse_building_costs` -- or one of the handful of leftovers the data
+    still carries with no station whatsoever.
+
+    The order matters. A recipe listed in several places is judged by the best of
+    them: most machine recipes are *also* offered at the automated workbench, and
+    reading that first would turn every one of them into hand crafting.
     """
-    for candidate in parse_class_list(recipe.get("mProducedIn", "")):
+    places = parse_class_list(recipe.get("mProducedIn", ""))
+    for candidate in places:
         if candidate in PRODUCTION_MACHINES:
-            return candidate
+            return candidate, RecipeAvailability.PLACEABLE
+    for candidate in places:
+        if candidate in EXCLUDED_MACHINES:
+            return candidate, RecipeAvailability.MACHINE_OUT_OF_SCOPE
+    if any(candidate in BUILD_GUN_CLASSES for candidate in places):
+        return None
+    for candidate in places:
+        if candidate in MANUAL_STATIONS:
+            return MANUAL_STATIONS[candidate], RecipeAvailability.HAND_CRAFTED
     return None
+
+
+def _warn_unknown_station(recipe: ClassEntry, warnings: list[str]) -> None:
+    """Name a recipe made only somewhere this parser does not know about.
+
+    Everything else is classified: a machine in scope, one out of scope, a manual
+    station, or the build gun. What is left is either a leftover the data still
+    carries with no station at all -- silent on purpose -- or a station a future
+    game version has added, which must not disappear without a word.
+    """
+    places = parse_class_list(recipe.get("mProducedIn", ""))
+    known = PRODUCTION_MACHINES | EXCLUDED_MACHINES | BUILD_GUN_CLASSES | set(MANUAL_STATIONS)
+    if places and all(place not in known for place in places):
+        warnings.append(
+            f"{recipe.get('ClassName')} : fabriquée seulement dans "
+            f"{', '.join(places)}, station inconnue et recette ignorée"
+        )
 
 
 def parse_recipes(
@@ -505,14 +559,28 @@ def parse_recipes(
     forms: dict[str, ItemForm],
     warnings: list[str],
 ) -> list[Recipe]:
-    """Recipes of the V1 machines, with every amount normalised to per-minute rates."""
+    """Every recipe that makes a part, with amounts normalised to per-minute rates.
+
+    Includes the ones no node can place -- they carry an
+    :class:`~satisplanner.core.models.RecipeAvailability` saying what stops them,
+    and the caller splits the list on it. They are parsed exactly like the others,
+    rates and all: an out-of-scope recipe shown with no figures would answer half
+    the question it exists to answer.
+    """
     recipes: list[Recipe] = []
     missing_items: set[str] = set()
+    machine_names = {
+        cls["ClassName"]: cls.get("mDisplayName") or ""
+        for cls in _iter_all_classes(grouped)
+        if cls.get("ClassName")
+    }
 
     for cls in grouped.get("FGRecipe", []):
-        machine = _machine_of(cls)
-        if machine is None:
+        origin = _origin_of(cls)
+        if origin is None:
+            _warn_unknown_station(cls, warnings)
             continue
+        machine, availability = origin
         class_name = cls["ClassName"]
         cycle_seconds = parse_float(cls.get("mManufactoringDuration"))
         if cycle_seconds <= 0:
@@ -565,6 +633,14 @@ def parse_recipes(
                 ingredients=slots["ingredients"],
                 products=slots["products"],
                 is_event=is_event_class(cls),
+                availability=availability,
+                # Only for a machine the catalogue will not carry: for the others
+                # the name is read from ``buildings`` and stays in one place.
+                building_name_fr=(
+                    ""
+                    if availability is RecipeAvailability.PLACEABLE
+                    else _label(machine, machine_names.get(machine, machine), labels)
+                ),
             )
         )
 
@@ -716,6 +792,31 @@ def parse_fuel_entries(raw: object) -> list[tuple[str, str | None]]:
         supplemental = str(entry.get("mSupplementalResourceClass") or "")
         pairs.append((fuel, supplemental or None))
     return pairs
+
+
+def byproducts_of_excluded_generators(grouped: Locale, labels: dict[str, str]) -> dict[str, str]:
+    """Items that fall out of a generator this version cannot place.
+
+    Uranium waste has **no recipe at all** in the game: it is what the nuclear
+    plant drops on a belt, fifty per rod. Without this, its card would say "no
+    recipe, comes in from outside" and be read as "picked up off the ground",
+    which is the exact confusion the catalogue is meant to end. The building is
+    named instead, and the entry disappears on its own the day the generator
+    enters the catalogue -- it is keyed on the exclusion, not on the item.
+    """
+    origins: dict[str, str] = {}
+    for cls in _iter_all_classes(grouped):
+        if cls.get("ClassName") not in EXCLUDED_GENERATORS:
+            continue
+        name = _label(cls["ClassName"], cls.get("mDisplayName") or cls["ClassName"], labels)
+        fuels = cls.get("mFuel")
+        if not isinstance(fuels, list):
+            continue
+        for fuel in fuels:
+            byproduct = (fuel.get("mByproduct") or "").strip() if isinstance(fuel, dict) else ""
+            if byproduct:
+                origins[byproduct] = name
+    return origins
 
 
 def parse_generators(
@@ -952,6 +1053,23 @@ def parse_buildings(
     return buildings, extractors, belts, pipes, storages, attachments
 
 
+def _with_external_origins(
+    items: list[Item],
+    recipes: Sequence[Recipe],
+    reference: Locale,
+    labels: dict[str, str],
+) -> list[Item]:
+    """Name the building behind every item that no recipe whatsoever produces."""
+    origins = byproducts_of_excluded_generators(reference, labels)
+    made = {slot.item_class for recipe in recipes for slot in recipe.products}
+    return [
+        item.model_copy(update={"byproduct_of_fr": origins[item.class_name]})
+        if item.class_name in origins and item.class_name not in made
+        else item
+        for item in items
+    ]
+
+
 def parse_dataset(
     reference: Locale,
     labels: dict[str, str],
@@ -965,7 +1083,10 @@ def parse_dataset(
     warnings: list[str] = []
     items = parse_items(reference, labels, descriptions)
     forms = {item.class_name: item.form for item in items}
-    recipes = parse_recipes(reference, labels, forms, warnings)
+    parsed = parse_recipes(reference, labels, forms, warnings)
+    recipes = [recipe for recipe in parsed if recipe.is_placeable]
+    unavailable = [recipe for recipe in parsed if not recipe.is_placeable]
+    items = _with_external_origins(items, parsed, reference, labels)
     buildings, extractors, belts, pipes, storages, attachments = parse_buildings(
         reference, labels, warnings
     )
@@ -984,6 +1105,7 @@ def parse_dataset(
         reference_was_preferred=reference_was_preferred,
         items=tuple(items),
         recipes=tuple(recipes),
+        unavailable_recipes=tuple(unavailable),
         buildings=tuple(buildings),
         building_costs=tuple(parse_building_costs(reference, buildings, forms, warnings)),
         extractors=tuple(extractors),

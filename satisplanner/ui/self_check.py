@@ -90,9 +90,13 @@ class SelfCheck:
         game_data = self.window.game_data
         assert game_data.recipes, "aucune recette : la base n'a pas été embarquée"
         assert game_data.items, "aucun item"
+        # The second count is not decoration: it is the part of the game this
+        # version keeps without being able to place, and a build that lost it
+        # would look healthy while its item cards went back to saying nothing.
         return (
-            f"{len(game_data.recipes)} recettes, {len(game_data.items)} items, "
-            f"données de jeu {db.GAME_VERSION}"
+            f"{len(game_data.recipes)} recettes posables, "
+            f"{len(game_data.unavailable_recipes)} hors périmètre, "
+            f"{len(game_data.items)} items, données de jeu {db.GAME_VERSION}"
         )
 
     def _palette(self) -> str:

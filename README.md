@@ -39,8 +39,12 @@ Autant le dire avant d'ouvrir la fenêtre.
   document et voyage avec lui, parce qu'il change les chiffres. Les raccords ne sont jamais un
   goulot — un répartiteur passe 2000 items/min quand le meilleur convoyeur plafonne à 1200 — mais
   ils décident du partage.
-- **Hors périmètre V1** : Mélangeur, Convertisseur, Encodeur quantique, Accélérateur de
-  particules, nucléaire, extracteur de puits de ressources, Clean Pipeline.
+- **Hors périmètre** : Convertisseur, Encodeur quantique, Accélérateur de particules, nucléaire,
+  extracteur de puits de ressources, Clean Pipeline. Le **Mélangeur en est sorti** et ses
+  17 recettes sont au catalogue. Ce qui reste dehors n'y est plus en silence : les recettes de
+  ces machines sont **conservées dans la base**, et la fiche d'un objet les montre grisées en
+  nommant ce qui les bloque — une machine pas encore modélisée, ou une fabrication à la main
+  qui ne sera jamais un nœud d'usine.
 - **Le nombre de machines est une saisie**, pas un résultat — sauf si vous demandez l'inverse.
   « Je veux 2 Cadres modulaires lourds par minute » est le **mode objectif**, et il construit
   l'usine ; mais il n'**optimise** rien. Il suit la recette standard, ou celle que vous imposez,
@@ -139,6 +143,12 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
   chaîne de fabrication comme on suit un wiki. Chaque recette porte un bouton « poser sur le
   canvas ». Le coût en minerai est **indicatif et le dit** : il ne suit que les recettes standard
   et ne crédite pas les sous-produits.
+  **Ce que le catalogue ne sait pas faire, la fiche le dit** au lieu de se taire : les recettes
+  que le jeu possède et qu'aucun nœud ne peut poser apparaissent grisées, sans bouton, avec ce
+  qui les en empêche — une machine pas encore modélisée, ou une fabrication à la main. Et un
+  objet qu'aucune recette du jeu ne produit dit d'où il vient : ramassé dans le monde, ou tombé
+  d'un bâtiment hors périmètre. Sans cela, « hors périmètre » et « absent des données » se
+  ressemblent, et c'est ce qui a fait croire à un trou sur la cellule d'uranium.
 - **Gisements** : la pureté et le type d'extracteur se lisent sur le nœud
   (« 1 Foreuse Mk.3 — gisement pur ») et se changent par clic droit ou par les colonnes du
   tableau, sans supprimer le nœud ni ses lignes. **La pureté appartient au gisement** : elle
@@ -584,15 +594,13 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 - Somersloop et amplification de production : autre formule, autre travail.
 - Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
   sémantique n'est pas la même. À traiter pour lui-même.
-- **Mélangeur et puits de ressource, ensemble** — le prochain lot, et l'ordre est décidé par
-  l'état des lieux plutôt que par l'ordre d'apparition dans le jeu. Le Mélangeur ne demande
-  **aucun code** : `FGBuildableManufacturer` comme la Façonneuse, puissance fixe de 75 MW, même
-  exposant, et ses recettes tiennent dans les 4 entrées et 2 sorties déjà supportées. Deux
-  constantes et une régénération de base. Mais seules 6 de ses 17 recettes sont alimentables
-  aujourd'hui : les autres veulent de l'azote, et **l'azote n'a pas d'extracteur** — il est
-  marqué matière brute comme le fer, à l'état gazeux, et rien dans le périmètre ne peut le
-  sortir du sol. Séparés, chacun des deux déçoit ; ensemble ils ouvrent l'acide nitrique, le
-  système de refroidissement, le cadre modulaire fusionné, et donc la phase 5.
+- **Le puits de ressource**, et c'est la moitié qui reste du lot ouvert avec le Mélangeur.
+  Celui-ci est entré au catalogue sans une ligne de moteur — `FGBuildableManufacturer` comme la
+  Façonneuse, 75 MW fixes, même exposant, et ses 17 recettes tiennent dans les 4 entrées et
+  2 sorties déjà supportées. Mais **11 d'entre elles veulent de l'azote, et l'azote n'a pas
+  d'extracteur** : il est marqué matière brute comme le fer, à l'état gazeux, et rien dans le
+  périmètre ne peut le sortir du sol. Le puits est ce qui les alimente, et avec elles l'acide
+  nitrique, le système de refroidissement, le cadre modulaire fusionné, et donc la phase 5.
 
   Deux pièges relevés d'avance, pour ne pas les redécouvrir :
 
