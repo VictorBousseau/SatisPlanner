@@ -269,14 +269,33 @@ valeur par défaut de 100 %, et le document est noté comme converti. Le numéro
 incrémenté malgré l'absence de conversion à faire, pour qu'une V1 refuse un fichier V1.1 par une
 phrase plutôt que par une erreur de validation.
 
-Le schéma courant est le **6**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
+Le schéma courant est le **7**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
 premier qui puisse déplacer un chiffre : les répartiteurs qu'une disposition supposait sont
 matérialisés, les lignes reprises à travers eux, et un partage en 5 ou en 7 cesse d'être égal
 parce qu'il ne l'est pas dans le jeu. Le relevé des vingt-et-une usines de référence, avec
 l'ancienne et la nouvelle part de chaque branche touchée, est dans
 [`docs/migration-repartiteurs.md`](docs/migration-repartiteurs.md). Le passage du 5 au 6 ne fait
 rien, et c'est le propos : un répartiteur écrit avant les modes est un `standard`, et un standard
-est le cas du programmable où rien n'est écrit sur aucune branche.
+est le cas du programmable où rien n'est écrit sur aucune branche. Le passage du 6 au 7 lit le
+mode dans le contenu : un document qui porte un répartiteur a été pensé en mode fidèle, un
+document qui n'en porte aucun s'ouvre en simple, et personne n'a rien à migrer.
+
+### Pourquoi les numéros majeurs se suivent de si près
+
+**Le numéro majeur suit le schéma de document, et rien d'autre.** Un fichier de schéma 7 est
+refusé par un build 2.0 exactement comme un schéma 6 l'était par un 1.1 : le fichier est la seule
+interface que cette application expose à son propre passé, et la casser est ce à quoi sert un
+majeur. La conséquence surprend quand on ne l'a pas lue : en élargissant le catalogue à tout ce
+que le jeu sait fabriquer, **trois majeures se sont succédé en quelques semaines** — 3.0 pour les
+deux modes de raccord, 4.0 pour le puits de ressource, 5.0 pour les générateurs manquants — parce
+que chacune de ces trois-là ajoute un type de nœud, donc un format de fichier qu'un build
+antérieur ne sait pas lire.
+
+Ce n'est ni un dérapage ni une inflation cosmétique. Les versions qui n'ont **pas** touché au
+document sont restées mineures : 3.1 a fait entrer le Mélangeur et les 69 recettes hors périmètre
+en ne changeant que le schéma de la **base de données**, qui est embarquée et ne voyage pas.
+Grouper trois formats incompatibles sous un seul majeur pour que la suite soit plus jolie viderait
+le numéro de ce qu'il annonce.
 
 Exports : PNG du canvas, PDF avec le canvas en première page et, au choix, les totaux et les
 diagnostics en seconde.
