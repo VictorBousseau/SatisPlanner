@@ -134,7 +134,19 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
 MODELLING_NOTES: Final[tuple[str, ...]] = (
     "La pureté d'un gisement s'applique à <b>tous</b> les extracteurs de ce nœud : "
     "un nœud est un gisement. Deux gisements de puretés différentes, ce sont deux "
-    "nœuds, et c'est la seule façon de les représenter.",
+    "nœuds, et c'est la seule façon de les représenter. <b>La règle vaut pour un "
+    "gisement, pas pour un puits de ressource</b> : un pressuriseur ouvre plusieurs "
+    "satellites d'un coup et rien ne dit qu'ils se ressemblent, donc là, la pureté "
+    "est <b>par satellite</b> et le nœud porte un décompte — « 1 impur · 2 normaux · "
+    "3 purs » — au lieu d'une valeur. C'est pour garder la règle du gisement entière "
+    "que le puits est un type de nœud à part.",
+    "<b>Un puits de ressource est deux bâtiments</b>, et un seul des deux consomme. "
+    "Le pressuriseur coûte <b>150 MW</b>, un seul quel que soit le nombre de "
+    "satellites ; les satellites, eux, ne consomment rien. Un puits vide coûte donc "
+    "déjà ses 150 MW, ce qui est signalé. Chaque satellite donne 30, 60 ou 120 m³/min "
+    "selon sa pureté et <b>porte sa propre canalisation</b> : trois satellites font "
+    "trois ports de sortie. Surcadencer agit sur le puits entier — le débit suit, et "
+    "la facture suit l'exposant du pressuriseur.",
     "La cadence multiplie le débit à l'identique et l'électricité en loi de "
     "puissance : à 250 %, une machine produit 2,5 fois plus et consomme environ "
     "3,36 fois plus.",

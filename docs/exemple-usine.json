@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "attachment_mode": "faithful",
   "nodes": [
     {
@@ -24,8 +24,8 @@
         240.0
       ],
       "extractor_class": "Build_WaterPump_C",
-      "count": 1.0,
-      "clock_speed": 0.75
+      "count": 3.0,
+      "clock_speed": 0.625
     },
     {
       "kind": "external_source",
@@ -36,7 +36,7 @@
         560.0
       ],
       "item_class": "Desc_Coal_C",
-      "rate_per_minute": 30.0
+      "rate_per_minute": 75.0
     },
     {
       "kind": "machine",
@@ -58,7 +58,7 @@
       ],
       "generator_class": "Build_GeneratorCoal_C",
       "fuel_class": "Desc_Coal_C",
-      "count": 2.0,
+      "count": 5.0,
       "show_deployed": true
     },
     {
@@ -173,6 +173,67 @@
       ],
       "item_class": "Desc_CopperIngot_C",
       "is_sink": false
+    },
+    {
+      "kind": "resource_well",
+      "id": "puits1",
+      "label": "Puits d'azote",
+      "position": [
+        -640.0,
+        880.0
+      ],
+      "item_class": "Desc_NitrogenGas_C",
+      "extractor_class": "Build_FrackingExtractor_C",
+      "satellites": {
+        "impure": 0,
+        "normal": 2,
+        "pure": 0
+      },
+      "clock_speed": 1.0
+    },
+    {
+      "kind": "external_source",
+      "id": "entree2",
+      "label": "Eau importee",
+      "position": [
+        -640.0,
+        1040.0
+      ],
+      "item_class": "Desc_Water_C",
+      "rate_per_minute": 30.0
+    },
+    {
+      "kind": "external_source",
+      "id": "entree3",
+      "label": "Plaques de fer importees",
+      "position": [
+        -640.0,
+        1200.0
+      ],
+      "item_class": "Desc_IronPlate_C",
+      "rate_per_minute": 10.0
+    },
+    {
+      "kind": "machine",
+      "id": "machine3",
+      "position": [
+        -240.0,
+        1040.0
+      ],
+      "recipe_class": "Recipe_NitricAcid_C",
+      "machine_count": 1.0,
+      "clock_speed": 1.0
+    },
+    {
+      "kind": "output",
+      "id": "sortie4",
+      "label": "Acide nitrique",
+      "position": [
+        160.0,
+        1040.0
+      ],
+      "item_class": "Desc_NitricAcid_C",
+      "is_sink": false
     }
   ],
   "edges": [
@@ -259,6 +320,34 @@
       "target": "sortie3",
       "item_class": "Desc_CopperIngot_C",
       "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e13",
+      "source": "puits1",
+      "target": "machine3",
+      "item_class": "Desc_NitrogenGas_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e14",
+      "source": "entree2",
+      "target": "machine3",
+      "item_class": "Desc_Water_C",
+      "transport_class": "Build_Pipeline_C"
+    },
+    {
+      "id": "e15",
+      "source": "entree3",
+      "target": "machine3",
+      "item_class": "Desc_IronPlate_C",
+      "transport_class": "Build_ConveyorBeltMk1_C"
+    },
+    {
+      "id": "e16",
+      "source": "machine3",
+      "target": "sortie4",
+      "item_class": "Desc_NitricAcid_C",
+      "transport_class": "Build_Pipeline_C"
     }
   ]
 }

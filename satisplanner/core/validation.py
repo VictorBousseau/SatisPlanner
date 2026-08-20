@@ -20,6 +20,7 @@ from satisplanner.core.graph import (
     MergerNode,
     Node,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
@@ -135,6 +136,8 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             )
     if isinstance(node, GeneratorNode):
         yield from _generator_structure(node, game_data)
+    if isinstance(node, ResourceWellNode):
+        yield from _well_structure(node, game_data)
 
     # Fuel, make-up water and every ingredient alike: an input nobody feeds is a
     # warning wherever it is, and the sentence is the same one.
@@ -304,6 +307,37 @@ def _generator_structure(node: GeneratorNode, game_data: GameData) -> Iterator[D
 # --------------------------------------------------------------------------- #
 
 
+def _well_structure(node: ResourceWellNode, game_data: GameData) -> Iterator[Diagnostic]:
+    """A resource well is a pressuriser plus a tally, and both can be wrong."""
+    extractor = game_data.extractors.get(node.extractor_class)
+    if extractor is not None and node.item_class not in (extractor.allowed_items or ()):
+        allowed = ", ".join(
+            game_data.item(item).display_name_fr for item in extractor.allowed_items
+        )
+        yield Diagnostic(
+            severity=Severity.ERROR,
+            code=DiagnosticCode.INCOMPATIBLE_RECIPE,
+            message=(
+                f"Un puits de ressource ne s'ouvre pas sur "
+                f"{game_data.item(node.item_class).display_name_fr} : "
+                f"seuls {allowed} en ont."
+            ),
+            node_id=node.id,
+        )
+    if node.satellite_count == 0:
+        # The trap is that this is not free: the pressuriser draws its 150 MW
+        # whether or not a single satellite has been opened on it.
+        yield Diagnostic(
+            severity=Severity.WARNING,
+            code=DiagnosticCode.UNCONNECTED_NODE,
+            message=(
+                "Ce puits n'a aucun satellite : rien n'est extrait, et le pressuriseur "
+                "consomme quand même sa puissance nominale."
+            ),
+            node_id=node.id,
+        )
+
+
 def _nodes(graph: FactoryGraph, game_data: GameData, report: FactoryReport) -> Iterator[Diagnostic]:
     nodes = graph.node_map()
     for solution in report.nodes:
@@ -439,7 +473,7 @@ def _throttled(
         )
         return
 
-    if isinstance(node, ResourceNode | WaterExtractorNode | ExternalSourceNode):
+    if isinstance(node, ResourceNode | ResourceWellNode | WaterExtractorNode | ExternalSourceNode):
         produced = sum(solution.outputs.values())
         item = _source_item(node, game_data)
         # Read the potential from the node itself rather than dividing by the ratio:
@@ -459,7 +493,7 @@ def _throttled(
 
 def _source_item(node: Node, game_data: GameData) -> Item | None:
     match node:
-        case ResourceNode() | ExternalSourceNode():
+        case ResourceNode() | ResourceWellNode() | ExternalSourceNode():
             return game_data.item(node.item_class)
         case WaterExtractorNode():
             extracted = game_data.extractor(node.extractor_class).item_class
@@ -472,9 +506,17 @@ def _source_potential(node: Node, game_data: GameData) -> float:
     """What a source could deliver at full tilt, in its own unit."""
     match node:
         case ResourceNode():
-            return game_data.extractor(node.extractor_class).rate(node.purity) * node.count
+            rate = game_data.extractor(node.extractor_class).rate(node.purity) * node.count
+            return rate * node.clock_speed
+        case ResourceWellNode():
+            extractor = game_data.extractor(node.extractor_class)
+            rate = sum(
+                extractor.rate(purity) * count for purity, count in sorted(node.satellites.items())
+            )
+            return rate * node.clock_speed
         case WaterExtractorNode():
-            return game_data.extractor(node.extractor_class).rate_per_minute * node.count
+            rate = game_data.extractor(node.extractor_class).rate_per_minute * node.count
+            return rate * node.clock_speed
         case ExternalSourceNode():
             return node.rate_per_minute
         case _:

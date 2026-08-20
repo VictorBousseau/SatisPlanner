@@ -62,6 +62,7 @@ from satisplanner.core.graph import (
     NodeKind,
     OutputNode,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
@@ -69,6 +70,7 @@ from satisplanner.core.graph import (
     branch_carries,
     branch_filter,
     condensation_order,
+    extra_buildings,
     generator_input_rates,
     machine_building,
     pass_through_item,
@@ -411,6 +413,15 @@ class _Solver:
                 extractor = self.game_data.extractor(node.extractor_class)
                 rate = extractor.rate(node.purity) * node.count * node.clock_speed
                 return {node.item_class: rate}
+            case ResourceWellNode():
+                # One well, several satellites, and each satellite its own purity:
+                # the output is a sum over the tally, not a rate times a count.
+                extractor = self.game_data.extractor(node.extractor_class)
+                rate = sum(
+                    extractor.rate(purity) * count
+                    for purity, count in sorted(node.satellites.items())
+                )
+                return {node.item_class: rate * node.clock_speed}
             case WaterExtractorNode():
                 extractor = self.game_data.extractor(node.extractor_class)
                 item = extractor.item_class
@@ -841,11 +852,20 @@ class _Solver:
         machine_count = unit_count(node)
         clock = getattr(node, "clock_speed", 1.0)
         building = self._building_of(node)
+        extra = extra_buildings(node, self.game_data)
         power = 0.0
         if building is not None and machine_count is not None:
             # Not proportional: the game raises the draw to the building's own
             # exponent, which is why 250 % costs about 3.36 times and not 2.5.
             power = self.game_data.building(building).power_at(clock) * machine_count
+        # A node that puts down a second building pays for it too. Today that is
+        # the well's pressuriser, which is where all of a well's current goes: the
+        # satellites are declared at zero, so leaving this out would make a well
+        # free and overclocking one free as well.
+        power += sum(
+            self.game_data.building(class_name).power_at(clock) * units
+            for class_name, units in sorted(extra.items())
+        )
         shards = 0
         if machine_count is not None and clock > 1.0:
             shards = sum(self.game_data.shards_for(clock, machine_count).values())
@@ -882,6 +902,7 @@ class _Solver:
             blocked_products=state.blocked_products,
             starved_items=() if state.passes_through else state.starved_items(spare),
             building_class=building,
+            extra_buildings=dict(sorted(extra.items())),
             machine_count=machine_count,
             useful_machine_count=None if machine_count is None else machine_count * ratio,
             clock_speed=clock,
@@ -894,7 +915,9 @@ class _Solver:
         match node:
             case MachineNode():
                 return machine_building(node, self.game_data)
-            case ResourceNode() | WaterExtractorNode():
+            case ResourceNode() | ResourceWellNode() | WaterExtractorNode():
+                # For a well this is the satellite. The pressuriser is the other
+                # half, and it comes through ``extra_buildings``.
                 return node.extractor_class
             case GeneratorNode():
                 return node.generator_class
@@ -910,7 +933,7 @@ class _Solver:
         match node:
             case MachineNode():
                 return self.game_data.recipe(node.recipe_class).display_name_fr
-            case ResourceNode() | ExternalSourceNode() | OutputNode():
+            case ResourceNode() | ResourceWellNode() | ExternalSourceNode() | OutputNode():
                 return self.game_data.item(node.item_class).display_name_fr
             case WaterExtractorNode():
                 return self.game_data.building(node.extractor_class).display_name_fr
@@ -965,7 +988,10 @@ class _Solver:
         """What actually enters the factory, split by form."""
         totals: dict[str, float] = {}
         for state in self._sorted_states():
-            if not isinstance(state.node, ResourceNode | WaterExtractorNode | ExternalSourceNode):
+            if not isinstance(
+                state.node,
+                ResourceNode | ResourceWellNode | WaterExtractorNode | ExternalSourceNode,
+            ):
                 continue
             for item_class, rate in state.outflow.items():
                 if self.game_data.item(item_class).form.is_fluid is fluids and rate > FLOW_EPSILON:
@@ -1065,6 +1091,8 @@ class _Solver:
             # the same heading, because either way it is a building to put down.
             basket = attachments if solution.kind in PASS_THROUGH_KINDS else buildings
             basket[solution.building_class] = basket.get(solution.building_class, 0) + count
+            for class_name, units in solution.extra_buildings.items():
+                buildings[class_name] = buildings.get(class_name, 0) + units
             if basket is attachments:
                 continue
             if solution.clock_speed > 1.0 and solution.machine_count is not None:

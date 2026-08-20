@@ -27,9 +27,9 @@ from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
 
 from satisplanner.core import constants, formatting
-from satisplanner.core.graph import GeneratorNode, ResourceNode
+from satisplanner.core.graph import GeneratorNode, ResourceNode, ResourceWellNode
 from satisplanner.ui import edits
-from satisplanner.ui.canvas_items import Field
+from satisplanner.ui.canvas_items import PURITY_BY_FIELD, Field
 from satisplanner.ui.catalogue import (
     PURITY_LABELS,
     extractor_choices,
@@ -78,6 +78,10 @@ def current_value(document: FactoryDocument, target: str, field: Field) -> str:
         case Field.CLOCK:
             # Typed in percent, stored as a fraction: nobody types 2,5 for 250 %.
             return formatting.number(getattr(node, "clock_speed", 1.0) * 100.0)
+        case Field.SATELLITES_IMPURE | Field.SATELLITES_NORMAL | Field.SATELLITES_PURE:
+            if not isinstance(node, ResourceWellNode):
+                return ""
+            return str(node.satellites.get(PURITY_BY_FIELD[field], 0))
         case _:
             quantity = edits.quantity_of(node)
             return "" if quantity is None else formatting.number(getattr(node, quantity.field))
@@ -102,6 +106,10 @@ def apply(document: FactoryDocument, target: str, field: Field, value: str) -> s
             return edits.set_clock_speed(document, target, _number(value) / 100.0)
         case Field.QUANTITY:
             return edits.set_quantity(document, target, _number(value))
+        case Field.SATELLITES_IMPURE | Field.SATELLITES_NORMAL | Field.SATELLITES_PURE:
+            return edits.set_satellites(
+                document, target, PURITY_BY_FIELD[field], _number(value)
+            )
 
 
 def _number(text: str) -> float:

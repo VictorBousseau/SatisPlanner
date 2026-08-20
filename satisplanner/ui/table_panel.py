@@ -46,9 +46,11 @@ from satisplanner.core.graph import (
     MachineNode,
     Node,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     WaterExtractorNode,
 )
+from satisplanner.core.models import Purity
 from satisplanner.core.results import FactoryReport, LimitingFactor, NodeSolution
 from satisplanner.ui import edits, theme
 from satisplanner.ui.binding import DocumentBinding
@@ -138,12 +140,14 @@ COLUMN_WIDTHS: Final[dict[int, int]] = {
 }
 
 # Node kinds that have a clock speed at all: a buffer or an exit has no throttle.
-ClockedNode = MachineNode | ResourceNode | WaterExtractorNode
+ClockedNode = MachineNode | ResourceNode | ResourceWellNode | WaterExtractorNode
 
 
 def has_clock(node: Node) -> TypeGuard[ClockedNode]:
     """True for the nodes that can be over- or underclocked, and narrows the type."""
-    return isinstance(node, MachineNode | ResourceNode | WaterExtractorNode)
+    return isinstance(
+        node, MachineNode | ResourceNode | ResourceWellNode | WaterExtractorNode
+    )
 
 
 _ROLE_NODE_ID: Final = int(Qt.ItemDataRole.UserRole)
@@ -294,7 +298,7 @@ class NodeTableModel(QAbstractTableModel):
             case _ if column == COLUMN_CLOCK:
                 return formatting.percent(node.clock_speed) if has_clock(node) else "—"
             case _ if column == COLUMN_PURITY:
-                return PURITY_LABELS[node.purity] if isinstance(node, ResourceNode) else "—"
+                return self._purity_text(node)
             case _ if column == COLUMN_EXTRACTOR:
                 return self._extractor_name(node)
             case _ if column == COLUMN_FUEL:
@@ -317,15 +321,35 @@ class NodeTableModel(QAbstractTableModel):
                 return formatting.percent(solution.ratio) if solution else "—"
 
     def _quantity_text(self, node: Node) -> str:
+        if isinstance(node, ResourceWellNode):
+            return f"{node.satellite_count} satellite(s)"
         quantity = quantity_of(node)
         if quantity is None:
             return "—"
         value = formatting.number(getattr(node, quantity.field))
         return f"{value} {quantity.label}"
 
+    def _purity_text(self, node: Node) -> str:
+        """One purity for a deposit, a tally of them for a well.
+
+        A well has no single purity to show -- that is the whole reason it is a node
+        kind of its own -- so the column shows the tally and stays read-only here.
+        The three numbers are edited on the face of the node, where each of them has
+        a place of its own to be double-clicked.
+        """
+        if isinstance(node, ResourceNode):
+            return PURITY_LABELS[node.purity]
+        if isinstance(node, ResourceWellNode):
+            written = [
+                f"{node.satellites.get(purity, 0)} {PURITY_LABELS[purity].lower()}"
+                for purity in Purity
+            ]
+            return " · ".join(written)
+        return "—"
+
     def _extractor_name(self, node: Node) -> str:
         """The building working this node, French, or a dash when there is none."""
-        if not isinstance(node, ResourceNode | WaterExtractorNode):
+        if not isinstance(node, ResourceNode | ResourceWellNode | WaterExtractorNode):
             return "—"
         building = self.document.game_data.buildings.get(node.extractor_class)
         return building.display_name_fr if building else node.extractor_class

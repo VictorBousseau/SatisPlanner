@@ -24,7 +24,7 @@ Un `.sfp` est une **archive ZIP** contenant jusqu'à trois membres :
 
 ```json
 {
-  "application_version": "3.1.0",
+  "application_version": "4.0.0",
   "game_version": "1.2",
   "schema_version": 7,
   "saved_at": "2026-08-02T18:42:11+00:00"
@@ -36,7 +36,7 @@ par quelles conversions le document doit passer. Un fichier annonçant une versi
 **supérieure** à celle que connaît la build est refusé avec une phrase, jamais
 ouvert de travers.
 
-Le schéma courant est le **7**. Les versions successives, et ce que chacune a
+Le schéma courant est le **8**. Les versions successives, et ce que chacune a
 ajouté :
 
 | Schéma | Ce qui change | Conversion à l'ouverture |
@@ -48,6 +48,7 @@ ajouté :
 | 5 | les répartiteurs et les groupeurs deviennent des nœuds | rien à faire **depuis le schéma 7** — voir ci-dessous |
 | 6 | le mode d'un répartiteur et les filtres de ses branches | rien à faire : tout répartiteur ancien est un `standard` |
 | 7 | `attachment_mode` : la règle des ports devient celle du document | le mode est lu sur le contenu, rien n'est réécrit |
+| 8 | le nœud `resource_well` apparaît | rien à faire : un document d'avant n'en a pas |
 
 Un numéro est incrémenté même quand il n'y a rien à convertir. C'est le seul moyen
 qu'une build ancienne refuse un fichier récent par une phrase plutôt qu'en ignorant
@@ -124,7 +125,7 @@ qui a rangé son usine s'attend à la retrouver rangée.
 
 ---
 
-## 3. Les neuf types de nœuds
+## 3. Les dix types de nœuds
 
 ### `resource` — un gisement
 
@@ -146,12 +147,59 @@ qui a rangé son usine s'attend à la retrouver rangée.
 0,5, 1 ou 2. Elle s'applique à **tous** les extracteurs du nœud : un nœud *est* un
 gisement. Deux gisements de puretés différentes sont deux nœuds.
 
+La règle vaut pour un **gisement**, c'est-à-dire pour ce type de nœud, et pas pour
+tout ce qui sort quelque chose du sol. Un **puits de ressource** (`resource_well`,
+plus bas) n'a pas de pureté : un pressuriseur ouvre plusieurs satellites d'un coup
+et rien ne dit qu'ils se ressemblent, donc la pureté y est **par satellite** et le
+nœud porte un décompte au lieu d'une valeur. C'est précisément pour garder la règle
+ci-dessus entière que le puits est un type de nœud à part et non un `resource`
+élargi : une règle qui plie sur la valeur d'un champ n'en est plus une.
+
 `count` est le nombre d'extracteurs, strictement positif, décimales admises.
 `clock_speed` est une fraction — `1.0` vaut 100 %, `2.5` vaut 250 % — bornée entre
 0,01 et 2,5. Le débit lui est strictement proportionnel ; l'électricité, non.
 
 Débit produit = `débit de base × pureté × count × clock_speed`.
 Ici : 120 × 2 × 1 × 1 = **240 minerai/min**.
+
+### `resource_well` — un puits de ressource
+
+```json
+{
+  "kind": "resource_well",
+  "id": "puits1",
+  "label": "Puits d'azote",
+  "position": [-640.0, 880.0],
+  "item_class": "Desc_NitrogenGas_C",
+  "extractor_class": "Build_FrackingExtractor_C",
+  "satellites": { "impure": 0, "normal": 2, "pure": 0 },
+  "clock_speed": 1.0
+}
+```
+
+**Deux bâtiments en un nœud**, ce qu'aucun autre type n'est. `extractor_class` est
+le *satellite* — `Build_FrackingExtractor_C`, 60 m³/min de base, 0 MW. Le
+pressuriseur n'est pas écrit : il est lu dans le catalogue à partir du satellite,
+pour qu'un fichier ne puisse pas porter un couple qui se contredit. C'est lui qui
+consomme, et il consomme tout : **150 MW**, un seul quel que soit le nombre de
+satellites.
+
+`satellites` est le décompte par pureté. Les clés absentes valent zéro, et les trois
+peuvent coexister — c'est tout l'objet de ce type de nœud. Chaque satellite donne
+30, 60 ou 120 m³/min selon sa pureté, et **chacun porte sa propre canalisation** :
+un puits de trois satellites a trois ports de sortie en mode fidèle.
+
+`clock_speed` s'applique au puits entier : le débit de chaque satellite lui est
+proportionnel, et la consommation du pressuriseur suit son exposant. C'est la seule
+lecture sous laquelle surcadencer un puits coûte quelque chose, les satellites étant
+déclarés à zéro.
+
+Débit produit = `Σ (satellites × débit de base × pureté) × clock_speed`.
+Ici : 2 × 60 × 1 × 1 = **120 m³ d'azote/min**.
+
+Trois ressources seulement ont des puits dans le jeu, et la liste est lue et non
+écrite : **pétrole brut, azote, eau**. L'azote n'a que celui-là — aucun extracteur
+ne le sort du sol autrement.
 
 ### `water_extractor` — une pompe à eau
 
@@ -420,13 +468,18 @@ Résolu contre les données du jeu 1.2 :
 
 | | |
 | --- | --- |
-| Solides bruts consommés | 240 minerai de fer/min, 30 minerai de cuivre/min, 30 charbon/min |
-| Fluides | 90 m³ d'eau/min |
-| Sorties | 80 lingots de fer/min, 30 lingots de cuivre/min |
+| Solides bruts consommés | 240 minerai de fer/min, 30 minerai de cuivre/min, 75 charbon/min, 10 plaques de fer/min |
+| Fluides | 255 m³ d'eau/min, 120 m³ d'azote/min |
+| Sorties | 80 lingots de fer/min, 30 lingots de cuivre/min, 30 m³ d'acide nitrique/min |
 | Rejets assumés | 80 lingots de fer/min |
-| Électricité | 68,673 MW consommés, 150 MW produits |
-| Liste de courses | 9 fonderies, 1 Foreuse Mk.2, 2 Foreuses Mk.1, 1 pompe, 2 centrales, 1 conteneur, 1 répartiteur, 1 groupeur |
+| Électricité | 312,234 MW consommés, 375 MW produits |
+| Liste de courses | 9 fonderies, 1 Mélangeur, 1 Foreuse Mk.2, 2 Foreuses Mk.1, 3 pompes, 1 pressuriseur, 2 satellites de puits, 5 centrales, 1 conteneur, 1 répartiteur, 1 groupeur |
 | Diagnostic | tampon en remplissage, +80/min, saturé en 1 h |
+
+Le puits d'azote à lui seul pèse **150 MW sur les 312**, ce qui explique les cinq
+centrales à charbon là où deux suffisaient avant qu'il soit là. Ce n'est pas un
+travers de l'exemple : un pressuriseur coûte cela, et l'azote n'a pas d'autre porte
+d'entrée.
 
 Tous les nœuds tournent à 100 % et rien n'est en erreur : c'est ce que la suite de
 tests vérifie à chaque exécution, pas seulement que le fichier se charge.

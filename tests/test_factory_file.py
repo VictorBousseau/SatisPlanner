@@ -468,7 +468,7 @@ def test_the_documented_example_is_still_a_valid_factory(game_data: GameData) ->
 
     assert graph.schema_version == SCHEMA_VERSION
     kinds = {node.kind for node in graph.nodes}
-    assert kinds == set(NodeKind), "les neuf types doivent y être"
+    assert kinds == set(NodeKind), "les dix types doivent y être"
     report = engine.solve(graph, game_data)
     assert report.converged
     assert not report.has_errors(), "l'exemple de référence ne doit rien avoir de casse"

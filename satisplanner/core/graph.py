@@ -50,7 +50,13 @@ from satisplanner.core.models import (
 # wants both on different days; what they must not want is the same file read two
 # ways. The mode is therefore in the document and travels with it, because it
 # changes the figures -- which is exactly what a colour preference does not do.
-SCHEMA_VERSION: Final = 7
+# 8 added the resource well, which is a node kind of its own and not a wider
+# deposit. A deposit's purity applies to all of its extractors; a well's purity is
+# per satellite, so the two cannot be the same model without making the rule
+# conditional on a field. An older document simply has no well; a document that
+# has one must not be opened by a build that would read its satellite tally as
+# nothing and show a factory running on air.
+SCHEMA_VERSION: Final = 8
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -93,6 +99,7 @@ class AttachmentMode(StrEnum):
 
 class NodeKind(StrEnum):
     RESOURCE = "resource"
+    RESOURCE_WELL = "resource_well"
     WATER_EXTRACTOR = "water_extractor"
     EXTERNAL_SOURCE = "external_source"
     MACHINE = "machine"
@@ -141,6 +148,43 @@ class ResourceNode(_NodeBase):
     purity: Purity = Purity.NORMAL
     count: float = Field(default=1.0, gt=0)
     clock_speed: float = _clock_field()
+
+
+class ResourceWellNode(_NodeBase):
+    """A resource well: one pressuriser, and satellites of differing purities.
+
+    **Not a wider** :class:`ResourceNode`, and the reason is a rule. A deposit node
+    says "the purity applies to *every* extractor on it": one node is one deposit,
+    and two purities are two nodes. That is true of a solid patch and false of a
+    well, where the pressuriser opens several satellite nodes at once and **each
+    satellite has a purity of its own**. Widening the deposit node would have made
+    the rule conditional on a field, which is the same as not having a rule.
+
+    So the purity is not a value here but a **tally**: how many satellites of each
+    purity this well opens. ``satellites`` is that tally, and the well's output is
+    the sum over it.
+
+    The building is two buildings, which nothing else in this model is: the
+    pressuriser draws the current -- 150 MW, all of it -- and the satellites draw
+    none. Only ``extractor_class`` is stored, the satellite; the pressuriser is read
+    from the catalogue, so a document cannot hold a pair that disagrees with itself.
+
+    The clock belongs to the well as a whole. Overclocking raises every satellite's
+    output in proportion and the pressuriser's draw by its exponent, which is the
+    only reading under which overclocking a well costs anything at all: the
+    satellites are declared at zero.
+    """
+
+    kind: Literal[NodeKind.RESOURCE_WELL] = NodeKind.RESOURCE_WELL
+    item_class: str
+    extractor_class: str
+    satellites: dict[Purity, int] = Field(default_factory=dict)
+    clock_speed: float = _clock_field()
+
+    @property
+    def satellite_count(self) -> int:
+        """How many satellites this well opens, all purities together."""
+        return sum(self.satellites.values())
 
 
 class WaterExtractorNode(_NodeBase):
@@ -271,6 +315,7 @@ class MergerNode(_PassThroughNode):
 
 Node = Annotated[
     ResourceNode
+    | ResourceWellNode
     | WaterExtractorNode
     | ExternalSourceNode
     | MachineNode
@@ -298,6 +343,7 @@ CONSUMER_KINDS: Final = frozenset(
 PRODUCER_KINDS: Final = frozenset(
     {
         NodeKind.RESOURCE,
+        NodeKind.RESOURCE_WELL,
         NodeKind.WATER_EXTRACTOR,
         NodeKind.EXTERNAL_SOURCE,
         NodeKind.MACHINE,
@@ -532,7 +578,7 @@ def node_output_items(node: Node, game_data: GameData) -> set[str]:
             # Whatever it was put on. An empty set means "not decided yet", which
             # is what lets the first line connected settle it.
             return {node.item_class} if node.item_class else set()
-        case ResourceNode():
+        case ResourceNode() | ResourceWellNode():
             return {node.item_class}
         case WaterExtractorNode():
             extracted = game_data.extractor(node.extractor_class).item_class
@@ -901,8 +947,29 @@ def unit_count(node: Node) -> float | None:
             return node.machine_count
         case ResourceNode() | WaterExtractorNode() | GeneratorNode():
             return node.count
+        case ResourceWellNode():
+            # The satellites, not the pressuriser. They are what scales the output,
+            # what the ports are counted from -- each satellite has a pipe of its
+            # own -- and what a reader means by "how big is this well".
+            return float(node.satellite_count)
         case _:
             return None
+
+
+def extra_buildings(node: Node, game_data: GameData) -> dict[str, int]:
+    """Buildings a node puts down besides the ones :func:`unit_count` counts.
+
+    Only a resource well has any. Its pressuriser is a single building whatever the
+    number of satellites, it draws all 150 MW of the well, and the satellites draw
+    none -- so neither the power nor the shopping list can be worked out from one
+    building and one count, which is what every other node is.
+    """
+    match node:
+        case ResourceWellNode():
+            activator = game_data.extractor(node.extractor_class).activator_class
+            return {activator: 1} if activator else {}
+        case _:
+            return {}
 
 
 def machine_building(node: MachineNode, game_data: GameData) -> str:

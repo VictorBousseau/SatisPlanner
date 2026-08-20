@@ -40,7 +40,7 @@ Autant le dire avant d'ouvrir la fenêtre.
   goulot — un répartiteur passe 2000 items/min quand le meilleur convoyeur plafonne à 1200 — mais
   ils décident du partage.
 - **Hors périmètre** : Convertisseur, Encodeur quantique, Accélérateur de particules, nucléaire,
-  extracteur de puits de ressources, Clean Pipeline. Le **Mélangeur en est sorti** et ses
+  Clean Pipeline. Le **Mélangeur en est sorti** et ses
   17 recettes sont au catalogue. Ce qui reste dehors n'y est plus en silence : les recettes de
   ces machines sont **conservées dans la base**, et la fiche d'un objet les montre grisées en
   nommant ce qui les bloque — une machine pas encore modélisée, ou une fabrication à la main
@@ -149,6 +149,14 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
   objet qu'aucune recette du jeu ne produit dit d'où il vient : ramassé dans le monde, ou tombé
   d'un bâtiment hors périmètre. Sans cela, « hors périmètre » et « absent des données » se
   ressemblent, et c'est ce qui a fait croire à un trou sur la cellule d'uranium.
+- **Puits de ressource** : un nœud à part, et pas un gisement élargi. La pureté d'un puits est
+  **par satellite** — un pressuriseur en ouvre plusieurs d'un coup et rien ne dit qu'ils se
+  ressemblent — donc le nœud porte un décompte, « 1 impur · 2 normaux · 3 purs », chaque nombre
+  éditable d'un double-clic. C'est aussi le seul nœud qui pose **deux bâtiments** : le
+  pressuriseur, qui consomme les 150 MW à lui seul, et les satellites, qui n'en consomment
+  aucun et donnent 30, 60 ou 120 m³/min chacun. Trois ressources en ont dans le jeu — pétrole
+  brut, azote, eau — et **l'azote n'a que cela** : c'est ce qui ouvre l'acide nitrique, le
+  système de refroidissement, le cadre modulaire fusionné et la dernière phase.
 - **Gisements** : la pureté et le type d'extracteur se lisent sur le nœud
   (« 1 Foreuse Mk.3 — gisement pur ») et se changent par clic droit ou par les colonnes du
   tableau, sans supprimer le nœud ni ses lignes. **La pureté appartient au gisement** : elle
@@ -248,7 +256,7 @@ Une usine s'enregistre en `.sfp` : une archive ZIP contenant `factory.json`, un 
 
 Le format est décrit champ par champ dans [`docs/format-usine.md`](docs/format-usine.md), avec un
 exemple complet et fonctionnel — [`docs/exemple-usine.json`](docs/exemple-usine.json), couvrant les
-**neuf** types de nœuds — que la suite de tests charge, résout et vérifie à 100 % partout, pour
+**dix** types de nœuds — que la suite de tests charge, résout et vérifie à 100 % partout, pour
 qu'il ne puisse pas se périmer en silence. Le même document décrit aussi le `.sfm` de la
 bibliothèque de modules, dont la charge utile est un code de partage et non un second format.
 
@@ -269,7 +277,7 @@ valeur par défaut de 100 %, et le document est noté comme converti. Le numéro
 incrémenté malgré l'absence de conversion à faire, pour qu'une V1 refuse un fichier V1.1 par une
 phrase plutôt que par une erreur de validation.
 
-Le schéma courant est le **7**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
+Le schéma courant est le **8**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
 premier qui puisse déplacer un chiffre : les répartiteurs qu'une disposition supposait sont
 matérialisés, les lignes reprises à travers eux, et un partage en 5 ou en 7 cesse d'être égal
 parce qu'il ne l'est pas dans le jeu. Le relevé des vingt-et-une usines de référence, avec
@@ -278,7 +286,9 @@ l'ancienne et la nouvelle part de chaque branche touchée, est dans
 rien, et c'est le propos : un répartiteur écrit avant les modes est un `standard`, et un standard
 est le cas du programmable où rien n'est écrit sur aucune branche. Le passage du 6 au 7 lit le
 mode dans le contenu : un document qui porte un répartiteur a été pensé en mode fidèle, un
-document qui n'en porte aucun s'ouvre en simple, et personne n'a rien à migrer.
+document qui n'en porte aucun s'ouvre en simple, et personne n'a rien à migrer. Le passage du
+7 au 8 n'écrit rien non plus : aucun document antérieur ne pouvait contenir un puits de
+ressource, faute de moyen d'en dessiner un.
 
 ### Pourquoi les numéros majeurs se suivent de si près
 
@@ -613,24 +623,6 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 - Somersloop et amplification de production : autre formule, autre travail.
 - Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
   sémantique n'est pas la même. À traiter pour lui-même.
-- **Le puits de ressource**, et c'est la moitié qui reste du lot ouvert avec le Mélangeur.
-  Celui-ci est entré au catalogue sans une ligne de moteur — `FGBuildableManufacturer` comme la
-  Façonneuse, 75 MW fixes, même exposant, et ses 17 recettes tiennent dans les 4 entrées et
-  2 sorties déjà supportées. Mais **11 d'entre elles veulent de l'azote, et l'azote n'a pas
-  d'extracteur** : il est marqué matière brute comme le fer, à l'état gazeux, et rien dans le
-  périmètre ne peut le sortir du sol. Le puits est ce qui les alimente, et avec elles l'acide
-  nitrique, le système de refroidissement, le cadre modulaire fusionné, et donc la phase 5.
-
-  Deux pièges relevés d'avance, pour ne pas les redécouvrir :
-
-  - **la pureté d'un puits est par satellite**, ce qui contredit une règle écrite noir sur blanc
-    dans la page d'aide et dans `docs/format-usine.md` — « la pureté s'applique à **tous** les
-    extracteurs du nœud ». Elle reste vraie d'un gisement solide et devient fausse d'un puits, ce
-    qui demande un **type de nœud distinct** et non un `ResourceNode` élargi. Les deux documents
-    devront alors énoncer la nuance et non la règle actuelle ;
-  - un puits est un bâtiment **en deux parties** — `Build_FrackingSmasher_C` l'activateur à
-    150 MW, `Build_FrackingExtractor_C` les satellites à 0 MW — ce qu'aucun extracteur du modèle
-    n'est aujourd'hui.
 - **Les trois machines à puissance variable**, en un lot d'un bloc et après le précédent :
   Convertisseur, Accélérateur de particules, Encodeur quantique. Elles partagent un seul manque
   et il se paie une fois. Toutes trois sont `FGBuildableManufacturerVariablePower` : leur

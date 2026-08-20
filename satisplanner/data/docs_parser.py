@@ -311,14 +311,24 @@ OTHER_GENERATOR_NATIVE_CLASSES: Final[tuple[str, ...]] = (
 )
 
 # True when the extracted node has a purity (impure / normal / pure). The Water
-# Extractor has a fixed output and no node purity.
+# Extractor has a fixed output and no node purity. A resource-well satellite has
+# one, and it is *its own* -- the pressuriser opens several at once and they need
+# not match, which is why a well is a node kind of its own.
 EXTRACTOR_HAS_PURITY: Final[dict[str, bool]] = {
     "Build_MinerMk1_C": True,
     "Build_MinerMk2_C": True,
     "Build_MinerMk3_C": True,
     "Build_OilPump_C": True,
     "Build_WaterPump_C": False,
+    "Build_FrackingExtractor_C": True,
 }
+
+# The two halves of a resource well, each under a native class of its own. The
+# satellite extracts and draws nothing; the pressuriser draws everything and
+# extracts nothing. Named by native class rather than by class name so that a game
+# version renaming one of them fails loudly instead of shipping half a well.
+WELL_SATELLITE_NATIVE_CLASS: Final = "FGBuildableFrackingExtractor"
+WELL_ACTIVATOR_NATIVE_CLASS: Final = "FGBuildableFrackingActivator"
 
 # Slot counts are absent from the game files; see core.constants.
 STORAGE_SLOTS: Final[dict[str, int]] = {
@@ -892,6 +902,53 @@ def parse_generators(
     return buildings, generators
 
 
+def grouped_class_names(grouped: Locale, native_class: str) -> set[str]:
+    """Class names filed under one native class."""
+    return {cls["ClassName"] for cls in grouped.get(native_class, []) if cls.get("ClassName")}
+
+
+def _first_form(raw: str | None) -> ItemForm:
+    """The first form an extractor declares, defaulting to solid.
+
+    ``mAllowedResourceForms`` is a list, and only the resource-well satellite
+    declares more than one: liquid **and** gas. Taking the first loses nothing --
+    both are measured in m3 and both answer yes to ``is_fluid``, which is the only
+    question this field is ever asked -- and the unit a rate is shown in comes from
+    the item, never from the extractor.
+    """
+    for token in (raw or "").strip("()").split(","):
+        form = conversions.FORM_BY_RAW.get(token.strip())
+        if form is not None:
+            return form
+    return ItemForm.SOLID
+
+
+def _well_activator(
+    grouped: Locale,
+    labels: dict[str, str],
+    descriptors: dict[str, ClassEntry],
+    buildings: list[Building],
+    warnings: list[str],
+) -> str | None:
+    """The pressuriser, added to the buildings and returned by class name.
+
+    It is half of a resource well and the half that costs: 150 MW against nothing
+    for the satellites. It extracts no resource of its own, so it gets a building
+    row and no extractor row -- there is no rate to put on it.
+    """
+    candidates = grouped.get(WELL_ACTIVATOR_NATIVE_CLASS, [])
+    if len(candidates) != 1:
+        if candidates:
+            warnings.append(
+                f"{len(candidates)} pressuriseurs de puits sous {WELL_ACTIVATOR_NATIVE_CLASS} :"
+                " un seul est attendu, puits hors périmètre"
+            )
+        return None
+    cls = candidates[0]
+    buildings.append(_building(cls, BuildingKind.EXTRACTOR, labels, descriptors))
+    return str(cls["ClassName"])
+
+
 def parse_buildings(
     grouped: Locale,
     labels: dict[str, str],
@@ -927,20 +984,28 @@ def parse_buildings(
                 f"{class_name} : machine de production inconnue, hors périmètre par défaut"
             )
 
-    # Extractors: solid miners and the oil pump, plus the water extractor which
-    # the game models with its own native class.
+    # Extractors: solid miners and the oil pump, the water extractor which the game
+    # models with its own native class, and the resource-well satellite which has
+    # one too. The pressuriser is added just after: it extracts nothing, so it is a
+    # building without an extractor row.
+    activator = _well_activator(grouped, labels, descriptors, buildings, warnings)
     extractor_classes: Iterable[ClassEntry] = [
         *grouped.get("FGBuildableResourceExtractor", []),
         *grouped.get("FGBuildableWaterPump", []),
+        *grouped.get(WELL_SATELLITE_NATIVE_CLASS, []),
     ]
     for cls in extractor_classes:
         class_name = cls["ClassName"]
         if class_name not in EXTRACTOR_HAS_PURITY:
             continue
-        forms_declared = conversions.FORM_BY_RAW.get(
-            (cls.get("mAllowedResourceForms") or "").strip("()"), ItemForm.SOLID
-        )
+        forms_declared = _first_form(cls.get("mAllowedResourceForms"))
         allowed = parse_allowed_resources(cls.get("mAllowedResources", ""))
+        is_satellite = class_name in grouped_class_names(grouped, WELL_SATELLITE_NATIVE_CLASS)
+        if is_satellite and activator is None:
+            warnings.append(
+                f"{class_name} : satellite de puits sans pressuriseur, puits hors périmètre"
+            )
+            continue
         buildings.append(_building(cls, BuildingKind.EXTRACTOR, labels, descriptors))
         extractors.append(
             Extractor(
@@ -953,6 +1018,8 @@ def parse_buildings(
                     forms_declared,
                 ),
                 has_purity=EXTRACTOR_HAS_PURITY[class_name],
+                activator_class=activator if is_satellite else None,
+                allowed_items=tuple(allowed),
             )
         )
 

@@ -235,6 +235,19 @@ class Extractor(_Row):
     allowed_form: ItemForm
     rate_per_minute: float
     has_purity: bool
+    # The building that has to be put down beside this extractor for it to work at
+    # all. Only a resource-well satellite has one -- the pressuriser -- and it is
+    # what makes such an extractor impossible to place on its own. Empty for every
+    # extractor that stands alone, which is all the others.
+    activator_class: str | None = None
+    # What this extractor may be put on, when the game restricts it to a list. Empty
+    # means the form alone decides, which is the case of every solid miner.
+    allowed_items: tuple[str, ...] = ()
+
+    @property
+    def needs_activator(self) -> bool:
+        """Whether this extractor is a satellite rather than a building of its own."""
+        return self.activator_class is not None
 
     def rate(self, purity: Purity) -> float:
         """Base rate at 100 % clock speed, adjusted for node purity if relevant."""

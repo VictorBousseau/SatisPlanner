@@ -58,7 +58,12 @@ logger = logging.getLogger(__name__)
 # carry; `items.byproduct_of_fr` names the unplaceable building an item drops out
 # of. A recipe dropped at parse time made "outside the scope" and "missing from
 # the data" look the same on screen, which is the one thing a catalogue must not do.
-SCHEMA_VERSION: Final = 8
+# 9 described the resource well: `extractors.activator_class` names the pressuriser
+# a satellite cannot work without -- the only extractor in the game that is half a
+# building -- and `extractor_resources` lists what an extractor may be put on when
+# the game restricts it, which is how a well is offered for oil, nitrogen and water
+# and for nothing else.
+SCHEMA_VERSION: Final = 9
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -171,7 +176,21 @@ CREATE TABLE extractors (
     item_class      TEXT REFERENCES items (class_name),
     allowed_form    TEXT NOT NULL CHECK (allowed_form IN ('solid', 'liquid', 'gas')),
     rate_per_minute REAL NOT NULL,
-    has_purity      INTEGER NOT NULL CHECK (has_purity IN (0, 1))
+    has_purity      INTEGER NOT NULL CHECK (has_purity IN (0, 1)),
+    -- The building that has to stand beside this one for it to work: the
+    -- resource-well pressuriser, and nothing else in the game. Null for every
+    -- extractor that is a building on its own.
+    activator_class TEXT REFERENCES buildings (class_name)
+);
+
+-- What an extractor may be put on, when the game names a list. A solid miner names
+-- none -- it takes any ore -- and gets no rows; the resource-well satellite names
+-- crude oil, nitrogen and water, and gets three.
+CREATE TABLE extractor_resources (
+    extractor_class TEXT NOT NULL REFERENCES extractors (class_name),
+    slot_index      INTEGER NOT NULL,
+    item_class      TEXT NOT NULL REFERENCES items (class_name),
+    PRIMARY KEY (extractor_class, slot_index)
 );
 
 -- Buildings that put power on the grid instead of taking it off.
@@ -397,7 +416,7 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...])
 def _insert_extractors(connection: sqlite3.Connection, extractors: tuple[Extractor, ...]) -> None:
     connection.executemany(
         "INSERT INTO extractors (class_name, item_class, allowed_form, rate_per_minute,"
-        " has_purity) VALUES (?, ?, ?, ?, ?)",
+        " has_purity, activator_class) VALUES (?, ?, ?, ?, ?, ?)",
         [
             (
                 extractor.class_name,
@@ -405,8 +424,18 @@ def _insert_extractors(connection: sqlite3.Connection, extractors: tuple[Extract
                 extractor.allowed_form.value,
                 extractor.rate_per_minute,
                 int(extractor.has_purity),
+                extractor.activator_class,
             )
             for extractor in extractors
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO extractor_resources (extractor_class, slot_index, item_class)"
+        " VALUES (?, ?, ?)",
+        [
+            (extractor.class_name, index, item_class)
+            for extractor in extractors
+            for index, item_class in enumerate(extractor.allowed_items)
         ],
     )
 
@@ -594,6 +623,10 @@ def _read_recipes(connection: sqlite3.Connection, *, placeable: bool) -> list[Re
 
 
 def read_extractors(connection: sqlite3.Connection) -> list[Extractor]:
+    allowed: dict[str, list[str]] = {}
+    query = "SELECT * FROM extractor_resources ORDER BY extractor_class, slot_index"
+    for row in connection.execute(query):
+        allowed.setdefault(row["extractor_class"], []).append(row["item_class"])
     return [
         Extractor(
             class_name=row["class_name"],
@@ -601,6 +634,8 @@ def read_extractors(connection: sqlite3.Connection) -> list[Extractor]:
             allowed_form=ItemForm(row["allowed_form"]),
             rate_per_minute=row["rate_per_minute"],
             has_purity=bool(row["has_purity"]),
+            activator_class=row["activator_class"],
+            allowed_items=tuple(allowed.get(row["class_name"], ())),
         )
         for row in connection.execute("SELECT * FROM extractors ORDER BY class_name")
     ]

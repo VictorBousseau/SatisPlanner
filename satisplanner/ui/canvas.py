@@ -53,6 +53,7 @@ from satisplanner.core.graph import (
     MergerNode,
     Node,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
@@ -796,7 +797,9 @@ class FactoryScene(QGraphicsScene):
             menu.addMenu(self._extractor_menu(item.node, menu))
         if isinstance(item.node, GeneratorNode):
             menu.addMenu(self._fuel_menu(item.node, menu))
-        if isinstance(item.node, MachineNode | ResourceNode | WaterExtractorNode):
+        if isinstance(
+            item.node, MachineNode | ResourceNode | ResourceWellNode | WaterExtractorNode
+        ):
             clock = QAction("Cadence...", menu)
             clock.triggered.connect(lambda: self.ask_clock_speed(item.node.id, parent))
             menu.addAction(clock)
@@ -1094,7 +1097,9 @@ class FactoryScene(QGraphicsScene):
 
     def ask_clock_speed(self, node_id: str, parent: QWidget) -> None:
         node = self.document.graph.node(node_id)
-        assert isinstance(node, MachineNode | ResourceNode | WaterExtractorNode)
+        assert isinstance(
+            node, MachineNode | ResourceNode | ResourceWellNode | WaterExtractorNode
+        )
         shard = self.document.game_data.overclock_shard()
         hint = ""
         if shard is not None:

@@ -46,6 +46,7 @@ from satisplanner.core.graph import (
     Node,
     OutputNode,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
@@ -226,6 +227,20 @@ def _six_to_seven(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     return payload, []
 
 
+def _seven_to_eight(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Schema 7 to 8: the resource well became a node kind.
+
+    Nothing to convert, and that is the whole content of this step. No document
+    written before this version can hold a well -- there was no way to draw one --
+    so every schema-7 file is already a valid schema-8 file, field for field.
+
+    The number is incremented all the same, and for the usual reason: it is what
+    makes a 3.x build refuse a file holding a well by a sentence, instead of
+    reading a node it does not know and drawing a factory that is missing a source.
+    """
+    return payload, []
+
+
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
 MIGRATIONS: Final[dict[int, Step]] = {
     1: _one_to_two,
@@ -234,6 +249,7 @@ MIGRATIONS: Final[dict[int, Step]] = {
     4: _four_to_five,
     5: _five_to_six,
     6: _six_to_seven,
+    7: _seven_to_eight,
 }
 
 
@@ -399,7 +415,7 @@ def _referenced_by(node: Node, game_data: GameData) -> list[tuple[str, Any]]:
             if machine.building_class:
                 found.append((machine.building_class, game_data.buildings))
             return found
-        case ResourceNode() as deposit:
+        case ResourceNode() | ResourceWellNode() as deposit:
             return [
                 (deposit.item_class, game_data.items),
                 (deposit.extractor_class, game_data.extractors),

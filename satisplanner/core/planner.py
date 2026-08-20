@@ -45,6 +45,7 @@ from satisplanner.core.graph import (
     Node,
     OutputNode,
     ResourceNode,
+    ResourceWellNode,
     StorageNode,
     WaterExtractorNode,
     port_line_budget,
@@ -373,7 +374,10 @@ def _place_nodes(game_data: GameData, made: Plan, graph: FactoryGraph) -> None:
 
 
 def _node_for(game_data: GameData, step: Step, position: tuple[float, float]) -> Node:
-    slug = _slug(game_data, step.item_class)
+    # Never spelled out here: the identifier is what the lines are drawn between,
+    # and two places inventing it independently is how a well ends up connected to
+    # a node that does not exist.
+    slug = node_id_for(game_data, step)
     if step.recipe_class is not None:
         return MachineNode(
             id=slug,
@@ -383,7 +387,7 @@ def _node_for(game_data: GameData, step: Step, position: tuple[float, float]) ->
         )
     if not _is_raw(game_data, step.item_class):
         return ExternalSourceNode(
-            id=f"entree-{slug}",
+            id=slug,
             item_class=step.item_class,
             rate_per_minute=step.rate_per_minute,
             position=position,
@@ -397,15 +401,27 @@ def _node_for(game_data: GameData, step: Step, position: tuple[float, float]) ->
         raise PlanError(msg)
     each = extractor.rate(DEFAULT_PURITY)
     units = step.produced_per_minute / each if each > 0 else 1.0
+    if extractor.needs_activator:
+        # A satellite is a whole thing or it is nothing: there is no such object as
+        # two thirds of one, even in the exact-ratio variant where machines are
+        # allowed decimals. Rounding up leaves a surplus, which the diagnostics
+        # report as a surplus -- and which the real purities usually change anyway.
+        return ResourceWellNode(
+            id=slug,
+            item_class=step.item_class,
+            extractor_class=extractor.class_name,
+            satellites={DEFAULT_PURITY: max(1, math.ceil(units - RATE_EPSILON))},
+            position=position,
+        )
     if extractor.item_class is not None and not extractor.has_purity:
         return WaterExtractorNode(
-            id=f"gisement-{slug}",
+            id=slug,
             extractor_class=extractor.class_name,
             count=max(units, RATE_EPSILON),
             position=position,
         )
     return ResourceNode(
-        id=f"gisement-{slug}",
+        id=slug,
         item_class=step.item_class,
         extractor_class=extractor.class_name,
         purity=DEFAULT_PURITY,
@@ -420,6 +436,12 @@ def _extractor_for(game_data: GameData, item_class: str) -> Extractor | None:
     The slowest that can do the job, by class name, so the answer never depends on
     dictionary order. Which miner is really on the deposit is the user's to say --
     that is exactly what :attr:`Plan.to_settle` is for.
+
+    A resource well comes last, however cheap its class name sorts. It is two
+    buildings, a hundred and fifty megawatts and a spot on the map that has to have
+    one, so it is the answer only where nothing else is: nitrogen, and nitrogen
+    alone. Water has a pump and crude oil has a derrick, and a generator that sank
+    a well for either would be answering a question nobody asked.
     """
     item = game_data.items.get(item_class)
     if item is None:
@@ -429,8 +451,13 @@ def _extractor_for(game_data: GameData, item_class: str) -> Extractor | None:
         for extractor in game_data.extractors.values()
         if extractor.allowed_form.is_fluid is item.form.is_fluid
         and extractor.item_class in (None, item_class)
+        and item_class in (extractor.allowed_items or (item_class,))
     ]
-    return min(candidates, key=lambda extractor: extractor.class_name) if candidates else None
+    if not candidates:
+        return None
+    return min(
+        candidates, key=lambda extractor: (extractor.needs_activator, extractor.class_name)
+    )
 
 
 def _lay_lines(game_data: GameData, made: Plan, graph: FactoryGraph) -> None:
@@ -574,7 +601,13 @@ def node_id_for(game_data: GameData, step: Step) -> str:
     slug = _slug(game_data, step.item_class)
     if step.recipe_class is not None:
         return slug
-    return f"gisement-{slug}" if _is_raw(game_data, step.item_class) else f"entree-{slug}"
+    if not _is_raw(game_data, step.item_class):
+        return f"entree-{slug}"
+    extractor = _extractor_for(game_data, step.item_class)
+    # A well is not a deposit and the identifier says so: "puits-azote" reads back
+    # in a diagnostic, in the table and in the saved file as what it actually is.
+    prefix = "puits" if extractor is not None and extractor.needs_activator else "gisement"
+    return f"{prefix}-{slug}"
 
 
 def _name(game_data: GameData, item_class: str) -> str:

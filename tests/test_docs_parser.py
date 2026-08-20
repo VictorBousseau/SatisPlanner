@@ -402,7 +402,19 @@ def test_extractors_carry_their_rate_and_purity_flag(dataset: GameDataset) -> No
     assert water.item_class == "Desc_Water_C"
     assert water.has_purity is False, "l'extracteur d'eau a un débit fixe"
 
-    assert "Build_FrackingExtractor_C" not in extractors, "les puits sont hors périmètre V1"
+    # The resource well: the one extractor in the game that is half a building.
+    satellite = extractors["Build_FrackingExtractor_C"]
+    assert satellite.rate_per_minute == 60, "1000 unités par seconde, soit 60 m³/min"
+    assert satellite.has_purity is True, "chaque satellite a sa propre pureté"
+    assert satellite.item_class is None, "trois ressources possibles, aucune imposée"
+    assert satellite.allowed_items == (
+        "Desc_LiquidOil_C",
+        "Desc_NitrogenGas_C",
+        "Desc_Water_C",
+    )
+    assert satellite.needs_activator, "un satellite ne se pose pas seul"
+    assert satellite.activator_class == "Build_FrackingSmasher_C"
+    assert extractors["Build_MinerMk1_C"].needs_activator is False
 
 
 def test_storages_expose_slots_for_solids_and_volume_for_fluids(dataset: GameDataset) -> None:

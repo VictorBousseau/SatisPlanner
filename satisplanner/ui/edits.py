@@ -31,6 +31,7 @@ from satisplanner.core.graph import (
     Node,
     OutputNode,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
@@ -84,10 +85,54 @@ def quantity_of(node: Node) -> Quantity | None:
             return Quantity("rate_per_minute", "/min")
         case StorageNode():
             return Quantity("initial_content", "en stock")
+        case ResourceWellNode():
+            # A well is sized by three numbers, one per purity, and none of them is
+            # "the" quantity. They are set through :func:`set_satellites`, and the
+            # table shows the total rather than pretending one of the three is it.
+            return None
         case OutputNode() | SplitterNode() | MergerNode():
             # An exit is a boundary and an attachment is a fitting: neither is a
             # bank of anything, so neither has a number to set.
             return None
+
+
+def set_satellites(
+    document: FactoryDocument, node_id: str, purity: Purity | str, count: float
+) -> str | None:
+    """Set how many satellites of one purity a well opens.
+
+    Whole satellites only, and refused rather than rounded: half a satellite is not
+    a thing you can build, and a 2,5 silently turned into 2 teaches the field takes
+    decimals. The whole tally is written back as one value, because the field is a
+    mapping and assigning into it in place would slip past validation.
+    """
+    node = document.graph.node(node_id)
+    if not isinstance(node, ResourceWellNode):
+        return "Ce nœud n'est pas un puits de ressource."
+    try:
+        wanted = Purity(purity)
+    except ValueError:
+        return f"Pureté inconnue : {purity}"
+    if math.isnan(count):
+        return "Ce n'est pas un nombre."
+    if count < 0:
+        return "Valeur hors domaine : 0 au minimum."
+    if count != int(count):
+        return "Un satellite ne se pose pas en fraction : un nombre entier."
+    whole = int(count)
+    if node.satellites.get(wanted, 0) == whole:
+        return None
+    tally = {**node.satellites, wanted: whole}
+    document.undo_stack.push(
+        SetNodeFieldCommand(
+            document,
+            node_id,
+            "satellites",
+            tally,
+            f"{node_id} : {whole} satellite(s) {wanted.value}",
+        )
+    )
+    return None
 
 
 def set_quantity(document: FactoryDocument, node_id: str, value: float) -> str | None:

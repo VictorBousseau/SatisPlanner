@@ -41,6 +41,7 @@ from satisplanner.core.graph import (
     Node,
     OutputNode,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
@@ -49,7 +50,7 @@ from satisplanner.core.graph import (
     port_line_budget,
     unit_count,
 )
-from satisplanner.core.models import GameData, Item, ItemForm, SplitterMode
+from satisplanner.core.models import GameData, Item, ItemForm, Purity, SplitterMode
 from satisplanner.core.results import EdgeSolution, LimitingFactor, NodeSolution
 from satisplanner.ui import item_colours, theme
 from satisplanner.ui.catalogue import PURITY_LABELS, SPLITTER_MODE_LABELS
@@ -130,8 +131,36 @@ class Field(StrEnum):
     PURITY = "purity"
     EXTRACTOR = "extractor"
     FUEL = "fuel"
+    # A resource well is sized by three numbers and not by one: how many satellites
+    # of each purity it opens. That is not the same concept written three ways --
+    # it is three quantities, each with its own rate -- so it gets three fields
+    # rather than being crammed into ``QUANTITY``.
+    SATELLITES_IMPURE = "satellites_impure"
+    SATELLITES_NORMAL = "satellites_normal"
+    SATELLITES_PURE = "satellites_pure"
     # A line's tier. Not on a node at all: a double-click on the line itself.
     TRANSPORT = "transport"
+
+
+# Which field stands for which purity of satellite, and back.
+SATELLITE_FIELDS: Final[dict[Purity, Field]] = {
+    Purity.IMPURE: Field.SATELLITES_IMPURE,
+    Purity.NORMAL: Field.SATELLITES_NORMAL,
+    Purity.PURE: Field.SATELLITES_PURE,
+}
+PURITY_BY_FIELD: Final[dict[Field, Purity]] = {
+    field: purity for purity, field in SATELLITE_FIELDS.items()
+}
+
+# How many satellites of one purity read on the face of a node. Plural agreement is
+# written out rather than computed: "impur" does not take an s the way "normal"
+# takes "normaux", and a rule that gets one of the three wrong is worse than three
+# entries in a table.
+SATELLITE_WORDS: Final[dict[Purity, tuple[str, str]]] = {
+    Purity.IMPURE: ("impur", "impurs"),
+    Purity.NORMAL: ("normal", "normaux"),
+    Purity.PURE: ("pur", "purs"),
+}
 
 
 @dataclass(frozen=True)
@@ -482,7 +511,7 @@ class NodeItem(QGraphicsItem):
                 return ((content or ANY_ITEM,), (content,) if content else ())
             case OutputNode() as output:
                 return ((output.item_class,), ())
-            case ResourceNode() | ExternalSourceNode() as source:
+            case ResourceNode() | ResourceWellNode() | ExternalSourceNode() as source:
                 return ((), (source.item_class,))
             case WaterExtractorNode() as pump:
                 item = self.game_data.extractor(pump.extractor_class).item_class
@@ -566,7 +595,9 @@ class NodeItem(QGraphicsItem):
         match self.node:
             case MachineNode() as machine:
                 return self.game_data.recipe(machine.recipe_class).display_name_fr
-            case ResourceNode() | ExternalSourceNode() | OutputNode() as endpoint:
+            case (
+                ResourceNode() | ResourceWellNode() | ExternalSourceNode() | OutputNode()
+            ) as endpoint:
                 return self.game_data.item(endpoint.item_class).display_name_fr
             case WaterExtractorNode() as pump:
                 return self.game_data.building(pump.extractor_class).display_name_fr
@@ -625,6 +656,8 @@ class NodeItem(QGraphicsItem):
                     Segment(PURITY_LABELS[deposit.purity].lower(), Field.PURITY),
                     *_clock_segments(deposit.clock_speed),
                 ]
+            case ResourceWellNode() as well:
+                return self._well_segments(well)
             case WaterExtractorNode() as pump:
                 return [
                     Segment(f"{formatting.number(pump.count)} unité(s)", Field.QUANTITY),
@@ -655,6 +688,33 @@ class NodeItem(QGraphicsItem):
                 return [Segment("rejet assumé" if output.is_sink else "sortie de l'usine")]
             case SplitterNode() | MergerNode():
                 return self._attachment_segments()
+
+    def _well_segments(self, node: ResourceWellNode) -> list[Segment]:
+        """A well's face: the pressuriser, then the tally, one number per purity.
+
+        The three counts are on the node for the same reason a deposit's purity is:
+        nothing else shows them and every figure depends on them. They are written
+        even when nought, because a well whose pure satellites read zero is telling
+        you something, and a line that appears only when it is non-empty makes the
+        reader wonder whether the field exists at all.
+        """
+        extractor = self.game_data.extractors.get(node.extractor_class)
+        activator = extractor.activator_class if extractor else None
+        head = (
+            self.game_data.building(activator).display_name_fr
+            if activator and activator in self.game_data.buildings
+            else "Puits de ressource"
+        )
+        segments = [Segment(head), Segment(" — ")]
+        for index, purity in enumerate(Purity):
+            count = node.satellites.get(purity, 0)
+            singular, plural = SATELLITE_WORDS[purity]
+            if index:
+                segments.append(Segment(" · "))
+            segments.append(Segment(str(count), SATELLITE_FIELDS[purity]))
+            segments.append(Segment(f" {singular if count == 1 else plural}"))
+        segments.extend(_clock_segments(node.clock_speed))
+        return segments
 
     def subtitle_layout(self) -> SubtitleLayout:
         """The measured subtitle, from the cache when the text has not changed.
@@ -818,7 +878,9 @@ class NodeItem(QGraphicsItem):
                 if headline is not None:
                     return self.icons.for_item(self.game_data.item(headline))
                 return self.icons.for_building(self.game_data.building(recipe.building_class))
-            case ResourceNode() | ExternalSourceNode() | OutputNode() as endpoint:
+            case (
+                ResourceNode() | ResourceWellNode() | ExternalSourceNode() | OutputNode()
+            ) as endpoint:
                 return self.icons.for_item(self.game_data.item(endpoint.item_class))
             case WaterExtractorNode() as pump:
                 return self.icons.for_building(self.game_data.building(pump.extractor_class))

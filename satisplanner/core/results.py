@@ -110,6 +110,12 @@ class NodeSolution(_Result):
     # line is too small. Filled in once the uncapped companion run is known.
     line_limited_items: tuple[str, ...] = ()
     building_class: str | None = None
+    # Buildings this node puts down beyond the bank ``machine_count`` counts, by
+    # class and by whole units. Empty for every node but a resource well, which is
+    # one pressuriser plus its satellites: two buildings, two counts, and only one
+    # of them drawing current. Both the power bill and the shopping list read it,
+    # so a node that puts down two things is priced for two.
+    extra_buildings: dict[str, int] = Field(default_factory=dict)
     machine_count: float | None = None  # what the user set
     useful_machine_count: float | None = None  # what the inputs actually feed
     # 1.0 is 100 %. Throughput follows it exactly; power follows it raised to the

@@ -24,13 +24,16 @@ from satisplanner.core.graph import (
     Node,
     OutputNode,
     ResourceNode,
+    ResourceWellNode,
     SplitterNode,
     StorageNode,
     WaterExtractorNode,
 )
 from satisplanner.core.models import (
     AttachmentRole,
+    Building,
     BuildingKind,
+    Extractor,
     GameData,
     Item,
     ItemForm,
@@ -77,6 +80,7 @@ class EntryKind(StrEnum):
 
     RECIPE = "recipe"
     EXTRACTOR = "extractor"
+    RESOURCE_WELL = "resource_well"
     WATER_EXTRACTOR = "water_extractor"
     GENERATOR = "generator"
     STORAGE = "storage"
@@ -91,6 +95,7 @@ class EntryKind(StrEnum):
 SECTION_LABELS: Final[dict[EntryKind, str]] = {
     EntryKind.RECIPE: "Recettes",
     EntryKind.EXTRACTOR: "Extraction",
+    EntryKind.RESOURCE_WELL: "Extraction",
     EntryKind.WATER_EXTRACTOR: "Extraction",
     EntryKind.GENERATOR: "Électricité",
     EntryKind.STORAGE: "Stockage",
@@ -144,6 +149,9 @@ class PaletteEntry:
             case EntryKind.WATER_EXTRACTOR:
                 extractor = game_data.extractors.get(self.class_name)
                 return extractor.item_class if extractor else None
+            case EntryKind.RESOURCE_WELL:
+                # Named by what it pulls up, exactly as a deposit entry is.
+                return self.class_name if self.class_name in game_data.items else None
             case EntryKind.GENERATOR:
                 # A generator is about what it burns, which is the item the card
                 # can actually say something useful about.
@@ -174,6 +182,19 @@ class PaletteEntry:
                     id=node_id,
                     item_class=self.class_name,
                     extractor_class=self.extractor_class,
+                    position=position,
+                )
+            case EntryKind.RESOURCE_WELL:
+                assert self.extractor_class is not None
+                # One normal satellite to begin with, for the same reason a deposit
+                # starts on one extractor and normal purity: it is a size, not a
+                # reading of the map, and the map is the one thing this application
+                # cannot know. What is actually out there gets typed in afterwards.
+                return ResourceWellNode(
+                    id=node_id,
+                    item_class=self.class_name,
+                    extractor_class=self.extractor_class,
+                    satellites={Purity.NORMAL: 1},
                     position=position,
                 )
             case EntryKind.WATER_EXTRACTOR:
@@ -330,6 +351,11 @@ def _extraction(game_data: GameData) -> list[PaletteEntry]:
                 )
             )
             continue
+        if extractor.needs_activator:
+            # A well satellite is not a building you place: it is opened by a
+            # pressuriser, and what the palette offers is the well as a whole.
+            entries.extend(_well_entries(game_data, extractor, name, building))
+            continue
         for item in _resources_for(game_data, extractor.allowed_form, extractor.item_class):
             entries.append(
                 PaletteEntry(
@@ -344,6 +370,36 @@ def _extraction(game_data: GameData) -> list[PaletteEntry]:
                 )
             )
     return sorted(entries, key=lambda entry: (fold(entry.detail), fold(entry.label)))
+
+
+def _well_entries(
+    game_data: GameData, extractor: Extractor, name: str, building: Building | None
+) -> list[PaletteEntry]:
+    """One well entry per resource the game says a well can be sunk into.
+
+    Crude oil, nitrogen and water, and the list is read rather than written: a
+    solid miner names no resource because it takes any ore, and a satellite names
+    three because those are the three that come out of the ground under pressure.
+    """
+    del building
+    entries = []
+    for item_class in extractor.allowed_items:
+        item = game_data.items.get(item_class)
+        if item is None:
+            continue
+        entries.append(
+            PaletteEntry(
+                kind=EntryKind.RESOURCE_WELL,
+                label=item.display_name_fr,
+                detail=name,
+                class_name=item.class_name,
+                icon_class=item.class_name,
+                icon_file=item.icon_file,
+                extractor_class=extractor.class_name,
+                is_event=item.is_event,
+            )
+        )
+    return entries
 
 
 def _resources_for(game_data: GameData, form: ItemForm, only: str | None) -> list[Item]:

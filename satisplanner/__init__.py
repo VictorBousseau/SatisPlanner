@@ -17,6 +17,8 @@ game database. Data reaches it by injection.
 # The **database** schema is a different thing and does not move the major number.
 # Widening the catalogue -- the Blender, and keeping the recipes no node can place --
 # took `db.SCHEMA_VERSION` from 7 to 8 and left every saved factory readable, both
-# ways: the file is the interface to the past, and this change does not touch it.
+# ways: the file is the interface to the past, and that change did not touch it.
+# The resource well does: it is a node kind, so a 4.0 document holds something a 3.x
+# build cannot read, and the major number is exactly the sentence that says so.
 # (This is not the game's version, which is 1.2 and lives in ``data.db.GAME_VERSION``.)
-__version__ = "3.1.0"
+__version__ = "4.0.0"
