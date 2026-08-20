@@ -216,7 +216,17 @@ def _one_recipe(
         )
 
     power = ""
-    if building is not None and building.power_mw > 0:
+    if recipe.has_own_power:
+        # This machine's draw depends on what it is making, so the figure belongs
+        # on the recipe line and nowhere else. Both ends of the swing are shown
+        # next to the mean, because a reader sizing a power plant wants to know
+        # that an Encoder touches two gigawatts on the way.
+        low, high = recipe.power_range_mw
+        power = (
+            f" — {formatting.number(recipe.power_mw)} MW en moyenne "
+            f"({formatting.number(low)} à {formatting.number(high)})"
+        )
+    elif building is not None and building.power_mw > 0:
         power = f" — {formatting.number(building.power_mw)} MW"
     # Most French labels already read "... (alternative)"; the marker is only added
     # where the game left it out, exactly as the palette does.

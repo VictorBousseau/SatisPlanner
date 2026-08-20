@@ -24,7 +24,7 @@ Un `.sfp` est une **archive ZIP** contenant jusqu'à trois membres :
 
 ```json
 {
-  "application_version": "4.0.0",
+  "application_version": "4.1.0",
   "game_version": "1.2",
   "schema_version": 7,
   "saved_at": "2026-08-02T18:42:11+00:00"
@@ -254,7 +254,27 @@ n'existe que pour qu'une incohérence soit diagnostiquée plutôt qu'ignorée.
 
 Attention à une règle qui surprend : **un sous-produit sans issue arrête la machine
 entièrement**. Si une recette produit deux choses, les deux doivent avoir une ligne
-sortante, sinon le nœud tourne à 0 %.
+sortante, sinon le nœud tourne à 0 %. Elle se remarque surtout à l'Encodeur
+quantique, dont **chaque** recette rend en résidus de matière noire exactement le
+volume de matière photonique qu'elle avale : sans torchère pour les résidus, la
+machine est arrêtée — et arrêtée, elle consomme quand même son gigawatt.
+
+Rien dans le fichier ne dit la puissance : elle est lue dans le catalogue, sur le
+bâtiment ou, pour trois machines, sur la recette. Le **Convertisseur**,
+l'**Accélérateur de particules** et l'**Encodeur quantique** déclarent une plaque à
+zéro et portent leur consommation sur ce qu'ils fabriquent. Le bilan retient le
+**milieu** de leur plage, qui est la moyenne d'une oscillation symétrique, parce que
+ce modèle est en régime permanent et n'a pas de notion de temps :
+
+| Machine | Plage annoncée | Ce que le bilan compte |
+| --- | --- | --- |
+| Convertisseur | 100 à 400 MW | 250 MW, ses 25 recettes |
+| Accélérateur de particules | 250 à 750 MW | 500 MW, diamants et plutonium |
+| Accélérateur de particules | 500 à 1500 MW | 1000 MW, matière noire et ficsonium |
+| Encodeur quantique | 0 à 2000 MW | 1000 MW, ses 6 recettes |
+
+L'Accélérateur est le seul à avoir deux paliers, et c'est lui qui interdit de poser
+le chiffre sur le bâtiment : aucune valeur unique n'est juste pour ses deux moitiés.
 
 ### `generator` — une centrale
 

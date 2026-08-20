@@ -322,23 +322,16 @@ def produced_in(*classes: str) -> str:
     ("places", "expected"),
     [
         (("Build_ConstructorMk1_C",), ("Build_ConstructorMk1_C", RecipeAvailability.PLACEABLE)),
-        (
-            ("Build_HadronCollider_C",),
-            ("Build_HadronCollider_C", RecipeAvailability.MACHINE_OUT_OF_SCOPE),
-        ),
         (("BP_WorkshopComponent_C",), ("Build_Workshop_C", RecipeAvailability.HAND_CRAFTED)),
         (("BP_BuildGun_C",), None),
         (("FGBuildGun",), None),
         ((), None),
-        # A machine wins over a bench, and a machine in scope wins over one that
-        # is not: both orders are the ones a recipe actually comes in.
+        # A machine wins over a bench: most machine recipes are also offered at the
+        # automated workbench, so reading the stations in file order would call
+        # them all hand crafting.
         (
             ("BP_WorkBenchComponent_C", "Build_ConstructorMk1_C"),
             ("Build_ConstructorMk1_C", RecipeAvailability.PLACEABLE),
-        ),
-        (
-            ("Build_HadronCollider_C", "Build_ManufacturerMk1_C"),
-            ("Build_ManufacturerMk1_C", RecipeAvailability.PLACEABLE),
         ),
     ],
 )
@@ -352,6 +345,29 @@ def test_every_station_is_classified(
     rule is what is tested.
     """
     assert docs_parser._origin_of({"mProducedIn": produced_in(*places)}) == expected
+
+
+def test_a_machine_left_out_on_purpose_is_marked_and_not_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No machine is out of scope any more, so the rule is tested on a made-up one.
+
+    ``EXCLUDED_MACHINES`` is empty and that is the point of this whole series: every
+    machine the game manufactures parts in is in the catalogue. The branch stays
+    because it is what would let a future machine be left out **deliberately**, told
+    apart from one nobody has heard of -- and a rule with no test is a rule that
+    rots. So the exclusion is faked, and the classification checked against it.
+    """
+    assert not docs_parser.EXCLUDED_MACHINES, "plus aucune machine hors périmètre"
+    monkeypatch.setattr(docs_parser, "EXCLUDED_MACHINES", frozenset({"Build_Teleporteur_C"}))
+    assert docs_parser._origin_of({"mProducedIn": produced_in("Build_Teleporteur_C")}) == (
+        "Build_Teleporteur_C",
+        RecipeAvailability.MACHINE_OUT_OF_SCOPE,
+    )
+    # And a machine in scope still wins over one that is not.
+    assert docs_parser._origin_of(
+        {"mProducedIn": produced_in("Build_Teleporteur_C", "Build_ManufacturerMk1_C")}
+    ) == ("Build_ManufacturerMk1_C", RecipeAvailability.PLACEABLE)
 
 
 def test_a_station_this_parser_does_not_know_is_named() -> None:

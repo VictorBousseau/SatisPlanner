@@ -39,12 +39,12 @@ Autant le dire avant d'ouvrir la fenêtre.
   document et voyage avec lui, parce qu'il change les chiffres. Les raccords ne sont jamais un
   goulot — un répartiteur passe 2000 items/min quand le meilleur convoyeur plafonne à 1200 — mais
   ils décident du partage.
-- **Hors périmètre** : Convertisseur, Encodeur quantique, Accélérateur de particules, nucléaire,
-  Clean Pipeline. Le **Mélangeur en est sorti** et ses
-  17 recettes sont au catalogue. Ce qui reste dehors n'y est plus en silence : les recettes de
-  ces machines sont **conservées dans la base**, et la fiche d'un objet les montre grisées en
-  nommant ce qui les bloque — une machine pas encore modélisée, ou une fabrication à la main
-  qui ne sera jamais un nœud d'usine.
+- **Toutes les machines du jeu sont au catalogue** : les 291 recettes que Satisfactory fabrique
+  dans une machine s'y posent, Mélangeur, Convertisseur, Accélérateur de particules et Encodeur
+  quantique compris. Ce qui reste dehors, ce sont les **26 recettes fabriquées à la main** à
+  l'atelier d'équipement — parachute, tronçonneuse, fusil — et elles n'y sont pas en silence : la
+  base les conserve et la fiche d'un objet les montre grisées, en disant qu'un atelier ne sera
+  jamais un nœud d'usine. Restent hors périmètre le **nucléaire** et le Clean Pipeline.
 - **Le nombre de machines est une saisie**, pas un résultat — sauf si vous demandez l'inverse.
   « Je veux 2 Cadres modulaires lourds par minute » est le **mode objectif**, et il construit
   l'usine ; mais il n'**optimise** rien. Il suit la recette standard, ou celle que vous imposez,
@@ -162,6 +162,12 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
   tableau, sans supprimer le nœud ni ses lignes. **La pureté appartient au gisement** : elle
   multiplie tous les extracteurs du nœud. Deux gisements de puretés différentes sont deux nœuds,
   et c'est la seule façon de les représenter.
+- **Puissance variable** : le Convertisseur, l'Accélérateur de particules et l'Encodeur quantique
+  consomment selon **ce qu'ils fabriquent** et non selon ce qu'ils sont. Leur plaque est à zéro et
+  le chiffre est porté par la recette, entre deux bornes que la consommation parcourt en jeu. Le
+  bilan retient la **moyenne**, soit le milieu de l'oscillation, parce que ce modèle est en régime
+  permanent ; la fiche d'objet affiche les deux bornes à côté — « 1000 MW en moyenne (0 à 2000) »
+  pour l'Encodeur, qu'il vaut mieux savoir avant de dimensionner une centrale.
 - **Cadence** : chaque extracteur et chaque machine se règle de 1 % à 250 % (clic droit ▸
   « Cadence… », ou la colonne du tableau). Un nœud dont la cadence n'est pas 100 % l'affiche en
   toutes lettres. Le débit suit la cadence exactement ; l'électricité suit une loi de puissance,
@@ -601,19 +607,31 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
     prouver qu'il n'y a bien qu'une porte.
 16. **La consommation compte les machines à l'arrêt, la production ne compte que ce qui brûle.**
     L'asymétrie est volontaire. Côté consommation c'est un **dimensionnement au pire cas et non
-    une mesure du jeu** : les fichiers ne déclarent qu'une consommation nominale par bâtiment et
-    aucune consommation de veille — le seul second chiffre du jeu,
-    `mEstimatedMininumPowerConsumption`, n'existe que sur les trois machines à puissance variable
-    hors périmètre et désigne le bas de la plage d'une recette *en marche*. Inventer une valeur
-    réduite serait pire que compter au maximum. Côté production, en revanche, la donnée est sans
-    ambiguïté : un générateur sans carburant ne brûle rien et ne produit rien.
-17. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
+    une mesure du jeu** : les fichiers ne déclarent qu'une consommation nominale et aucune
+    consommation de veille. Le seul second chiffre du jeu, `mEstimatedMininumPowerConsumption`,
+    n'existe que sur les trois machines à puissance variable — désormais au catalogue — et désigne
+    le bas de la plage d'une recette **en marche**, pas une veille : il ne dit donc rien de ce
+    qu'une machine arrêtée consomme. Inventer une valeur réduite serait pire que compter au
+    maximum. Côté production, en revanche, la donnée est sans ambiguïté : un générateur sans
+    carburant ne brûle rien et ne produit rien.
+17. **La puissance appartient à la paire machine + recette, et la plaque fixe en est le cas
+    particulier.** Trois machines déclarent `mPowerConsumption` à zéro et portent leur
+    consommation sur la recette, sous la forme `constant + facteur` : leur tirage oscille au lieu
+    de tenir en place. Comme ce modèle est en régime permanent, il en retient **le milieu**, qui
+    est la moyenne de toute oscillation symétrique autour de son centre — et deux paramètres sans
+    troisième pour décrire une forme disent symétrique. Prendre le maximum dimensionnerait chaque
+    centrale sur une pointe qu'aucune usine ne tient ; prendre le minimum sous-estimerait une
+    facture réelle. Ce n'était pas une généralisation gratuite : l'Accélérateur a **deux** paliers,
+    500 MW sur les diamants et 1000 sur la matière noire, et aucun chiffre porté par le bâtiment
+    ne peut être juste pour les deux. Deux recettes du jeu portent en outre une plage sur une
+    machine qui a sa propre plaque ; le jeu les ignore, ce parseur aussi, mais il les **nomme**.
+18. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
     diagnostic d'erreur ne se traduit pas par un taux réduit, et c'est délibéré : en jeu, un
     déficit ne ralentit pas l'usine, il déclenche une coupure générale jusqu'à intervention
     manuelle. Afficher « tout à zéro » n'apprendrait rien et un bridage partiel serait une
     invention. Le test qui compte n'est pas que les chiffres soient justes, c'est que la même
     usine résolue avec et sans assez de générateurs donne exactement les mêmes débits.
-18. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
+19. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
     coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
     écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
     affichant la même image coûte seize millisecondes.
@@ -623,13 +641,6 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 - Somersloop et amplification de production : autre formule, autre travail.
 - Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
   sémantique n'est pas la même. À traiter pour lui-même.
-- **Les trois machines à puissance variable**, en un lot d'un bloc et après le précédent :
-  Convertisseur, Accélérateur de particules, Encodeur quantique. Elles partagent un seul manque
-  et il se paie une fois. Toutes trois sont `FGBuildableManufacturerVariablePower` : leur
-  `mPowerConsumption` vaut **zéro**, et la consommation est portée par la **recette**, sous la
-  forme `constant + facteur` — 250 + 500 pour les granulés de plutonium, 0 + 2000 pour l'éclat de
-  charge synthétique. Le moteur lit aujourd'hui la puissance sur le **bâtiment** et n'a nulle part
-  où mettre un chiffre par recette. C'est le seul vrai manque de modélisation qui reste.
 - **La centrale nucléaire**, et elle casse une hypothèse du moteur plutôt que d'en manquer une.
   Le catalogue sait déjà fabriquer la **barre d'uranium** par ses deux recettes — la cellule
   encapsulée a une alternative à la Façonneuse, `Recipe_Alternate_UraniumCell_1_C`, qui ne

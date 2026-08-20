@@ -956,6 +956,28 @@ def unit_count(node: Node) -> float | None:
             return None
 
 
+def draw_of(node: Node, building_class: str, clock_speed: float, game_data: GameData) -> float:
+    """What **one** building of this node draws, at this clock.
+
+    Normally the building's own nameplate. The Converter, the Particle Accelerator
+    and the Quantum Encoder declare none at all -- their ``mPowerConsumption`` is
+    zero -- and the figure lives on the **recipe** instead, because what those
+    machines draw depends on what they are making. A fixed nameplate is therefore
+    the particular case and a draw belonging to the machine-and-recipe pair the
+    general one, exactly as a standard splitter is the case of the programmable one
+    where nothing has been written on any branch.
+
+    The exponent stays the building's in both cases: overclocking is priced by the
+    machine, never by the recipe it happens to be running.
+    """
+    nominal: float | None = None
+    if isinstance(node, MachineNode):
+        recipe = game_data.recipe(node.recipe_class)
+        if recipe.has_own_power:
+            nominal = recipe.power_mw
+    return game_data.building(building_class).power_at(clock_speed, nominal)
+
+
 def extra_buildings(node: Node, game_data: GameData) -> dict[str, int]:
     """Buildings a node puts down besides the ones :func:`unit_count` counts.
 

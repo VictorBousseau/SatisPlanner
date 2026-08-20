@@ -252,8 +252,18 @@ PRODUCTION_MACHINES: Final[frozenset[str]] = frozenset(
         # recipe of its own goes beyond the four inputs and two outputs already
         # supported. It is here because the data says it fits, not the reverse.
         "Build_Blender_C",
+        # The three that put their draw on the recipe rather than on themselves.
+        # Same slots, same exponent; only the power is read elsewhere.
+        "Build_Converter_C",
+        "Build_HadronCollider_C",
+        "Build_QuantumEncoder_C",
     }
 )
+
+# Machines whose ``mPowerConsumption`` is zero on purpose: the draw belongs to the
+# recipe, as ``constant + factor``. Their own class says so -- they are filed under
+# a native class of their own -- so this is read and not assumed.
+VARIABLE_POWER_NATIVE_CLASS: Final = "FGBuildableManufacturerVariablePower"
 
 # The build gun, under both spellings the data uses: a class list normally names
 # the blueprint, but one recipe -- the Space Elevator -- names the native class
@@ -271,17 +281,13 @@ MANUAL_STATIONS: Final[dict[str, str]] = {
     "BP_WorkshopComponent_C": "Build_Workshop_C",
 }
 
-# Machines the game has and this version does not model yet. Listed rather than
-# inferred so that a machine added by a future game version shows up as unknown
-# instead of being silently swallowed. Their recipes are kept and marked, because
-# an absence that says nothing is read as a gap in the data.
-EXCLUDED_MACHINES: Final[frozenset[str]] = frozenset(
-    {
-        "Build_Converter_C",
-        "Build_HadronCollider_C",
-        "Build_QuantumEncoder_C",
-    }
-)
+# Machines the game has and this version does not model yet. **Empty**, and that is
+# the point of the series that ends here: every machine the game manufactures parts
+# in is now in :data:`PRODUCTION_MACHINES`. The constant stays because it is what
+# tells a machine added by a future game version apart from one left out on
+# purpose -- an unknown class still raises a warning rather than being swallowed,
+# and a deliberate exclusion would have somewhere to be written.
+EXCLUDED_MACHINES: Final[frozenset[str]] = frozenset()
 
 # Generators in scope. The biomass burner, the coal generator and the fuel
 # generator: everything that burns an item a V1 factory can produce or extract.
@@ -563,6 +569,43 @@ def _warn_unknown_station(recipe: ClassEntry, warnings: list[str]) -> None:
         )
 
 
+# What the game writes on a recipe whose machine prices itself: nothing, spelt as a
+# constant of zero and a factor of one. Anything else on such a machine is data the
+# game itself ignores, and this parser says so rather than believing it.
+_NO_VARIABLE_POWER: Final[tuple[float, ...]] = (0.0, 1.0)
+
+
+def _variable_power(
+    recipe: ClassEntry, machine: str, variable_machines: frozenset[str], warnings: list[str]
+) -> tuple[float, float]:
+    """The draw a recipe carries, once the **building** has been asked whether it may.
+
+    The building decides, never the recipe. Two recipes in Satisfactory 1.2 carry a
+    swing of 500 to 1500 MW on a machine that prices itself -- the Biochemical
+    Sculptor at the Blender and the Ballistic Warp Drive at the Manufacturer -- and
+    the game ignores both, because neither machine is a variable-power one. Trusting
+    them would bill a Blender thirteen times what it draws.
+
+    Neither is corrected in silence: an unexpected figure is named in the warnings,
+    which is the rule this project applies to any value that contradicts another.
+    """
+    constant = parse_float(recipe.get("mVariablePowerConsumptionConstant"))
+    factor = parse_float(recipe.get("mVariablePowerConsumptionFactor"))
+    if machine in variable_machines:
+        if constant <= 0 and factor <= 0:
+            warnings.append(
+                f"{recipe.get('ClassName')} : {machine} ne déclare aucune puissance et la "
+                f"recette non plus, machine à consommation nulle"
+            )
+        return constant, factor
+    if constant != 0.0 or factor not in _NO_VARIABLE_POWER:
+        warnings.append(
+            f"{recipe.get('ClassName')} : puissance variable {constant:g}+{factor:g} déclarée "
+            f"sur {machine}, qui a sa propre plaque — champ ignoré, comme le jeu l'ignore"
+        )
+    return 0.0, 0.0
+
+
 def parse_recipes(
     grouped: Locale,
     labels: dict[str, str],
@@ -579,6 +622,7 @@ def parse_recipes(
     """
     recipes: list[Recipe] = []
     missing_items: set[str] = set()
+    variable_machines = frozenset(grouped_class_names(grouped, VARIABLE_POWER_NATIVE_CLASS))
     machine_names = {
         cls["ClassName"]: cls.get("mDisplayName") or ""
         for cls in _iter_all_classes(grouped)
@@ -622,6 +666,7 @@ def parse_recipes(
             warnings.append(f"{class_name} : item inconnu ou aucun produit, recette ignorée")
             continue
 
+        power = _variable_power(cls, machine, variable_machines, warnings)
         display_name = cls.get("mDisplayName") or class_name
         # The game encodes "alternate" twice and inconsistently: usually in the
         # class name, sometimes only in the English label. Both are authoritative,
@@ -644,6 +689,11 @@ def parse_recipes(
                 products=slots["products"],
                 is_event=is_event_class(cls),
                 availability=availability,
+                # Zero for everything the building itself prices, which is all but
+                # three machines. Read rather than inferred: a recipe that stopped
+                # declaring a draw would show up as a machine consuming nothing.
+                power_constant_mw=power[0],
+                power_factor_mw=power[1],
                 # Only for a machine the catalogue will not carry: for the others
                 # the name is read from ``buildings`` and stays in one place.
                 building_name_fr=(
@@ -974,8 +1024,13 @@ def parse_buildings(
     storages: list[Storage] = []
     attachments: list[Attachment] = []
 
-    # Production machines
-    for cls in grouped.get("FGBuildableManufacturer", []):
+    # Production machines, both kinds: the ones that carry their own draw and the
+    # ones that leave it to the recipe. Nothing else tells them apart in a row.
+    machine_classes: Iterable[ClassEntry] = [
+        *grouped.get("FGBuildableManufacturer", []),
+        *grouped.get(VARIABLE_POWER_NATIVE_CLASS, []),
+    ]
+    for cls in machine_classes:
         class_name = cls["ClassName"]
         if class_name in PRODUCTION_MACHINES:
             buildings.append(_building(cls, BuildingKind.MANUFACTURER, labels, descriptors))
@@ -1120,6 +1175,39 @@ def parse_buildings(
     return buildings, extractors, belts, pipes, storages, attachments
 
 
+def _check_variable_power_ranges(
+    grouped: Locale, recipes: Sequence[Recipe], warnings: list[str]
+) -> None:
+    """Hold the building's declared range against the range its recipes describe.
+
+    A variable-power machine states the span it expects to draw --
+    ``mEstimatedMininumPowerConsumption`` and its maximum twin -- and every recipe
+    states its own ``constant`` and ``constant + factor``. The two are written
+    independently in the game files and must agree: the building's floor is the
+    lowest constant among its recipes, its ceiling the highest sum.
+
+    That makes it a real cross-check rather than a formality. Reading the fields
+    into the wrong slots, or losing a recipe, breaks the agreement and says so here
+    instead of shipping a power bill nobody can trace back.
+    """
+    for cls in grouped.get(VARIABLE_POWER_NATIVE_CLASS, []):
+        class_name = cls.get("ClassName", "")
+        made = [recipe for recipe in recipes if recipe.building_class == class_name]
+        if not made:
+            continue
+        low = min(recipe.power_range_mw[0] for recipe in made)
+        high = max(recipe.power_range_mw[1] for recipe in made)
+        declared = (
+            parse_float(cls.get("mEstimatedMininumPowerConsumption")),
+            parse_float(cls.get("mEstimatedMaximumPowerConsumption")),
+        )
+        if (low, high) != declared:
+            warnings.append(
+                f"{class_name} : plage annoncée {declared[0]:g}-{declared[1]:g} MW, plage de "
+                f"ses recettes {low:g}-{high:g} MW — les deux devraient coïncider"
+            )
+
+
 def _with_external_origins(
     items: list[Item],
     recipes: Sequence[Recipe],
@@ -1160,6 +1248,8 @@ def parse_dataset(
     energies = {item.class_name: item.energy_mj for item in items}
     generator_buildings, generators = parse_generators(reference, labels, forms, energies, warnings)
     buildings = sorted([*buildings, *generator_buildings], key=lambda b: b.class_name)
+
+    _check_variable_power_ranges(reference, recipes, warnings)
 
     known_buildings = {building.class_name for building in buildings}
     orphans = sorted({r.building_class for r in recipes} - known_buildings)

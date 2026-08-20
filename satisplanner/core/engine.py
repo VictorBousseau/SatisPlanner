@@ -70,6 +70,7 @@ from satisplanner.core.graph import (
     branch_carries,
     branch_filter,
     condensation_order,
+    draw_of,
     extra_buildings,
     generator_input_rates,
     machine_building,
@@ -856,8 +857,10 @@ class _Solver:
         power = 0.0
         if building is not None and machine_count is not None:
             # Not proportional: the game raises the draw to the building's own
-            # exponent, which is why 250 % costs about 3.36 times and not 2.5.
-            power = self.game_data.building(building).power_at(clock) * machine_count
+            # exponent, which is why 250 % costs about 3.36 times and not 2.5. And
+            # the nameplate itself may come from the recipe rather than from the
+            # building -- see :func:`draw_of`.
+            power = draw_of(node, building, clock, self.game_data) * machine_count
         # A node that puts down a second building pays for it too. Today that is
         # the well's pressuriser, which is where all of a well's current goes: the
         # satellites are declared at zero, so leaving this out would make a well

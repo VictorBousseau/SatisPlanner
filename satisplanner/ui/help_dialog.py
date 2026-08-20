@@ -149,7 +149,18 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "la facture suit l'exposant du pressuriseur.",
     "La cadence multiplie le débit à l'identique et l'électricité en loi de "
     "puissance : à 250 %, une machine produit 2,5 fois plus et consomme environ "
-    "3,36 fois plus.",
+    "3,36 fois plus. L'exposant est le même pour toutes les machines de "
+    "production, y compris les trois ci-dessous.",
+    "<b>Trois machines consomment selon ce qu'elles fabriquent</b>, et non selon "
+    "ce qu'elles sont : le <b>Convertisseur</b>, l'<b>Accélérateur de "
+    "particules</b> et l'<b>Encodeur quantique</b>. Leur plaque est à zéro et le "
+    "chiffre est porté par la <b>recette</b>. En jeu leur consommation oscille — "
+    "l'Accélérateur va de 250 à 750 MW sur des diamants, de 500 à 1500 sur la "
+    "matière noire ; l'Encodeur, de 0 à 2000 — et comme ce modèle est en régime "
+    "permanent, c'est la <b>moyenne</b> qui est comptée, soit le milieu de "
+    "l'oscillation. La fiche d'objet montre les deux bornes à côté d'elle, parce "
+    "que dimensionner une centrale sur la moyenne d'un Encodeur sans savoir qu'il "
+    "touche deux gigawatts serait une mauvaise surprise.",
     "<b>Le nombre de machines est ce que vous saisissez</b>, jamais ce que l'outil "
     "décide. En regard, il vous dit combien sont réellement utiles compte tenu de "
     "ce qui arrive, et l'écart entre les deux. Pour prendre le problème par "
@@ -240,6 +251,11 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "vient : ramassé dans le monde, ou tombé d'un bâtiment hors périmètre — les "
     "déchets d'uranium sortent de la centrale nucléaire, ils ne se ramassent pas. "
     "Une absence qui ne se nomme pas se lit comme un trou dans les données.",
+    "<b>Une machine à l'arrêt consomme quand même.</b> La production suit le taux "
+    "de fonctionnement, la consommation non : un nœud bloqué ou affamé paie sa "
+    "facture entière, comme en jeu. Ça ne se remarquait pas à 4 MW ; ça se "
+    "remarque avec un Encodeur quantique bloqué, qui est la façon la plus chère de "
+    "ce catalogue de ne rien produire.",
     "Les tampons sont des puits et des sources infinis. L'application dit si les "
     "débits sont tenables et en combien de temps un stock se vide, mais ne simule "
     "pas le temps qui passe.",

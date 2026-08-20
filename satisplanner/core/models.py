@@ -163,6 +163,17 @@ class Recipe(_Row):
     products: tuple[RecipeSlot, ...]
     is_event: bool = False
     availability: RecipeAvailability = RecipeAvailability.PLACEABLE
+    # What one machine running this recipe draws, when the **building** declares
+    # nothing. Three machines are like that -- the Converter, the Particle
+    # Accelerator and the Quantum Encoder -- and the game writes their draw here
+    # as ``constant`` and ``factor``: the consumption swings between ``constant``
+    # and ``constant + factor`` over a cycle instead of sitting still.
+    #
+    # Both are zero for every other recipe, and that is the whole shape of the
+    # rule: a fixed nameplate on the building is the **particular** case, and a
+    # draw that belongs to the machine-and-recipe pair is the general one.
+    power_constant_mw: float = 0.0
+    power_factor_mw: float = 0.0
     # French name of the machine, carried **only** when that machine is absent from
     # the catalogue. A placeable recipe leaves it empty and the name is read from
     # ``buildings``, so the two can never drift apart for the rows that have both.
@@ -172,6 +183,35 @@ class Recipe(_Row):
     def is_placeable(self) -> bool:
         """Whether a node can be placed for this recipe."""
         return self.availability is RecipeAvailability.PLACEABLE
+
+    @property
+    def has_own_power(self) -> bool:
+        """Whether the draw is written on this recipe rather than on the building."""
+        return self.power_constant_mw > 0 or self.power_factor_mw > 0
+
+    @property
+    def power_mw(self) -> float:
+        """The draw of one machine running this recipe, in steady state.
+
+        **The midpoint**, and the choice is worth stating because the data gives a
+        range and no nominal. The consumption oscillates between ``constant`` and
+        ``constant + factor``; this engine solves a steady state and has no notion
+        of time, so a single figure is the only thing it can hold. Any oscillation
+        symmetric about its middle -- and two parameters with no third to describe
+        a shape say symmetric -- averages to that middle over a full period, so the
+        midpoint is the mean draw rather than a point picked out of the interval.
+        Taking the maximum would size every power plant for a peak no factory
+        sustains; taking the minimum would under-report a real bill.
+
+        Zero when the building has a nameplate of its own, which is where the
+        figure then comes from.
+        """
+        return self.power_constant_mw + self.power_factor_mw / 2.0
+
+    @property
+    def power_range_mw(self) -> tuple[float, float]:
+        """The two ends of the swing, for a reader who wants to see them."""
+        return self.power_constant_mw, self.power_constant_mw + self.power_factor_mw
 
     @property
     def product_count(self) -> int:
@@ -200,11 +240,18 @@ class Building(_Row):
     # the game uses 1.321929 for everything that produces and 1.6 elsewhere.
     power_exponent: float = 1.0
 
-    def power_at(self, clock_speed: float) -> float:
-        """Draw of one such building running at ``clock_speed`` (1.0 = 100 %)."""
+    def power_at(self, clock_speed: float, nominal_mw: float | None = None) -> float:
+        """Draw of one such building running at ``clock_speed`` (1.0 = 100 %).
+
+        ``nominal_mw`` replaces the nameplate for a building that has none: the
+        three variable-power machines declare zero and let the recipe say. The
+        exponent is the building's either way -- overclocking is priced by the
+        machine, not by what it happens to be making.
+        """
         if clock_speed <= 0:
             return 0.0
-        return float(self.power_mw * clock_speed**self.power_exponent)
+        base = self.power_mw if nominal_mw is None else nominal_mw
+        return float(base * clock_speed**self.power_exponent)
 
 
 class PowerShard(_Row):

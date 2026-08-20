@@ -63,7 +63,11 @@ logger = logging.getLogger(__name__)
 # building -- and `extractor_resources` lists what an extractor may be put on when
 # the game restricts it, which is how a well is offered for oil, nitrogen and water
 # and for nothing else.
-SCHEMA_VERSION: Final = 9
+# 10 added `recipes.power_constant_mw` and `recipes.power_factor_mw`. Three machines
+# declare `mPowerConsumption` at zero and put their draw on the recipe instead, as a
+# swing between the two: the fixed nameplate on a building turns out to be the
+# particular case, and the pair machine-and-recipe the general one.
+SCHEMA_VERSION: Final = 10
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -150,7 +154,13 @@ CREATE TABLE recipes (
     is_event        INTEGER NOT NULL CHECK (is_event IN (0, 1)),
     availability     TEXT NOT NULL DEFAULT 'placeable'
                      CHECK (availability IN ('placeable', 'machine', 'hand')),
-    building_name_fr TEXT NOT NULL DEFAULT ''
+    building_name_fr TEXT NOT NULL DEFAULT '',
+    -- What one machine running this recipe draws, when the building declares
+    -- nothing. Both zero for every recipe whose building has a nameplate, which is
+    -- all but the Converter, the Particle Accelerator and the Quantum Encoder. The
+    -- draw swings between the constant and the constant plus the factor.
+    power_constant_mw REAL NOT NULL DEFAULT 0,
+    power_factor_mw   REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE recipe_ingredients (
@@ -383,7 +393,8 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...])
     connection.executemany(
         "INSERT INTO recipes (class_name, display_name, display_name_fr, building_class,"
         " cycle_seconds, is_alternate, involves_fluid, product_count, is_event,"
-        " availability, building_name_fr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " availability, building_name_fr, power_constant_mw, power_factor_mw)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 recipe.class_name,
@@ -397,6 +408,8 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...])
                 int(recipe.is_event),
                 recipe.availability.value,
                 recipe.building_name_fr,
+                recipe.power_constant_mw,
+                recipe.power_factor_mw,
             )
             for recipe in recipes
         ],
@@ -614,6 +627,8 @@ def _read_recipes(connection: sqlite3.Connection, *, placeable: bool) -> list[Re
             is_event=bool(row["is_event"]),
             availability=RecipeAvailability(row["availability"]),
             building_name_fr=row["building_name_fr"],
+            power_constant_mw=row["power_constant_mw"],
+            power_factor_mw=row["power_factor_mw"],
         )
         for row in connection.execute(
             "SELECT * FROM recipes WHERE (availability = 'placeable') = ? ORDER BY class_name",

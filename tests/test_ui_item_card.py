@@ -7,6 +7,7 @@ allowance as the modal dialogs: the click is simulated, the code behind it is re
 """
 
 from collections.abc import Iterator
+from html import escape
 from pathlib import Path
 
 import pytest
@@ -117,18 +118,23 @@ def catalogue() -> GameData:
     return db.load_game_data_from_file(db.default_database_path())
 
 
-def test_an_out_of_scope_recipe_is_shown_with_what_stops_it(catalogue: GameData) -> None:
-    """The plutonium pellet: no placeable recipe, and the game's own recipe below."""
-    page = card_html(catalogue, "Desc_PlutoniumPellet_C")
+def test_a_hand_crafted_recipe_is_shown_with_what_stops_it(catalogue: GameData) -> None:
+    """The parachute: made at the equipment workshop, which is a pair of hands.
+
+    Every machine in the game is now in the catalogue, so this is the only reason
+    left for a recipe to be shown greyed -- and unlike the machines, it is not
+    going to change. A workshop will never be a factory node.
+    """
+    page = card_html(catalogue, "Desc_Parachute_C")
     assert "Aucune recette posable dans cette version" in page
     assert "Recettes hors du périmètre de cette version" in page
-    assert "Accélérateur de particules" in page
-    assert "machine que cette version ne modélise pas encore" in page
+    assert escape("Atelier d'équipement") in page
+    assert escape("ne sera jamais un nœud d'usine") in page
 
 
 def test_an_out_of_scope_recipe_cannot_be_put_on_the_canvas(catalogue: GameData) -> None:
     """No button for it: offering one would promise something the engine refuses."""
-    page = card_html(catalogue, "Desc_PlutoniumPellet_C")
+    page = card_html(catalogue, "Desc_Parachute_C")
     assert f"{PLACE_SCHEME}:" not in page
 
 
@@ -170,10 +176,28 @@ def test_only_a_raw_resource_is_called_a_raw_resource(catalogue: GameData) -> No
 
 
 def test_an_out_of_scope_consumer_is_listed_apart(catalogue: GameData) -> None:
-    """Knowing the Particle Accelerator eats this is the answer, not noise."""
-    page = card_html(catalogue, "Desc_NuclearWaste_C")
+    """A computer goes into machines and into a hand-held scanner; both are said."""
+    page = card_html(catalogue, "Desc_Computer_C")
     assert "Hors du périmètre de cette version :" in page
-    assert "Accélérateur de particules" in page
+    assert escape("Atelier d'équipement") in page
+
+
+def test_a_recipe_whose_draw_depends_on_what_it_makes_says_so(catalogue: GameData) -> None:
+    """A Quantum Encoder has no nameplate: the figure is on the recipe, with its swing.
+
+    Showing the mean alone would hide that the machine touches two gigawatts on the
+    way, which is what a reader sizing a power plant has come to the card for.
+    """
+    page = card_html(catalogue, "Desc_QuantumOscillator_C")
+    assert "1000 MW en moyenne" in page
+    assert "(0 à 2000)" in page
+
+
+def test_a_fixed_machine_still_shows_its_nameplate(catalogue: GameData) -> None:
+    """The particular case, unchanged: one figure, no range."""
+    page = card_html(catalogue, "Desc_IronIngot_C")
+    assert "4 MW" in page
+    assert "en moyenne" not in page
 
 
 def test_a_raw_ore_says_it_is_extracted_not_made(game_data: GameData) -> None:

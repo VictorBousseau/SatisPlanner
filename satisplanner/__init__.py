@@ -20,5 +20,8 @@ game database. Data reaches it by injection.
 # ways: the file is the interface to the past, and that change did not touch it.
 # The resource well does: it is a node kind, so a 4.0 document holds something a 3.x
 # build cannot read, and the major number is exactly the sentence that says so.
+# Variable power does not, for the same reason the Blender did not: three machines
+# and 43 recipes joined the catalogue, and a document still holds nothing but the
+# class name of a recipe. A 4.0 build opens a 4.1 file and vice versa.
 # (This is not the game's version, which is 1.2 and lives in ``data.db.GAME_VERSION``.)
-__version__ = "4.0.0"
+__version__ = "4.1.0"

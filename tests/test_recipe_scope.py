@@ -106,12 +106,20 @@ def test_the_uranium_cell_has_both_its_recipes(catalogue: GameData) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_a_machine_not_modelled_yet_is_marked_as_such(catalogue: GameData) -> None:
-    """Plutonium pellets: nothing placeable makes them, and the game says where."""
-    assert not breakdown.producers(catalogue, "Desc_PlutoniumPellet_C")
-    outside = breakdown.unavailable_producers(catalogue, "Desc_PlutoniumPellet_C")
-    assert [recipe.building_name_fr for recipe in outside] == ["Accélérateur de particules"]
-    assert outside[0].availability is RecipeAvailability.MACHINE_OUT_OF_SCOPE
+def test_no_recipe_waits_on_a_machine_any_more(catalogue: GameData) -> None:
+    """The end of the series, stated as a test rather than as a claim.
+
+    Plutonium pellets were the example when this file was written: nothing could
+    make them, and the card said the Particle Accelerator was why. That machine is
+    in the catalogue now, and so is every other one the game manufactures parts in.
+    What is left unplaceable is hand crafting, which never will be anything else.
+    """
+    assert not any(
+        recipe.availability is RecipeAvailability.MACHINE_OUT_OF_SCOPE
+        for recipe in catalogue.unavailable_recipes.values()
+    )
+    made = breakdown.producers(catalogue, "Desc_PlutoniumPellet_C")
+    assert [recipe.building_class for recipe in made] == ["Build_HadronCollider_C"]
 
 
 def test_hand_crafting_is_marked_as_permanent(catalogue: GameData) -> None:
