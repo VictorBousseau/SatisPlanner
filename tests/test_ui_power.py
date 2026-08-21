@@ -69,12 +69,17 @@ def submenu(menu: QMenu, title: str) -> QMenu:
 
 def test_the_palette_offers_one_entry_per_generator(window: MainWindow) -> None:
     """One per building, not one per fuel: five entries for one fuel generator
-    would be five ways to place the same thing."""
+    would be five ways to place the same thing.
+
+    The geothermal one is not here: it burns nothing, so it is not a generator
+    entry at all but a kind of its own, offered with a purity instead of a fuel.
+    """
     entries = [e for e in window.entries if e.kind is EntryKind.GENERATOR]
     assert {e.class_name for e in entries} == {
         COAL,
         FUEL,
         "Build_GeneratorBiomass_Automated_C",
+        "Build_GeneratorNuclear_C",
     }
     coal = next(e for e in entries if e.class_name == COAL)
     assert coal.label == "Générateur à charbon"

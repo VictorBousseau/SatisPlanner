@@ -44,7 +44,7 @@ Autant le dire avant d'ouvrir la fenêtre.
   quantique compris. Ce qui reste dehors, ce sont les **26 recettes fabriquées à la main** à
   l'atelier d'équipement — parachute, tronçonneuse, fusil — et elles n'y sont pas en silence : la
   base les conserve et la fiche d'un objet les montre grisées, en disant qu'un atelier ne sera
-  jamais un nœud d'usine. Restent hors périmètre le **nucléaire** et le Clean Pipeline.
+  jamais un nœud d'usine. Reste hors périmètre le Clean Pipeline.
 - **Le nombre de machines est une saisie**, pas un résultat — sauf si vous demandez l'inverse.
   « Je veux 2 Cadres modulaires lourds par minute » est le **mode objectif**, et il construit
   l'usine ; mais il n'**optimise** rien. Il suit la recette standard, ou celle que vous imposez,
@@ -162,6 +162,16 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
   tableau, sans supprimer le nœud ni ses lignes. **La pureté appartient au gisement** : elle
   multiplie tous les extracteurs du nœud. Deux gisements de puretés différentes sont deux nœuds,
   et c'est la seule façon de les représenter.
+- **Centrale nucléaire** : 2500 MW, 240 m³/min d'eau, et **des déchets sur un convoyeur** —
+  10 déchets d'uranium par minute, 1 déchet de plutonium, rien du tout avec une barre de
+  ficsonium. C'est le seul générateur du jeu qui remette de la matière dans l'usine, et la règle
+  du sous-produit s'y applique entière : **une centrale dont les déchets ne vont nulle part
+  s'arrête**, comme une raffinerie, et ne produit plus un mégawatt.
+- **Générateur géothermique** : ni entrée ni sortie, un nœud à part. C'est la **pureté du
+  geyser** qui décide, et elle se saisit comme celle d'un gisement parce que rien dans les
+  données du jeu ne dit où sont les geysers de votre carte. Le bilan compte la moyenne —
+  **100, 200 ou 400 MW** — qui sont les chiffres que le jeu imprime lui-même dans la description
+  du bâtiment. Pas de cadence : le jeu refuse de le surcadencer, seul de tous les générateurs.
 - **Puissance variable** : le Convertisseur, l'Accélérateur de particules et l'Encodeur quantique
   consomment selon **ce qu'ils fabriquent** et non selon ce qu'ils sont. Leur plaque est à zéro et
   le chiffre est porté par la recette, entre deux bornes que la consommation parcourt en jeu. Le
@@ -262,7 +272,7 @@ Une usine s'enregistre en `.sfp` : une archive ZIP contenant `factory.json`, un 
 
 Le format est décrit champ par champ dans [`docs/format-usine.md`](docs/format-usine.md), avec un
 exemple complet et fonctionnel — [`docs/exemple-usine.json`](docs/exemple-usine.json), couvrant les
-**dix** types de nœuds — que la suite de tests charge, résout et vérifie à 100 % partout, pour
+**onze** types de nœuds — que la suite de tests charge, résout et vérifie à 100 % partout, pour
 qu'il ne puisse pas se périmer en silence. Le même document décrit aussi le `.sfm` de la
 bibliothèque de modules, dont la charge utile est un code de partage et non un second format.
 
@@ -283,7 +293,7 @@ valeur par défaut de 100 %, et le document est noté comme converti. Le numéro
 incrémenté malgré l'absence de conversion à faire, pour qu'une V1 refuse un fichier V1.1 par une
 phrase plutôt que par une erreur de validation.
 
-Le schéma courant est le **8**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
+Le schéma courant est le **9**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
 premier qui puisse déplacer un chiffre : les répartiteurs qu'une disposition supposait sont
 matérialisés, les lignes reprises à travers eux, et un partage en 5 ou en 7 cesse d'être égal
 parce qu'il ne l'est pas dans le jeu. Le relevé des vingt-et-une usines de référence, avec
@@ -294,7 +304,7 @@ est le cas du programmable où rien n'est écrit sur aucune branche. Le passage 
 mode dans le contenu : un document qui porte un répartiteur a été pensé en mode fidèle, un
 document qui n'en porte aucun s'ouvre en simple, et personne n'a rien à migrer. Le passage du
 7 au 8 n'écrit rien non plus : aucun document antérieur ne pouvait contenir un puits de
-ressource, faute de moyen d'en dessiner un.
+ressource, faute de moyen d'en dessiner un, et le 8 au 9 pas davantage pour le geyser.
 
 ### Pourquoi les numéros majeurs se suivent de si près
 
@@ -641,22 +651,6 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 - Somersloop et amplification de production : autre formule, autre travail.
 - Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
   sémantique n'est pas la même. À traiter pour lui-même.
-- **La centrale nucléaire**, et elle casse une hypothèse du moteur plutôt que d'en manquer une.
-  Le catalogue sait déjà fabriquer la **barre d'uranium** par ses deux recettes — la cellule
-  encapsulée a une alternative à la Façonneuse, `Recipe_Alternate_UraniumCell_1_C`, qui ne
-  demande que de l'acide sulfurique — et il sait fabriquer la **cellule de plutonium encastré**
-  et la **barre de plutonium**. Ce qu'il ne sait pas faire, c'est les **brûler** : rien ne
-  consomme une barre. Et les **déchets d'uranium n'ont aucune recette dans le jeu** — ce sont
-  un sous-produit de la centrale, 50 par barre — donc toute la branche plutonium est coupée à
-  sa racine, alors que ses deux derniers maillons sont déjà là et inutilisables.
-
-  Le point de conception : `Build_GeneratorNuclear_C` **produit sur une ligne**, ce qu'aucun
-  générateur du modèle ne fait. `node_output_items` rend un ensemble vide pour un générateur et
-  `PRODUCER_KINDS` ne le contient pas, avec le commentaire « ce qu'il produit est du courant, et
-  le courant ne circule pas sur une ligne ». C'est vrai des trois générateurs en périmètre et
-  faux de la centrale. Son eau d'appoint, en revanche, est déjà modélisée — même
-  `mSupplementalToPowerRatio` que le générateur à charbon.
-- Reste le générateur géothermique, qui n'a pas d'intrant et dépend d'un emplacement de la carte.
 - **Choix automatique des recettes alternatives** dans le mode objectif : le générateur suit la
   recette standard sauf indication contraire, et choisir la meilleure sous contrainte demande un
   programme linéaire, donc une dépendance.

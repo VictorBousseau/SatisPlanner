@@ -248,8 +248,13 @@ def test_a_well_survives_the_share_code(catalogue: GameData) -> None:
 
 
 def test_the_document_schema_moved_for_it() -> None:
-    """A build that cannot draw a well must refuse the file, not read past it."""
-    assert SCHEMA_VERSION == 8
+    """A build that cannot draw a well must refuse the file, not read past it.
+
+    The well landed at schema 8; the number has moved on since, so what is checked
+    here is that a step exists for it and not what the current version happens to be.
+    """
+    assert SCHEMA_VERSION >= 8
+    assert 7 in factory_file.MIGRATIONS
 
 
 def test_lifting_a_document_that_has_no_well_changes_nothing() -> None:
@@ -260,7 +265,7 @@ def test_lifting_a_document_that_has_no_well_changes_nothing() -> None:
     """
     payload: dict[str, object] = {"schema_version": 7, "nodes": [], "edges": []}
     lifted, notes = factory_file.migrate(dict(payload), 7)
-    assert notes == ["document converti du schéma 7 au schéma 8"]
+    assert notes[0] == "document converti du schéma 7 au schéma 8"
     assert lifted["nodes"] == []
 
 

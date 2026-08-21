@@ -270,11 +270,13 @@ def test_a_generator_survives_the_round_trip(tmp_path: Path) -> None:
 
 def test_a_generator_whose_building_left_the_catalogue_is_pruned(game_data: GameData) -> None:
     graph = FactoryGraph()
+    # An invented class: every generator the game has is now in the catalogue, so
+    # the only way to test the pruning is with one that never existed.
     graph.add_node(
-        GeneratorNode(id="g1", generator_class="Build_GeneratorNuclear_C", fuel_class="Desc_Coal_C")
+        GeneratorNode(id="g1", generator_class="Build_GeneratorFusion_C", fuel_class="Desc_Coal_C")
     )
     missing, removed = factory_file.prune_unknown(graph, game_data)
-    assert missing == ["Build_GeneratorNuclear_C"]
+    assert missing == ["Build_GeneratorFusion_C"]
     assert removed == ["g1"]
 
 
@@ -468,7 +470,7 @@ def test_the_documented_example_is_still_a_valid_factory(game_data: GameData) ->
 
     assert graph.schema_version == SCHEMA_VERSION
     kinds = {node.kind for node in graph.nodes}
-    assert kinds == set(NodeKind), "les dix types doivent y être"
+    assert kinds == set(NodeKind), "les onze types doivent y être"
     report = engine.solve(graph, game_data)
     assert report.converged
     assert not report.has_errors(), "l'exemple de référence ne doit rien avoir de casse"

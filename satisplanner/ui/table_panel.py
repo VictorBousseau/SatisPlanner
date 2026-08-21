@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 from satisplanner.core import formatting
 from satisplanner.core.graph import (
     GeneratorNode,
+    GeothermalNode,
     GraphError,
     MachineNode,
     Node,
@@ -242,7 +243,10 @@ class NodeTableModel(QAbstractTableModel):
             return base | Qt.ItemFlag.ItemIsEditable
         if index.column() == COLUMN_CLOCK and has_clock(node):
             return base | Qt.ItemFlag.ItemIsEditable
-        if index.column() in (COLUMN_PURITY, COLUMN_EXTRACTOR) and isinstance(node, ResourceNode):
+        # A geyser has a purity and no extractor to choose; a deposit has both.
+        if index.column() == COLUMN_PURITY and isinstance(node, ResourceNode | GeothermalNode):
+            return base | Qt.ItemFlag.ItemIsEditable
+        if index.column() == COLUMN_EXTRACTOR and isinstance(node, ResourceNode):
             return base | Qt.ItemFlag.ItemIsEditable
         if index.column() == COLUMN_FUEL and isinstance(node, GeneratorNode):
             return base | Qt.ItemFlag.ItemIsEditable
@@ -264,7 +268,9 @@ class NodeTableModel(QAbstractTableModel):
             # Edited in percent, stored as a fraction: nobody types 2.5 for 250 %.
             return node.clock_speed * 100.0 if has_clock(node) else None
         if role == Qt.ItemDataRole.EditRole and column == COLUMN_PURITY:
-            return node.purity.value if isinstance(node, ResourceNode) else None
+            if isinstance(node, ResourceNode | GeothermalNode):
+                return node.purity.value
+            return None
         if role == Qt.ItemDataRole.EditRole and column == COLUMN_EXTRACTOR:
             return node.extractor_class if isinstance(node, ResourceNode) else None
         if role == Qt.ItemDataRole.EditRole and column == COLUMN_FUEL:
@@ -337,7 +343,7 @@ class NodeTableModel(QAbstractTableModel):
         The three numbers are edited on the face of the node, where each of them has
         a place of its own to be double-clicked.
         """
-        if isinstance(node, ResourceNode):
+        if isinstance(node, ResourceNode | GeothermalNode):
             return PURITY_LABELS[node.purity]
         if isinstance(node, ResourceWellNode):
             written = [
@@ -360,6 +366,8 @@ class NodeTableModel(QAbstractTableModel):
             return fuel_choices(self.document.game_data, node.generator_class)
         if isinstance(node, SplitterNode) and column == COLUMN_MODE:
             return [(mode.value, label) for mode, label in SPLITTER_MODE_LABELS.items()]
+        if isinstance(node, GeothermalNode) and column == COLUMN_PURITY:
+            return [(purity.value, label) for purity, label in PURITY_LABELS.items()]
         if not isinstance(node, ResourceNode):
             return []
         if column == COLUMN_PURITY:

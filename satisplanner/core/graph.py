@@ -50,13 +50,19 @@ from satisplanner.core.models import (
 # wants both on different days; what they must not want is the same file read two
 # ways. The mode is therefore in the document and travels with it, because it
 # changes the figures -- which is exactly what a colour preference does not do.
+# 9 added the geothermal generator, which burns nothing at all. Every other
+# generator is defined by the fuel it takes; this one is defined by the geyser it
+# is built on, so it has a purity and no fuel -- two facts that cannot be bolted
+# onto a node whose docstring begins "a bank of generators burning one chosen
+# fuel". An older document has none; one that has one must not be read by a build
+# that would take it for a generator with an empty fuel and produce nothing.
 # 8 added the resource well, which is a node kind of its own and not a wider
 # deposit. A deposit's purity applies to all of its extractors; a well's purity is
 # per satellite, so the two cannot be the same model without making the rule
 # conditional on a field. An older document simply has no well; a document that
 # has one must not be opened by a build that would read its satellite tally as
 # nothing and show a factory running on air.
-SCHEMA_VERSION: Final = 8
+SCHEMA_VERSION: Final = 9
 
 # A machine has at most four input ports and two output ports.
 MAX_MACHINE_INPUTS: Final = 4
@@ -104,6 +110,7 @@ class NodeKind(StrEnum):
     EXTERNAL_SOURCE = "external_source"
     MACHINE = "machine"
     GENERATOR = "generator"
+    GEOTHERMAL = "geothermal"
     STORAGE = "storage"
     OUTPUT = "output"
     SPLITTER = "splitter"
@@ -244,6 +251,30 @@ class GeneratorNode(_NodeBase):
     count: float = Field(default=1.0, gt=0)
 
 
+class GeothermalNode(_NodeBase):
+    """Generators built on geysers of one purity.
+
+    Not a :class:`GeneratorNode`, for the same reason a well is not a deposit. A
+    generator node is *a bank of generators burning one chosen fuel*; this one
+    burns nothing whatsoever. What it has instead is a **purity**, because its
+    output depends on the geyser under it -- and where the geysers on your map are
+    is the one thing the game files cannot say.
+
+    ``count`` aggregates geysers of the same purity, exactly as a deposit node
+    aggregates extractors: three pure geysers are one node with a count of three,
+    and a fourth impure one is a second node.
+
+    No clock. The game refuses to overclock this building at all --
+    ``mCanChangePotential`` is false, alone among the generators -- so the absence
+    is the game's, not a convention.
+    """
+
+    kind: Literal[NodeKind.GEOTHERMAL] = NodeKind.GEOTHERMAL
+    generator_class: str
+    purity: Purity = Purity.NORMAL
+    count: float = Field(default=1.0, gt=0)
+
+
 class StorageNode(_NodeBase):
     """A buffer. ``item_class`` may be left empty and inferred from the edges."""
 
@@ -320,6 +351,7 @@ Node = Annotated[
     | ExternalSourceNode
     | MachineNode
     | GeneratorNode
+    | GeothermalNode
     | StorageNode
     | OutputNode
     | SplitterNode
@@ -339,7 +371,12 @@ CONSUMER_KINDS: Final = frozenset(
         NodeKind.MERGER,
     }
 )
-# Node kinds that can emit a flow.
+# Node kinds that can emit a flow. A generator is here because **one** of them puts
+# something on a belt: the nuclear plant returns fifty uranium waste per rod. The
+# comment this replaces said "what it produces is power, and power does not travel
+# on a line", which was true of the three generators the model knew and false of
+# the one it did not. The others emit nothing and are refused by the item check,
+# not by the kind.
 PRODUCER_KINDS: Final = frozenset(
     {
         NodeKind.RESOURCE,
@@ -347,6 +384,7 @@ PRODUCER_KINDS: Final = frozenset(
         NodeKind.WATER_EXTRACTOR,
         NodeKind.EXTERNAL_SOURCE,
         NodeKind.MACHINE,
+        NodeKind.GENERATOR,
         NodeKind.STORAGE,
         NodeKind.SPLITTER,
         NodeKind.MERGER,
@@ -588,7 +626,15 @@ def node_output_items(node: Node, game_data: GameData) -> set[str]:
         case MachineNode():
             return set(game_data.recipe(node.recipe_class).product_rates())
         case GeneratorNode():
-            # It produces power, and power is not a flow on a line.
+            # Power is not a flow on a line -- but waste is. The nuclear plant
+            # returns fifty uranium waste per rod on a belt, and which waste
+            # depends on the rod. Every other generator returns nothing, so the
+            # set is empty for them and the edge check refuses a line by item
+            # rather than by kind.
+            generator = game_data.generators.get(node.generator_class)
+            return set(generator.byproducts(node.fuel_class)) if generator else set()
+        case GeothermalNode():
+            # It makes power out of a hole in the ground and nothing else.
             return set()
         case StorageNode():
             # A buffer passes through whatever reaches it.
@@ -945,7 +991,7 @@ def unit_count(node: Node) -> float | None:
     match node:
         case MachineNode():
             return node.machine_count
-        case ResourceNode() | WaterExtractorNode() | GeneratorNode():
+        case ResourceNode() | WaterExtractorNode() | GeneratorNode() | GeothermalNode():
             return node.count
         case ResourceWellNode():
             # The satellites, not the pressuriser. They are what scales the output,

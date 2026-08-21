@@ -134,9 +134,11 @@ GESTURES: Final[tuple[tuple[str, str], ...]] = (
 MODELLING_NOTES: Final[tuple[str, ...]] = (
     "La pureté d'un gisement s'applique à <b>tous</b> les extracteurs de ce nœud : "
     "un nœud est un gisement. Deux gisements de puretés différentes, ce sont deux "
-    "nœuds, et c'est la seule façon de les représenter. <b>La règle vaut pour un "
-    "gisement, pas pour un puits de ressource</b> : un pressuriseur ouvre plusieurs "
-    "satellites d'un coup et rien ne dit qu'ils se ressemblent, donc là, la pureté "
+    "nœuds, et c'est la seule façon de les représenter. Un <b>geyser</b> se lit de "
+    "la même façon, avec des générateurs géothermiques à la place des extracteurs. "
+    "<b>La règle vaut pour un gisement, pas pour un puits de ressource</b> : un "
+    "pressuriseur ouvre plusieurs satellites d'un coup et rien ne dit qu'ils se "
+    "ressemblent, donc là, la pureté "
     "est <b>par satellite</b> et le nœud porte un décompte — « 1 impur · 2 normaux · "
     "3 purs » — au lieu d'une valeur. C'est pour garder la règle du gisement entière "
     "que le puits est un type de nœud à part.",
@@ -165,6 +167,20 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "décide. En regard, il vous dit combien sont réellement utiles compte tenu de "
     "ce qui arrive, et l'écart entre les deux. Pour prendre le problème par "
     "l'autre bout — « je veux tant par minute » —, c'est <b>Générer une usine</b>.",
+    "<b>La centrale nucléaire produit sur une ligne</b>, et c'est le seul générateur "
+    "du jeu qui le fasse. Elle rend <b>50 déchets d'uranium par barre</b> — 10 par "
+    "minute — et 10 déchets de plutonium par barre de plutonium ; une barre de "
+    "ficsonium ne laisse rien. La règle du sous-produit s'y applique donc : "
+    "<b>une centrale dont les déchets ne vont nulle part s'arrête</b>, exactement "
+    "comme une raffinerie, et ne produit plus un mégawatt. Son eau d'appoint est "
+    "considérable : <b>240 m³/min</b>, contre 45 pour un générateur à charbon.",
+    "<b>Le générateur géothermique ne brûle rien</b> : il se pose sur un geyser, et "
+    "c'est la pureté du geyser qui décide. Le jeu annonce lui-même 100, 300 ou "
+    "600 MW au maximum selon le geyser ; comme ce modèle est en régime permanent, "
+    "c'est la <b>moyenne</b> qui est comptée — <b>100, 200 ou 400 MW</b>. La pureté "
+    "est une saisie, comme celle d'un gisement, parce que rien dans les données du "
+    "jeu ne dit où sont les geysers de votre carte. Il ne se surcadence pas : le "
+    "jeu le refuse, seul de tous les générateurs.",
     "<b>Un sous-produit sans issue arrête la machine entièrement.</b> Une recette "
     "qui produit deux choses doit voir partir les deux : sans quoi le nœud tombe à "
     "0 %, comme en jeu où la machine se bouche. Ce blocage se juge sur la "

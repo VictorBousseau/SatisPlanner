@@ -40,6 +40,7 @@ from satisplanner.core.graph import (
     ExternalSourceNode,
     FactoryGraph,
     GeneratorNode,
+    GeothermalNode,
     GraphError,
     MachineNode,
     MergerNode,
@@ -241,6 +242,22 @@ def _seven_to_eight(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]
     return payload, []
 
 
+def _eight_to_nine(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Schema 8 to 9: the geothermal generator became a node kind.
+
+    Nothing to convert. No document written before this version can hold one --
+    there was no way to draw it -- so every schema-8 file is a valid schema-9 file
+    field for field, and the number moves for the usual reason: so that a 4.x build
+    refuses a file holding a geyser by a sentence rather than reading a node it
+    does not know and reporting a power balance that is short two hundred megawatts.
+
+    The nuclear plant, which lands in the same release, needs no step of its own: it
+    is an ordinary ``generator`` node, and what changed is what the engine does with
+    one, not what the document says about it.
+    """
+    return payload, []
+
+
 # One entry per version that needs lifting, keyed by the version it lifts *from*.
 MIGRATIONS: Final[dict[int, Step]] = {
     1: _one_to_two,
@@ -250,6 +267,7 @@ MIGRATIONS: Final[dict[int, Step]] = {
     5: _five_to_six,
     6: _six_to_seven,
     7: _seven_to_eight,
+    8: _eight_to_nine,
 }
 
 
@@ -427,6 +445,10 @@ def _referenced_by(node: Node, game_data: GameData) -> list[tuple[str, Any]]:
                 (generator.generator_class, game_data.generators),
                 (generator.fuel_class, game_data.items),
             ]
+        case GeothermalNode() as geyser:
+            # No fuel to resolve: the whole point of this node is that it burns
+            # nothing at all.
+            return [(geyser.generator_class, game_data.generators)]
         case ExternalSourceNode() | OutputNode() as endpoint:
             return [(endpoint.item_class, game_data.items)]
         case SplitterNode() | MergerNode() as attachment:

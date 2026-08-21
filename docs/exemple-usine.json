@@ -1,5 +1,5 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "attachment_mode": "faithful",
   "nodes": [
     {
@@ -234,6 +234,18 @@
       ],
       "item_class": "Desc_NitricAcid_C",
       "is_sink": false
+    },
+    {
+      "kind": "geothermal",
+      "id": "geyser1",
+      "label": "Geyser pur du plateau",
+      "position": [
+        -240.0,
+        1360.0
+      ],
+      "generator_class": "Build_GeneratorGeoThermal_C",
+      "purity": "pure",
+      "count": 1.0
     }
   ],
   "edges": [

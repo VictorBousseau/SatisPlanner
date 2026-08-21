@@ -36,6 +36,7 @@ from satisplanner.core import formatting
 from satisplanner.core.graph import (
     ExternalSourceNode,
     GeneratorNode,
+    GeothermalNode,
     MachineNode,
     MergerNode,
     Node,
@@ -47,6 +48,7 @@ from satisplanner.core.graph import (
     WaterExtractorNode,
     attachment_building,
     machine_building,
+    node_output_items,
     port_line_budget,
     unit_count,
 )
@@ -502,8 +504,15 @@ class NodeItem(QGraphicsItem):
                 )
             case GeneratorNode() as generator:
                 # Fuel first, make-up water second: the game's own order, not the
-                # alphabet. A generator has no output port -- power is not a flow.
-                return (self._generator_inputs(generator), ())
+                # alphabet. An output port only when the thing actually returns
+                # something on a belt, which is the nuclear plant and nothing else.
+                return (
+                    self._generator_inputs(generator),
+                    tuple(sorted(node_output_items(generator, self.game_data))),
+                )
+            case GeothermalNode():
+                # Nothing in, nothing out: a hole in the ground and a cable.
+                return ((), ())
             case StorageNode() | SplitterNode() | MergerNode():
                 # One row each side for whatever it carries: how many *lines* hang
                 # off that side is the port budget's business, not a row's.
@@ -601,7 +610,7 @@ class NodeItem(QGraphicsItem):
                 return self.game_data.item(endpoint.item_class).display_name_fr
             case WaterExtractorNode() as pump:
                 return self.game_data.building(pump.extractor_class).display_name_fr
-            case GeneratorNode() as generator:
+            case GeneratorNode() | GeothermalNode() as generator:
                 return self.game_data.building(generator.generator_class).display_name_fr
             case StorageNode() as storage:
                 return self.game_data.building(storage.storage_class).display_name_fr
@@ -675,6 +684,20 @@ class NodeItem(QGraphicsItem):
                     Segment(" — "),
                     Segment(self.game_data.item(generator.fuel_class).display_name_fr, Field.FUEL),
                     Segment(f" — {total} MW produits"),
+                ]
+            case GeothermalNode() as geyser:
+                # The purity is on the face of the node for the same reason a
+                # deposit's is: nothing else shows it and everything depends on it.
+                # The same building gives 100, 200 or 400 MW on average.
+                produced = self.game_data.generators[geyser.generator_class].production_at(
+                    geyser.purity
+                )
+                total = formatting.number(produced * geyser.count)
+                return [
+                    Segment(f"{formatting.number(geyser.count)} unité(s)", Field.QUANTITY),
+                    Segment(" — geyser "),
+                    Segment(PURITY_LABELS[geyser.purity].lower(), Field.PURITY),
+                    Segment(f" — {total} MW en moyenne"),
                 ]
             case ExternalSourceNode() as source:
                 item = self.game_data.item(source.item_class)
@@ -884,7 +907,7 @@ class NodeItem(QGraphicsItem):
                 return self.icons.for_item(self.game_data.item(endpoint.item_class))
             case WaterExtractorNode() as pump:
                 return self.icons.for_building(self.game_data.building(pump.extractor_class))
-            case GeneratorNode() as generator:
+            case GeneratorNode() | GeothermalNode() as generator:
                 return self.icons.for_building(self.game_data.building(generator.generator_class))
             case StorageNode() as storage:
                 return self.icons.for_building(self.game_data.building(storage.storage_class))

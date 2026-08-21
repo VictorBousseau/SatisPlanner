@@ -23,5 +23,8 @@ game database. Data reaches it by injection.
 # Variable power does not, for the same reason the Blender did not: three machines
 # and 43 recipes joined the catalogue, and a document still holds nothing but the
 # class name of a recipe. A 4.0 build opens a 4.1 file and vice versa.
+# The geothermal generator does: schema 9, and 5.0. The nuclear plant rides along
+# without moving anything -- it is an ordinary generator node, and what changed is
+# what the engine does with one rather than what the document says about it.
 # (This is not the game's version, which is 1.2 and lives in ``data.db.GAME_VERSION``.)
-__version__ = "4.1.0"
+__version__ = "5.0.0"

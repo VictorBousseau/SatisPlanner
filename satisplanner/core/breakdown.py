@@ -22,7 +22,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Final
 
-from satisplanner.core.models import GameData, Recipe
+from satisplanner.core.models import GameData, Generator, Recipe
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,23 @@ def consumers(game_data: GameData, item_class: str) -> list[Recipe]:
         if any(slot.item_class == item_class for slot in recipe.ingredients)
     ]
     return sorted(used, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
+
+
+def generator_sources(game_data: GameData, item_class: str) -> list[tuple[Generator, str]]:
+    """Generators that leave this item behind, with the fuel that does it.
+
+    Uranium waste has no recipe in the game at all: it falls out of a nuclear plant
+    burning a rod. Until the plant was in the catalogue this had to be written down
+    as a frozen label on the item; now it is read from the generators themselves,
+    and it stops being true the moment the data stops saying it.
+    """
+    found = [
+        (generator, fuel.item_class)
+        for generator in game_data.generators.values()
+        for fuel in generator.fuels
+        if fuel.byproduct_class == item_class
+    ]
+    return sorted(found, key=lambda pair: (pair[0].class_name, pair[1]))
 
 
 def unavailable_producers(game_data: GameData, item_class: str) -> list[Recipe]:

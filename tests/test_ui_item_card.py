@@ -157,9 +157,16 @@ def test_the_uranium_cell_shows_its_standard_recipe_and_its_alternate(
 def test_an_item_with_no_recipe_at_all_names_the_building_it_falls_out_of(
     catalogue: GameData,
 ) -> None:
+    """Uranium waste is not made, it is left behind -- and the card says by what.
+
+    Read from the generator rather than from a label on the item, so it carries the
+    rate as well: ten a minute per plant burning a uranium rod.
+    """
     page = card_html(catalogue, "Desc_NuclearWaste_C")
-    assert "Aucune recette dans le jeu" in page
+    assert "sous-produit" in page
     assert "Centrale nucléaire" in page
+    assert escape("Barre d'uranium") in page
+    assert "10/min" in page
     assert "se ramasse dans le monde" not in page
 
 

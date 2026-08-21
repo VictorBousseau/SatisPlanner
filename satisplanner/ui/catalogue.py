@@ -19,6 +19,7 @@ from satisplanner.core.graph import (
     OVERFLOW_BRANCH,
     ExternalSourceNode,
     GeneratorNode,
+    GeothermalNode,
     MachineNode,
     MergerNode,
     Node,
@@ -83,6 +84,7 @@ class EntryKind(StrEnum):
     RESOURCE_WELL = "resource_well"
     WATER_EXTRACTOR = "water_extractor"
     GENERATOR = "generator"
+    GEOTHERMAL = "geothermal"
     STORAGE = "storage"
     SPLITTER = "splitter"
     MERGER = "merger"
@@ -98,6 +100,7 @@ SECTION_LABELS: Final[dict[EntryKind, str]] = {
     EntryKind.RESOURCE_WELL: "Extraction",
     EntryKind.WATER_EXTRACTOR: "Extraction",
     EntryKind.GENERATOR: "Électricité",
+    EntryKind.GEOTHERMAL: "Électricité",
     EntryKind.STORAGE: "Stockage",
     EntryKind.SPLITTER: "Raccords",
     EntryKind.MERGER: "Raccords",
@@ -160,6 +163,9 @@ class PaletteEntry:
             case EntryKind.STORAGE | EntryKind.SPLITTER | EntryKind.MERGER:
                 # About a building, or about nothing until a line reaches it.
                 return None
+            case EntryKind.GEOTHERMAL:
+                # It burns nothing, so there is no item it is about.
+                return None
             case _:
                 return self.class_name if self.class_name in game_data.items else None
 
@@ -211,6 +217,13 @@ class PaletteEntry:
                     generator_class=self.class_name,
                     fuel_class=self.fuel_class,
                     position=position,
+                )
+            case EntryKind.GEOTHERMAL:
+                # Normal purity to begin with, as a deposit does, and for the same
+                # reason: which geysers are on your map is the one thing the game
+                # files cannot say.
+                return GeothermalNode(
+                    id=node_id, generator_class=self.class_name, position=position
                 )
             case EntryKind.STORAGE:
                 return StorageNode(id=node_id, storage_class=self.class_name, position=position)
@@ -421,10 +434,28 @@ def _generators(game_data: GameData) -> list[PaletteEntry]:
     """
     entries = []
     for generator in sorted(game_data.generators.values(), key=lambda g: g.class_name):
+        building = game_data.buildings.get(generator.class_name)
+        name = building.display_name_fr if building else generator.class_name
+        if generator.has_purity:
+            # The geothermal one burns nothing, so it has no fuel to advertise and
+            # no fuel to start on. What it has is a geyser, and a purity.
+            entries.append(
+                PaletteEntry(
+                    kind=EntryKind.GEOTHERMAL,
+                    label=name,
+                    detail=(
+                        f"{generator.power_mw:g} MW en moyenne sur un geyser normal"
+                        f" — {generator.power_min_mw:g} à {generator.power_max_mw:g}"
+                    ),
+                    class_name=generator.class_name,
+                    icon_class=generator.class_name,
+                    icon_file=building.icon_file if building else None,
+                )
+            )
+            continue
         fuel_class = generator.default_fuel
         if fuel_class is None:
             continue
-        building = game_data.buildings.get(generator.class_name)
         fuel = game_data.items.get(fuel_class)
         detail = f"{generator.power_mw:g} MW produits"
         if fuel is not None:
@@ -432,7 +463,7 @@ def _generators(game_data: GameData) -> list[PaletteEntry]:
         entries.append(
             PaletteEntry(
                 kind=EntryKind.GENERATOR,
-                label=building.display_name_fr if building else generator.class_name,
+                label=name,
                 detail=detail,
                 class_name=generator.class_name,
                 icon_class=generator.class_name,

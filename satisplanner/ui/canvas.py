@@ -49,6 +49,7 @@ from satisplanner.core.graph import (
     OVERFLOW_BRANCH,
     FactoryGraph,
     GeneratorNode,
+    GeothermalNode,
     MachineNode,
     MergerNode,
     Node,
@@ -795,6 +796,10 @@ class FactoryScene(QGraphicsScene):
         if isinstance(item.node, ResourceNode):
             menu.addMenu(self._purity_menu(item.node, menu))
             menu.addMenu(self._extractor_menu(item.node, menu))
+        if isinstance(item.node, GeothermalNode):
+            # A geyser has a purity and no extractor to choose: the building is
+            # the only one that can stand on it.
+            menu.addMenu(self._purity_menu(item.node, menu))
         if isinstance(item.node, GeneratorNode):
             menu.addMenu(self._fuel_menu(item.node, menu))
         if isinstance(
@@ -818,7 +823,7 @@ class FactoryScene(QGraphicsScene):
         menu.addAction(delete)
         return menu
 
-    def _purity_menu(self, node: ResourceNode, parent: QMenu) -> QMenu:
+    def _purity_menu(self, node: ResourceNode | GeothermalNode, parent: QMenu) -> QMenu:
         """The purity of the deposit, which nothing else in the interface can set.
 
         It has been in the model since the beginning and reachable from nowhere,

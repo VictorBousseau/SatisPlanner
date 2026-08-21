@@ -56,6 +56,7 @@ from satisplanner.core.graph import (
     ExternalSourceNode,
     FactoryGraph,
     GeneratorNode,
+    GeothermalNode,
     MachineNode,
     MergerNode,
     Node,
@@ -74,6 +75,7 @@ from satisplanner.core.graph import (
     extra_buildings,
     generator_input_rates,
     machine_building,
+    node_output_items,
     pass_through_item,
     storage_item,
     unit_count,
@@ -435,9 +437,18 @@ class _Solver:
                 scale = node.machine_count * node.clock_speed
                 return {item: rate * scale for item, rate in sorted(rates.items())}
             case GeneratorNode():
-                # A generator puts out power, which no line carries and which the
-                # solver therefore never allocates. Its production is accounted for
-                # in the report, not in the flows.
+                # Power is not a flow, and the solver never allocates it. Waste is:
+                # a nuclear plant returns fifty uranium waste per rod on a belt, and
+                # that has to be carried away or the plant stops -- the byproduct
+                # rule applies to a generator exactly as it does to a refinery.
+                generator = self.game_data.generators.get(node.generator_class)
+                if generator is None:
+                    return {}
+                return {
+                    item: rate * node.count
+                    for item, rate in sorted(generator.byproducts(node.fuel_class).items())
+                }
+            case GeothermalNode():
                 return {}
             case StorageNode():
                 # Filled in at every iteration: a buffer hands downstream what it
@@ -520,9 +531,16 @@ class _Solver:
             if item is None or (node.id, item) in self._drained:
                 return ()
             return (item,)
-        if not isinstance(node, MachineNode):
+        if isinstance(node, MachineNode):
+            products: set[str] = set(self.game_data.recipe(node.recipe_class).product_rates())
+        elif isinstance(node, GeneratorNode):
+            # A nuclear plant with nowhere to put its waste is a machine with a
+            # blocked byproduct, and the rule is the same one: it fills up and
+            # shuts down. Every other generator returns nothing, so the set is
+            # empty and none of them can be blocked by this.
+            products = node_output_items(node, self.game_data)
+        else:
             return ()
-        products = self.game_data.recipe(node.recipe_class).product_rates()
         return tuple(item for item in sorted(products) if (node.id, item) not in self._drained)
 
     # -------------------------------------------------------------- iteration
@@ -883,6 +901,12 @@ class _Solver:
             generator = self.game_data.generators.get(node.generator_class)
             if generator is not None and generator.accepts(node.fuel_class):
                 produced = generator.power_mw * node.count * ratio
+        elif isinstance(node, GeothermalNode):
+            # Nothing feeds it, so nothing can starve it: a geyser runs at full tilt
+            # or the building is not there. The purity is the whole of its sizing.
+            geothermal = self.game_data.generators.get(node.generator_class)
+            if geothermal is not None:
+                produced = geothermal.production_at(node.purity) * node.count
         # A splitter has no nameplate and cannot be starved: it is a fitting, and the
         # rating :meth:`_size_pass_throughs` gave it is a ceiling nobody reaches, not
         # a rate it was built for. Writing it on the node would be a number pretending
@@ -922,7 +946,7 @@ class _Solver:
                 # For a well this is the satellite. The pressuriser is the other
                 # half, and it comes through ``extra_buildings``.
                 return node.extractor_class
-            case GeneratorNode():
+            case GeneratorNode() | GeothermalNode():
                 return node.generator_class
             case StorageNode():
                 return node.storage_class
@@ -940,7 +964,7 @@ class _Solver:
                 return self.game_data.item(node.item_class).display_name_fr
             case WaterExtractorNode():
                 return self.game_data.building(node.extractor_class).display_name_fr
-            case GeneratorNode():
+            case GeneratorNode() | GeothermalNode():
                 return self.game_data.building(node.generator_class).display_name_fr
             case StorageNode():
                 return self.game_data.building(node.storage_class).display_name_fr

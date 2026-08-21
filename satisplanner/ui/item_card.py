@@ -157,6 +157,18 @@ def _nothing_makes_it(game_data: GameData, item: Item) -> str:
         return "Ressource brute : elle s'extrait, elle ne se fabrique pas."
     if breakdown.unavailable_producers(game_data, item.class_name):
         return "Aucune recette posable dans cette version. Ce que le jeu propose est ci-dessous."
+    sources = breakdown.generator_sources(game_data, item.class_name)
+    if sources:
+        # No recipe makes it because it is not made: it falls out of a generator.
+        # Read from the catalogue rather than written on the item, so it answers
+        # with the rate as well as with the building.
+        written = ", ".join(
+            f"{escape(_building_name(game_data, generator.class_name))} brûlant "
+            f"{escape(_name_of(game_data, fuel))} "
+            f"({formatting.rate(generator.byproducts(fuel)[item.class_name], item)})"
+            for generator, fuel in sources
+        )
+        return f"Aucune recette : cet objet est un <b>sous-produit</b>. Il sort d'une {written}."
     if item.byproduct_of_fr:
         return (
             f"Aucune recette dans le jeu : cet objet tombe de la "
@@ -167,6 +179,11 @@ def _nothing_makes_it(game_data: GameData, item: Item) -> str:
         "Aucune recette dans le jeu : cet objet se ramasse dans le monde. "
         "Il entre dans l'usine par un apport extérieur."
     )
+
+
+def _building_name(game_data: GameData, class_name: str) -> str:
+    building = game_data.buildings.get(class_name)
+    return building.display_name_fr if building else class_name
 
 
 def _out_of_scope(game_data: GameData, item: Item) -> str:
@@ -326,12 +343,18 @@ def _raw_cost(game_data: GameData, item: Item) -> str:
         # The expansion stops at anything it cannot make, and until now it called
         # all of them raw resources. Uranium waste is not a raw resource, and the
         # section just above says so: two answers on one page, one of them wrong.
-        note = (
-            "C'est déjà une ressource brute."
-            if item.is_raw_resource
-            else "Le calcul s'arrête ici : rien dans le catalogue ne fabrique cet objet, "
-            "il entre dans l'usine tel quel."
-        )
+        if item.is_raw_resource:
+            note = "C'est déjà une ressource brute."
+        elif breakdown.generator_sources(game_data, item.class_name):
+            note = (
+                "Le calcul s'arrête ici : cet objet n'est pas fabriqué mais rejeté, "
+                "et son coût est celui du carburant qui le produit."
+            )
+        else:
+            note = (
+                "Le calcul s'arrête ici : rien dans le catalogue ne fabrique cet objet, "
+                "il entre dans l'usine tel quel."
+            )
         return f"<h2>Coût en ressources brutes</h2><p class='muted'>{note}</p>"
     rows = "".join(
         f"<tr><td><a href='{ITEM_SCHEME}:{escape(name)}'>"

@@ -26,6 +26,7 @@ from satisplanner.core.graph import (
     AttachmentMode,
     ExternalSourceNode,
     GeneratorNode,
+    GeothermalNode,
     MachineNode,
     MergerNode,
     Node,
@@ -79,7 +80,7 @@ def quantity_of(node: Node) -> Quantity | None:
         case ResourceNode() | WaterExtractorNode():
             # Strictly positive in the model: zero extractors is a deleted node.
             return Quantity("count", "extracteur(s)", minimum=1e-9)
-        case GeneratorNode():
+        case GeneratorNode() | GeothermalNode():
             return Quantity("count", "générateur(s)", minimum=1e-9)
         case ExternalSourceNode():
             return Quantity("rate_per_minute", "/min")
@@ -217,25 +218,30 @@ def set_clock_speed(document: FactoryDocument, node_id: str, clock_speed: float)
 
 
 def set_purity(document: FactoryDocument, node_id: str, purity: Purity | str) -> str | None:
-    """Set a deposit's purity, which multiplies what **every** extractor on it pulls.
+    """Set the purity of a deposit or of a geyser.
 
     One node is one deposit: the purity applies to all ``count`` extractors standing
     on it, because that is what a deposit is. Two deposits of different purities are
     two nodes, and the application has no way to express anything else -- which is
-    the honest modelling, not a limitation to work around.
+    the honest modelling, not a limitation to work around. A geothermal node reads
+    the same way, with geysers in place of extractors.
+
+    A **well** is the exception, and that is why it is a node kind of its own: its
+    purity is per satellite and is set through :func:`set_satellites`.
     """
     node = document.graph.node(node_id)
-    if not isinstance(node, ResourceNode):
-        return "Seul un gisement a une pureté."
+    if not isinstance(node, ResourceNode | GeothermalNode):
+        return "Seul un gisement ou un geyser a une pureté."
     try:
         wanted = Purity(purity)
     except ValueError:
         return f"Pureté inconnue : {purity}"
     if node.purity is wanted:
         return None
+    subject = "geyser" if isinstance(node, GeothermalNode) else "gisement"
     document.undo_stack.push(
         SetNodeFieldCommand(
-            document, node_id, "purity", wanted, f"gisement {PURITY_LABELS[wanted].lower()}"
+            document, node_id, "purity", wanted, f"{subject} {PURITY_LABELS[wanted].lower()}"
         )
     )
     return None

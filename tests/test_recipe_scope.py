@@ -133,19 +133,30 @@ def test_hand_crafting_is_marked_as_permanent(catalogue: GameData) -> None:
     assert {recipe.building_name_fr for recipe in by_hand} == {"Atelier d'équipement"}
 
 
-def test_an_item_no_recipe_makes_names_the_building_it_falls_out_of(
+def test_the_frozen_label_emptied_itself_when_the_plant_arrived(
     catalogue: GameData,
 ) -> None:
-    """Uranium waste has no recipe in the game at all -- it drops out of a generator.
+    """``byproduct_of_fr`` was keyed on the exclusion, not on the item. Here is the proof.
 
-    Without the name, its card would say "no recipe, comes in from outside", which
-    is what wood and leaves say too, and the reader would file a reactor byproduct
-    under foraging.
+    Uranium waste has no recipe at all in the game -- it drops out of a nuclear
+    plant. While the plant was out of scope the item carried the building's name as
+    a written label, so its card would not read as "picked up off the ground" like
+    wood and leaves. The plant is in the catalogue now and the label is gone on its
+    own: nothing had to be cleaned up, because it was filled from the exclusion list
+    and that list is empty.
+
+    What the card says instead is read live from the generator -- see
+    :func:`~satisplanner.core.breakdown.generator_sources` -- which is a better
+    answer, because it carries the rate as well as the name.
     """
     waste = catalogue.items["Desc_NuclearWaste_C"]
     assert not breakdown.producers(catalogue, waste.class_name)
     assert not breakdown.unavailable_producers(catalogue, waste.class_name)
-    assert waste.byproduct_of_fr == "Centrale nucléaire"
+    assert not waste.byproduct_of_fr, "l'étiquette figée doit s'être vidée d'elle-même"
+    assert not [item for item in catalogue.items.values() if item.byproduct_of_fr]
+
+    sources = breakdown.generator_sources(catalogue, waste.class_name)
+    assert [generator.class_name for generator, _ in sources] == ["Build_GeneratorNuclear_C"]
 
 
 def test_what_is_merely_gathered_names_nothing(catalogue: GameData) -> None:

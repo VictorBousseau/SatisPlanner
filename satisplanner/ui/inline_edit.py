@@ -27,7 +27,12 @@ from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
 
 from satisplanner.core import constants, formatting
-from satisplanner.core.graph import GeneratorNode, ResourceNode, ResourceWellNode
+from satisplanner.core.graph import (
+    GeneratorNode,
+    GeothermalNode,
+    ResourceNode,
+    ResourceWellNode,
+)
 from satisplanner.ui import edits
 from satisplanner.ui.canvas_items import PURITY_BY_FIELD, Field
 from satisplanner.ui.catalogue import (
@@ -54,7 +59,7 @@ def choices_for(document: FactoryDocument, target: str, field: Field) -> list[tu
         form = document.game_data.item(edge.item_class).form
         return transport_choices(document.game_data, form)
     node = document.graph.node(target)
-    if field is Field.PURITY and isinstance(node, ResourceNode):
+    if field is Field.PURITY and isinstance(node, ResourceNode | GeothermalNode):
         return [(purity.value, label) for purity, label in PURITY_LABELS.items()]
     if field is Field.EXTRACTOR and isinstance(node, ResourceNode):
         return extractor_choices(document.game_data, node.item_class)
@@ -70,7 +75,9 @@ def current_value(document: FactoryDocument, target: str, field: Field) -> str:
     node = document.graph.node(target)
     match field:
         case Field.PURITY:
-            return node.purity.value if isinstance(node, ResourceNode) else ""
+            if isinstance(node, ResourceNode | GeothermalNode):
+                return node.purity.value
+            return ""
         case Field.EXTRACTOR:
             return node.extractor_class if isinstance(node, ResourceNode) else ""
         case Field.FUEL:

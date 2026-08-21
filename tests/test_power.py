@@ -23,7 +23,11 @@ from satisplanner.core.graph import (
 from satisplanner.core.models import GameData, ItemForm
 from satisplanner.core.results import DiagnosticCode, FactoryReport, LimitingFactor, Severity
 from satisplanner.data import conversions
-from satisplanner.data.docs_parser import EXCLUDED_GENERATORS, GENERATORS
+from satisplanner.data.docs_parser import (
+    EXCLUDED_GENERATORS,
+    GENERATORS,
+    GEOTHERMAL_GENERATOR,
+)
 from tests.conftest import load_graph
 
 TOLERANCE = 1e-9
@@ -46,11 +50,10 @@ def codes(report: FactoryReport) -> set[DiagnosticCode]:
 # --------------------------------------------------------------------------- #
 
 
-def test_the_three_generators_are_there_and_no_others(game_data: GameData) -> None:
-    assert set(game_data.generators) == GENERATORS
-    for excluded in EXCLUDED_GENERATORS:
-        assert excluded not in game_data.generators
-        assert excluded not in game_data.buildings
+def test_every_generator_of_the_game_is_there_and_no_others(game_data: GameData) -> None:
+    """Four that burn something, one that burns nothing, and none left out."""
+    assert set(game_data.generators) == GENERATORS | {GEOTHERMAL_GENERATOR}
+    assert not EXCLUDED_GENERATORS, "plus aucun générateur hors périmètre"
 
 
 def test_the_biomass_burner_produces_thirty_megawatts(game_data: GameData) -> None:

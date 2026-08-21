@@ -318,6 +318,12 @@ class GeneratorFuel(_Row):
     # the coal generator names it per fuel entry in the game files.
     supplemental_class: str | None = None
     supplemental_per_minute: float = 0.0
+    # What burning this fuel leaves behind, and how much of it per minute. Only the
+    # nuclear plant has any: fifty uranium waste per rod, ten plutonium waste per
+    # plutonium rod, nothing at all for a ficsonium rod. It goes out **on a belt**,
+    # which is the one thing no generator in this model used to do.
+    byproduct_class: str | None = None
+    byproduct_per_minute: float = 0.0
 
     def input_rates(self) -> dict[str, float]:
         """Everything one such generator swallows per minute, by item."""
@@ -339,9 +345,38 @@ class Generator(_Row):
     """
 
     class_name: str
-    # `mPowerProduction`: what one unit puts on the grid at 100 %.
+    # `mPowerProduction`: what one unit puts on the grid at 100 %. For a generator
+    # whose output swings -- the geothermal one, and only it -- this is the **mean**
+    # over a cycle, derived at parse time and validated against the figures the
+    # game prints in the building's own description.
     power_mw: float
     fuels: tuple[GeneratorFuel, ...]
+    # The two ends of the swing, when there is one. Equal to ``power_mw`` twice over
+    # for a generator that holds still, which is every one of them but the
+    # geothermal: a range of one value is the particular case of a range.
+    power_min_mw: float = 0.0
+    power_max_mw: float = 0.0
+    # Whether output depends on the purity of the spot it is built on. True only of
+    # the geothermal generator, which is built on a geyser and not on a foundation.
+    has_purity: bool = False
+
+    @property
+    def is_variable(self) -> bool:
+        """Whether production swings rather than holding still."""
+        return self.power_max_mw > self.power_min_mw
+
+    def production_at(self, purity: Purity) -> float:
+        """Mean output of one unit, adjusted for the purity of its spot."""
+        if not self.has_purity:
+            return self.power_mw
+        return self.power_mw * purity.multiplier
+
+    def byproducts(self, item_class: str) -> dict[str, float]:
+        """What burning this fuel puts on a belt, per minute and per unit."""
+        fuel = self.fuel(item_class)
+        if fuel is None or not fuel.byproduct_class:
+            return {}
+        return {fuel.byproduct_class: fuel.byproduct_per_minute}
 
     def fuel(self, item_class: str) -> GeneratorFuel | None:
         for candidate in self.fuels:

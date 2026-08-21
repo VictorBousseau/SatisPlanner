@@ -24,7 +24,7 @@ Un `.sfp` est une **archive ZIP** contenant jusqu'à trois membres :
 
 ```json
 {
-  "application_version": "4.1.0",
+  "application_version": "5.0.0",
   "game_version": "1.2",
   "schema_version": 7,
   "saved_at": "2026-08-02T18:42:11+00:00"
@@ -36,7 +36,7 @@ par quelles conversions le document doit passer. Un fichier annonçant une versi
 **supérieure** à celle que connaît la build est refusé avec une phrase, jamais
 ouvert de travers.
 
-Le schéma courant est le **8**. Les versions successives, et ce que chacune a
+Le schéma courant est le **9**. Les versions successives, et ce que chacune a
 ajouté :
 
 | Schéma | Ce qui change | Conversion à l'ouverture |
@@ -49,6 +49,7 @@ ajouté :
 | 6 | le mode d'un répartiteur et les filtres de ses branches | rien à faire : tout répartiteur ancien est un `standard` |
 | 7 | `attachment_mode` : la règle des ports devient celle du document | le mode est lu sur le contenu, rien n'est réécrit |
 | 8 | le nœud `resource_well` apparaît | rien à faire : un document d'avant n'en a pas |
+| 9 | le nœud `geothermal` apparaît | rien à faire : un document d'avant n'en a pas |
 
 Un numéro est incrémenté même quand il n'y a rien à convertir. C'est le seul moyen
 qu'une build ancienne refuse un fichier récent par une phrase plutôt qu'en ignorant
@@ -125,7 +126,7 @@ qui a rangé son usine s'attend à la retrouver rangée.
 
 ---
 
-## 3. Les dix types de nœuds
+## 3. Les onze types de nœuds
 
 ### `resource` — un gisement
 
@@ -299,8 +300,52 @@ Il n'y a délibérément **pas** de `clock_speed` ici : le jeu élève la produc
 générateur à un exposant qui lui est propre, différent de celui qui facture une
 machine surcadencée, et modéliser l'un avec l'autre inventerait des chiffres.
 
-Un générateur n'a **aucune sortie** : ce qu'il produit est du courant, et le courant
-ne circule pas sur une ligne.
+Un générateur n'a **aucune sortie**, à une exception près : ce qu'il produit est du
+courant, et le courant ne circule pas sur une ligne. La **centrale nucléaire**, elle,
+rend ses déchets sur un convoyeur — 50 par barre d'uranium, soit 10 par minute, et
+10 par barre de plutonium ; une barre de ficsonium ne laisse rien. La règle du
+sous-produit s'y applique donc entièrement : **une centrale dont les déchets ne vont
+nulle part s'arrête** et ne produit plus un mégawatt.
+
+| | Puissance | Eau d'appoint | Sortie |
+| --- | --- | --- | --- |
+| Brûleur de biomasse | 30 MW | — | — |
+| Générateur à charbon | 75 MW | 45 m³/min | — |
+| Générateur à carburant | 250 MW | — | — |
+| Centrale nucléaire | 2500 MW | **240 m³/min** | 10 déchets d'uranium/min |
+
+### `geothermal` — un générateur sur un geyser
+
+```json
+{
+  "kind": "geothermal",
+  "id": "geyser1",
+  "label": "Geyser pur du plateau",
+  "position": [-240.0, 1360.0],
+  "generator_class": "Build_GeneratorGeoThermal_C",
+  "purity": "pure",
+  "count": 1.0
+}
+```
+
+**Ni entrée ni sortie, et pas de carburant** : c'est le seul bâtiment du jeu qui
+produise du courant à partir de rien. Ce qui décide, c'est la `purity` du geyser
+sous lui — d'où un type de nœud à part et non un `generator` sans carburant, pour la
+même raison qu'un puits n'est pas un gisement.
+
+`count` regroupe les geysers de même pureté, comme `count` regroupe les extracteurs
+d'un gisement. Pas de `clock_speed` : le jeu refuse de surcadencer ce bâtiment,
+seul de tous les générateurs.
+
+La production oscille, et le modèle étant en régime permanent, c'est la **moyenne**
+qui est comptée. Les chiffres sont ceux que le jeu imprime dans la description du
+bâtiment :
+
+| Geyser | Ce que le jeu annonce | Ce que le bilan compte |
+| --- | --- | --- |
+| impur | 50 à 150 MW | **100 MW** |
+| normal | 100 à 300 MW | **200 MW** |
+| pur | 200 à 600 MW | **400 MW** |
 
 ### `storage` — un tampon
 
@@ -492,8 +537,8 @@ Résolu contre les données du jeu 1.2 :
 | Fluides | 255 m³ d'eau/min, 120 m³ d'azote/min |
 | Sorties | 80 lingots de fer/min, 30 lingots de cuivre/min, 30 m³ d'acide nitrique/min |
 | Rejets assumés | 80 lingots de fer/min |
-| Électricité | 312,234 MW consommés, 375 MW produits |
-| Liste de courses | 9 fonderies, 1 Mélangeur, 1 Foreuse Mk.2, 2 Foreuses Mk.1, 3 pompes, 1 pressuriseur, 2 satellites de puits, 5 centrales, 1 conteneur, 1 répartiteur, 1 groupeur |
+| Électricité | 312,234 MW consommés, 775 MW produits |
+| Liste de courses | 9 fonderies, 1 Mélangeur, 1 Foreuse Mk.2, 2 Foreuses Mk.1, 3 pompes, 1 pressuriseur, 2 satellites de puits, 5 générateurs à charbon, 1 géothermique, 1 conteneur, 1 répartiteur, 1 groupeur |
 | Diagnostic | tampon en remplissage, +80/min, saturé en 1 h |
 
 Le puits d'azote à lui seul pèse **150 MW sur les 312**, ce qui explique les cinq

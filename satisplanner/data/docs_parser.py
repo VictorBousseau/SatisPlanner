@@ -289,32 +289,36 @@ MANUAL_STATIONS: Final[dict[str, str]] = {
 # and a deliberate exclusion would have somewhere to be written.
 EXCLUDED_MACHINES: Final[frozenset[str]] = frozenset()
 
-# Generators in scope. The biomass burner, the coal generator and the fuel
-# generator: everything that burns an item a V1 factory can produce or extract.
+# Generators that burn something. The nuclear plant is one of them and was the
+# awkward one: it burns a rod, drinks water **and puts waste on a belt**, which no
+# other generator in the game does.
 GENERATORS: Final[frozenset[str]] = frozenset(
     {
         "Build_GeneratorBiomass_Automated_C",
         "Build_GeneratorCoal_C",
         "Build_GeneratorFuel_C",
+        "Build_GeneratorNuclear_C",
     }
 )
 
-# Out of scope, listed rather than inferred so a generator added by a future game
-# version shows up as unknown instead of being silently swallowed. The geothermal
-# generator has no input at all -- its output depends on a spot on the map, which
-# is geometry -- and the nuclear plant belongs to a tier this version does not model.
-EXCLUDED_GENERATORS: Final[frozenset[str]] = frozenset(
-    {"Build_GeneratorGeoThermal_C", "Build_GeneratorNuclear_C"}
-)
+# The generator that burns nothing at all. Its output depends on the geyser it is
+# built on, so its purity is a saisie exactly as a deposit's is: nothing in the game
+# files says where the geysers on **your** map are.
+GEOTHERMAL_GENERATOR: Final = "Build_GeneratorGeoThermal_C"
 
-# Native classes generators live under. Fuel-burning ones are the only kind that
-# takes an input; the other two are named so that finding a class there is a
-# deliberate exclusion rather than an oversight.
-GENERATOR_NATIVE_CLASS: Final = "FGBuildableGeneratorFuel"
-OTHER_GENERATOR_NATIVE_CLASSES: Final[tuple[str, ...]] = (
-    "FGBuildableGeneratorGeoThermal",
+# Out of scope, listed rather than inferred so a generator added by a future game
+# version shows up as unknown instead of being silently swallowed. **Empty**: every
+# generator the game has is now in the catalogue.
+EXCLUDED_GENERATORS: Final[frozenset[str]] = frozenset()
+
+# Native classes generators live under. The nuclear plant has one of its own -- it
+# is the only generator with a byproduct -- and so does the geothermal one, which
+# takes no fuel at all and is therefore not a fuel generator in any sense.
+GENERATOR_NATIVE_CLASSES: Final[tuple[str, ...]] = (
+    "FGBuildableGeneratorFuel",
     "FGBuildableGeneratorNuclear",
 )
+GEOTHERMAL_NATIVE_CLASS: Final = "FGBuildableGeneratorGeoThermal"
 
 # True when the extracted node has a purity (impure / normal / pure). The Water
 # Extractor has a fixed output and no node purity. A resource-well satellite has
@@ -832,8 +836,8 @@ def parse_power_shards(
     return shards
 
 
-def parse_fuel_entries(raw: object) -> list[tuple[str, str | None]]:
-    """``mFuel`` into ``(fuel class, supplemental class or None)`` pairs.
+def parse_fuel_entries(raw: object) -> list[tuple[str, str | None, str, float]]:
+    """``mFuel`` into ``(fuel, supplemental or None, byproduct, amount per burn)``.
 
     One of the very few fields the dump stores as real JSON rather than as a
     pseudo-structured string, so there is nothing to parse with a regular
@@ -842,7 +846,7 @@ def parse_fuel_entries(raw: object) -> list[tuple[str, str | None]]:
     """
     if not isinstance(raw, list):
         return []
-    pairs: list[tuple[str, str | None]] = []
+    entries: list[tuple[str, str | None, str, float]] = []
     for entry in raw:
         if not isinstance(entry, dict):
             continue
@@ -850,8 +854,10 @@ def parse_fuel_entries(raw: object) -> list[tuple[str, str | None]]:
         if not fuel:
             continue
         supplemental = str(entry.get("mSupplementalResourceClass") or "")
-        pairs.append((fuel, supplemental or None))
-    return pairs
+        byproduct = str(entry.get("mByproduct") or "")
+        amount = parse_float(entry.get("mByproductAmount"))
+        entries.append((fuel, supplemental or None, byproduct, amount))
+    return entries
 
 
 def byproducts_of_excluded_generators(grouped: Locale, labels: dict[str, str]) -> dict[str, str]:
@@ -902,7 +908,10 @@ def parse_generators(
     buildings: list[Building] = []
     generators: list[Generator] = []
 
-    for cls in grouped.get(GENERATOR_NATIVE_CLASS, []):
+    fuel_classes: Iterable[ClassEntry] = [
+        entry for native in GENERATOR_NATIVE_CLASSES for entry in grouped.get(native, [])
+    ]
+    for cls in fuel_classes:
         class_name = cls["ClassName"]
         if class_name not in GENERATORS:
             if class_name not in EXCLUDED_GENERATORS:
@@ -917,18 +926,26 @@ def parse_generators(
 
         fuels: list[GeneratorFuel] = []
         unknown: list[str] = []
-        for fuel_class, supplemental in parse_fuel_entries(cls.get("mFuel")):
+        for fuel_class, supplemental, byproduct, amount in parse_fuel_entries(cls.get("mFuel")):
             form = forms.get(fuel_class)
             energy = energies.get(fuel_class, 0.0)
             if form is None or energy <= 0:
                 unknown.append(fuel_class)
                 continue
+            burn = conversions.fuel_rate_per_minute(power, energy)
+            # The waste comes out per rod burnt, so its rate is the burn rate times
+            # the amount -- derived exactly as every other rate here is.
+            kept = byproduct if byproduct in forms else None
+            if byproduct and kept is None:
+                unknown.append(byproduct)
             fuels.append(
                 GeneratorFuel(
                     item_class=fuel_class,
-                    rate_per_minute=conversions.fuel_rate_per_minute(power, energy),
+                    rate_per_minute=burn,
                     supplemental_class=supplemental,
                     supplemental_per_minute=supplemental_rate if supplemental else 0.0,
+                    byproduct_class=kept,
+                    byproduct_per_minute=burn * amount if kept else 0.0,
                 )
             )
         if unknown:
@@ -938,14 +955,48 @@ def parse_generators(
             continue
 
         buildings.append(_building(cls, BuildingKind.GENERATOR, labels, descriptors))
-        generators.append(Generator(class_name=class_name, power_mw=power, fuels=tuple(fuels)))
+        generators.append(
+            Generator(
+                class_name=class_name,
+                power_mw=power,
+                fuels=tuple(fuels),
+                power_min_mw=power,
+                power_max_mw=power,
+            )
+        )
 
-    for native in OTHER_GENERATOR_NATIVE_CLASSES:
-        for cls in grouped.get(native, []):
-            if cls.get("ClassName") not in EXCLUDED_GENERATORS:
-                warnings.append(
-                    f"{cls.get('ClassName')} : générateur inconnu sous {native}, hors périmètre"
-                )
+    for cls in grouped.get(GEOTHERMAL_NATIVE_CLASS, []):
+        class_name = cls["ClassName"]
+        if class_name != GEOTHERMAL_GENERATOR:
+            warnings.append(
+                f"{class_name} : générateur géothermique inconnu, hors périmètre par défaut"
+            )
+            continue
+        constant = parse_float(cls.get("mVariablePowerProductionConstant"))
+        factor = parse_float(cls.get("mVariablePowerProductionFactor"))
+        if constant != 0.0:
+            # Only one building in the game has these fields and it declares a
+            # constant of zero, so a non-zero one has never been checked against
+            # anything. Said out loud rather than trusted.
+            warnings.append(
+                f"{class_name} : constante de production {constant:g} non nulle, lecture de la "
+                f"plage non validée"
+            )
+        mean, low, high = conversions.variable_production_mw(constant, factor)
+        if mean <= 0:
+            warnings.append(f"{class_name} : production nulle, générateur ignoré")
+            continue
+        buildings.append(_building(cls, BuildingKind.GENERATOR, labels, descriptors))
+        generators.append(
+            Generator(
+                class_name=class_name,
+                power_mw=mean,
+                fuels=(),
+                power_min_mw=low,
+                power_max_mw=high,
+                has_purity=True,
+            )
+        )
 
     buildings.sort(key=lambda building: building.class_name)
     generators.sort(key=lambda generator: generator.class_name)

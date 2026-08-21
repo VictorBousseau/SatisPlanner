@@ -67,7 +67,12 @@ logger = logging.getLogger(__name__)
 # declare `mPowerConsumption` at zero and put their draw on the recipe instead, as a
 # swing between the two: the fixed nameplate on a building turns out to be the
 # particular case, and the pair machine-and-recipe the general one.
-SCHEMA_VERSION: Final = 10
+# 11 described the last two generators. `generator_fuels.byproduct_class` and its
+# rate carry what a nuclear plant returns on a belt -- the one generator in the
+# game that puts matter back into the factory -- and `generators.power_min_mw`,
+# `power_max_mw` and `has_purity` carry the geothermal one, whose output swings and
+# depends on the geyser it stands on rather than on any fuel.
+SCHEMA_VERSION: Final = 11
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -207,8 +212,16 @@ CREATE TABLE extractor_resources (
 CREATE TABLE generators (
     class_name TEXT PRIMARY KEY REFERENCES buildings (class_name),
     -- mPowerProduction, in MW at 100 %. Generators are not clockable in this
-    -- version: their production exponent is not the consumption one.
-    power_mw   REAL NOT NULL
+    -- version: their production exponent is not the consumption one. For the
+    -- geothermal generator, whose output swings, this is the **mean** over a cycle.
+    power_mw   REAL NOT NULL,
+    -- The two ends of the swing. Equal to power_mw twice over for a generator that
+    -- holds still, which is every one of them but the geothermal.
+    power_min_mw REAL NOT NULL DEFAULT 0,
+    power_max_mw REAL NOT NULL DEFAULT 0,
+    -- Whether output depends on the purity of the spot: true of the geothermal
+    -- generator alone, which is built on a geyser and not on a foundation.
+    has_purity   INTEGER NOT NULL DEFAULT 0 CHECK (has_purity IN (0, 1))
 );
 
 CREATE TABLE generator_fuels (
@@ -220,6 +233,11 @@ CREATE TABLE generator_fuels (
     -- Make-up water. A real input on a pipe, hence a class name and a rate.
     supplemental_class TEXT REFERENCES items (class_name),
     supplemental_per_minute REAL NOT NULL DEFAULT 0,
+    -- What burning this fuel leaves on the output belt, and how much per minute.
+    -- Null for every generator but the nuclear plant, and null for one of its
+    -- three rods: a ficsonium rod leaves nothing behind.
+    byproduct_class      TEXT REFERENCES items (class_name),
+    byproduct_per_minute REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (generator_class, slot_index)
 );
 
@@ -455,12 +473,23 @@ def _insert_extractors(connection: sqlite3.Connection, extractors: tuple[Extract
 
 def _insert_generators(connection: sqlite3.Connection, generators: tuple[Generator, ...]) -> None:
     connection.executemany(
-        "INSERT INTO generators (class_name, power_mw) VALUES (?, ?)",
-        [(generator.class_name, generator.power_mw) for generator in generators],
+        "INSERT INTO generators (class_name, power_mw, power_min_mw, power_max_mw,"
+        " has_purity) VALUES (?, ?, ?, ?, ?)",
+        [
+            (
+                generator.class_name,
+                generator.power_mw,
+                generator.power_min_mw,
+                generator.power_max_mw,
+                int(generator.has_purity),
+            )
+            for generator in generators
+        ],
     )
     connection.executemany(
         "INSERT INTO generator_fuels (generator_class, slot_index, item_class, rate_per_minute,"
-        " supplemental_class, supplemental_per_minute) VALUES (?, ?, ?, ?, ?, ?)",
+        " supplemental_class, supplemental_per_minute, byproduct_class,"
+        " byproduct_per_minute) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 generator.class_name,
@@ -469,6 +498,8 @@ def _insert_generators(connection: sqlite3.Connection, generators: tuple[Generat
                 fuel.rate_per_minute,
                 fuel.supplemental_class,
                 fuel.supplemental_per_minute,
+                fuel.byproduct_class,
+                fuel.byproduct_per_minute,
             )
             for generator in generators
             for index, fuel in enumerate(generator.fuels)
@@ -666,6 +697,8 @@ def read_generators(connection: sqlite3.Connection) -> list[Generator]:
                 rate_per_minute=row["rate_per_minute"],
                 supplemental_class=row["supplemental_class"],
                 supplemental_per_minute=row["supplemental_per_minute"],
+                byproduct_class=row["byproduct_class"],
+                byproduct_per_minute=row["byproduct_per_minute"],
             )
         )
     return [
@@ -673,6 +706,9 @@ def read_generators(connection: sqlite3.Connection) -> list[Generator]:
             class_name=row["class_name"],
             power_mw=row["power_mw"],
             fuels=tuple(fuels.get(row["class_name"], [])),
+            power_min_mw=row["power_min_mw"],
+            power_max_mw=row["power_max_mw"],
+            has_purity=bool(row["has_purity"]),
         )
         for row in connection.execute("SELECT * FROM generators ORDER BY class_name")
     ]

@@ -16,6 +16,7 @@ from satisplanner.core.graph import (
     ExternalSourceNode,
     FactoryGraph,
     GeneratorNode,
+    GeothermalNode,
     MachineNode,
     MergerNode,
     Node,
@@ -182,7 +183,14 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             node_id=node.id,
         )
 
-    if not graph.incoming(node.id) and not graph.outgoing(node.id):
+    # A geyser is never wired to anything and never will be: it takes nothing and
+    # returns nothing but current. Saying it does not take part in the calculation
+    # would be false -- it is the two hundred megawatts holding the factory up.
+    if (
+        not isinstance(node, GeothermalNode)
+        and not graph.incoming(node.id)
+        and not graph.outgoing(node.id)
+    ):
         yield Diagnostic(
             severity=Severity.INFO,
             code=DiagnosticCode.UNCONNECTED_NODE,
@@ -368,8 +376,11 @@ def _blocked(node: Node, solution: NodeSolution, game_data: GameData) -> Iterato
             f"rien passer et bloque tout ce qui l'alimente. Raccordez une de ses branches."
         )
     else:
+        # A power plant is not "a machine" to a reader, and its output is not what
+        # is blocked -- the current keeps flowing until the waste stops it.
+        subject = "la centrale" if isinstance(node, GeneratorNode) else "la machine"
         message = (
-            f"{names} n'a{plural} aucune sortie : la machine est totalement bloquée et ne "
+            f"{names} n'a{plural} aucune sortie : {subject} est totalement bloquée et ne "
             f"produit rien. Raccordez une ligne vers un consommateur, un tampon, ou une "
             f"sortie marquée « rejet assumé »."
         )

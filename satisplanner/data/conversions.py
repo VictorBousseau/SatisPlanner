@@ -145,6 +145,30 @@ def supplemental_rate_per_minute(ratio: float, power_mw: float) -> float:
     return ratio * power_mw * SECONDS_PER_MINUTE / LITRES_PER_CUBIC_METRE
 
 
+def variable_production_mw(constant: float, factor: float) -> tuple[float, float, float]:
+    """Mean, floor and ceiling of a generator whose output swings, in MW.
+
+    Source: ``mVariablePowerProductionConstant`` and ``...Factor`` on the geothermal
+    generator, the only building in the game that has them.
+
+    Formula: ``mean = constant + factor``, and the swing runs from ``factor / 2``
+    below the mean to ``factor / 2`` above -- so ``constant + factor/2`` to
+    ``constant + 3 x factor/2``.
+
+    Control, and it is the game's own: the geothermal generator prints its figures
+    in ``mDescription``. "Geyser normal - 100 a 300 MW (200 MW en moyenne)", and
+    the class declares constant 0 with factor 200. The naive reading -- mean at the
+    middle of ``constant`` to ``constant + factor``, which is how the *consumption*
+    fields work -- gives 100 MW and is half the truth. Production and consumption
+    do not use these two fields the same way.
+
+    The only building that has them declares a constant of zero, so a non-zero one
+    cannot be checked against anything; the parser says so rather than guessing.
+    """
+    mean = constant + factor
+    return mean, constant + factor / 2, constant + 3 * factor / 2
+
+
 def stack_size(m_cached_stack_size: float, form: ItemForm) -> float:
     """Stack size, in items for solids and in m3 for fluids.
 
