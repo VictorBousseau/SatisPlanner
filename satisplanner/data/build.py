@@ -60,7 +60,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def scoped_items(dataset: GameDataset) -> list[Item]:
-    """Items the V1 palette shows by default.
+    """Items the palette shows by default.
 
     That is every item involved in a kept recipe, plus every raw resource, since a
     miner can be placed on any node. Event content is excluded: it is hidden behind
@@ -198,7 +198,7 @@ def _report_icons(dataset: GameDataset, icons: IconIndex) -> None:
     in_scope = scoped_items(dataset)
     missing_items = [item for item in in_scope if icons.resolve(item.icon_file) is None]
     log(
-        "Items du périmètre V1   : %d, dont %d sans icône",
+        "Items du périmètre      : %d, dont %d sans icône",
         len(in_scope),
         len(missing_items),
     )

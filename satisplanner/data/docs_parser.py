@@ -235,7 +235,7 @@ def parse_float(raw: str | None, default: float = 0.0) -> float:
 
 
 # --------------------------------------------------------------------------- #
-# V1 scope
+# Scope
 # --------------------------------------------------------------------------- #
 
 PRODUCTION_MACHINES: Final[frozenset[str]] = frozenset(
@@ -1062,7 +1062,7 @@ def parse_buildings(
     list[Storage],
     list[Attachment],
 ]:
-    """Parse every buildable within V1 scope, plus its transport or storage rates."""
+    """Parse every buildable in scope, plus its transport or storage rates."""
     descriptors = {
         cls["ClassName"]: cls
         for cls in grouped.get("FGBuildingDescriptor", [])

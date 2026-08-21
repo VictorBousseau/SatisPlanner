@@ -648,6 +648,13 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 
 ## Backlog V2
 
+**Ce qui reste tient en huit lignes, et c'est le résultat de la série close en 5.0.0.**
+Toutes les machines et tous les générateurs du jeu sont au catalogue, et la moitié des
+entrées d'hier — Mélangeur, puits de ressource, puissance variable, centrale nucléaire,
+géothermique — sont parties parce qu'elles sont faites. Le reste se range en deux tas :
+ce qui demanderait une **dépendance ou une autre formule**, et ce qui demanderait un
+**modèle plus fin des raccords**. Rien n'y est un manque du catalogue.
+
 - Somersloop et amplification de production : autre formule, autre travail.
 - Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
   sémantique n'est pas la même. À traiter pour lui-même.

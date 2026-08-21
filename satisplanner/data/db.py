@@ -272,7 +272,7 @@ CREATE TABLE attachments (
 );
 
 -- Consumables that raise a building's clock ceiling. Only the overclocking kind
--- is stored; the Somersloop amplifies production instead and is out of V1 scope.
+-- is stored; the Somersloop amplifies production instead and is out of scope.
 CREATE TABLE power_shards (
     class_name      TEXT PRIMARY KEY REFERENCES items (class_name),
     extra_potential REAL NOT NULL

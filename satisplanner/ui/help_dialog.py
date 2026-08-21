@@ -251,22 +251,22 @@ MODELLING_NOTES: Final[tuple[str, ...]] = (
     "bois, de feuilles ou de mycélium qu'on ramasse : aucune machine ne la produit, "
     "donc aucune recette ne peut la produire ici. Alimentez-le par un <b>apport "
     "extérieur</b> au débit que vous vous engagez à tenir. La même remarque vaut "
-    "pour tout ce qui descend de la biomasse — biocarburant solide, puis liquide.",
-    "<b>L'azote est une matière brute qu'aucun extracteur ne sait sortir du sol.</b> "
-    "Il vient d'un puits de ressource, qui n'est pas modélisé ; il n'entre donc que "
-    "par un apport extérieur. Les recettes qui en demandent — acide nitrique, "
-    "système de refroidissement, cadre modulaire fusionné, et avec elles la dernière "
-    "phase de l'ascenseur spatial — sont au catalogue depuis que le Mélangeur y est, "
-    "mais elles ne s'alimentent que de cette façon.",
-    "<b>Ce que le catalogue ne sait pas fabriquer, il le dit.</b> La fiche d'un objet "
-    "montre, grisées et sans bouton pour les poser, les recettes que le jeu possède "
-    "et qu'aucun nœud ne peut porter, avec ce qui les en empêche : une <b>machine que "
-    "cette version ne modélise pas encore</b> — c'est temporaire, et ça se réduira —, "
-    "ou une <b>fabrication à la main</b> à l'atelier d'équipement, qui ne sera jamais "
-    "un nœud d'usine. Un objet qu'<b>aucune recette du jeu</b> ne produit dit d'où il "
-    "vient : ramassé dans le monde, ou tombé d'un bâtiment hors périmètre — les "
-    "déchets d'uranium sortent de la centrale nucléaire, ils ne se ramassent pas. "
-    "Une absence qui ne se nomme pas se lit comme un trou dans les données.",
+    "pour tout ce qui descend de la biomasse — biocarburant solide, puis liquide. "
+    "C'est, avec les restes extraterrestres, tout ce qui reste hors d'atteinte du "
+    "catalogue : le ramassage, et rien d'autre.",
+    "<b>L'azote ne sort du sol que par un puits de ressource</b> : aucune foreuse et "
+    "aucune pompe ne le travaille, c'est une matière brute à l'état gazeux. Posez un "
+    "puits, et l'acide nitrique, le système de refroidissement, le cadre modulaire "
+    "fusionné et le carburant de fusée deviennent constructibles de bout en bout.",
+    "<b>Toutes les machines du jeu sont au catalogue</b>, et les 291 recettes qu'elles "
+    "fabriquent s'y posent. Ce qui reste dehors, ce sont les <b>26 recettes "
+    "fabriquées à la main</b> à l'atelier d'équipement — parachute, tronçonneuse, "
+    "fusil : un atelier ne sera jamais un nœud d'usine. La fiche d'un objet les "
+    "montre grisées et sans bouton pour les poser, en disant pourquoi. Et un objet "
+    "qu'<b>aucune recette du jeu</b> ne produit dit d'où il vient : ramassé dans le "
+    "monde, ou <b>sous-produit</b> — les déchets d'uranium sortent de la centrale "
+    "nucléaire, dix par minute, ils ne se ramassent pas. Une absence qui ne se nomme "
+    "pas se lit comme un trou dans les données.",
     "<b>Une machine à l'arrêt consomme quand même.</b> La production suit le taux "
     "de fonctionnement, la consommation non : un nœud bloqué ou affamé paie sa "
     "facture entière, comme en jeu. Ça ne se remarquait pas à 4 MW ; ça se "
