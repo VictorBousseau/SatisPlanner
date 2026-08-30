@@ -22,3 +22,5 @@ satisplanner/resources/icons/
 
 # Sauvegardes utilisateur
 *.sfp
+*.sfm
+**/UsineGemini/
