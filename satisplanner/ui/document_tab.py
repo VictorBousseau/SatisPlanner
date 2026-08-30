@@ -23,6 +23,7 @@ from typing import Final
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData
 from satisplanner.ui.canvas import FactoryScene, FactoryView
 from satisplanner.ui.catalogue import PaletteEntry
@@ -76,7 +77,7 @@ class DocumentTab(QWidget):
 
     def tooltip(self) -> str:
         """Where the file is, and the warning the tab has no room for."""
-        lines = [str(self.document.path) if self.document.path else "Jamais enregistrée"]
+        lines = [str(self.document.path) if self.document.path else _("Jamais enregistrée")]
         if self.document.is_partial:
             lines.append(self.document.partial_description())
         return "\n\n".join(lines)

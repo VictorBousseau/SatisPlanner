@@ -9,7 +9,7 @@ those items their colour in silence.
 import pytest
 
 from satisplanner.core import constants
-from satisplanner.core.families import FAMILY_LABELS, ItemFamily, family_of
+from satisplanner.core.families import ItemFamily, family_label, family_of
 from satisplanner.core.models import GameData
 from satisplanner.data import db
 
@@ -81,9 +81,16 @@ def test_items_land_in_the_family_a_player_would_expect(
     assert family_of(shipped.item(class_name)) is expected
 
 
-def test_every_family_has_a_french_label() -> None:
-    """The preferences box shows these; a missing one would be a raw enum name."""
-    assert set(FAMILY_LABELS) == set(ItemFamily)
+def test_every_family_has_a_label() -> None:
+    """The preferences box shows these; a missing one would be a raw enum name.
+
+    A function rather than the table it used to be, so that the words follow the
+    language; what is checked is unchanged -- every family answers with something
+    readable, and none falls through to its own enum name.
+    """
+    for family in ItemFamily:
+        assert family_label(family)
+        assert family_label(family) != family.value
 
 
 def test_every_item_of_the_catalogue_lands_somewhere(shipped: GameData) -> None:

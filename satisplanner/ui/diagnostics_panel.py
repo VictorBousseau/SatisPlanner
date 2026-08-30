@@ -22,20 +22,30 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from satisplanner.core.i18n import _
 from satisplanner.core.results import Diagnostic, DiagnosticCode, FactoryReport, Severity
 from satisplanner.ui import theme
 from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.document import FactoryDocument
-from satisplanner.ui.report_html import SEVERITY_COLOURS, SEVERITY_LABELS
+from satisplanner.ui.report_html import SEVERITY_COLOURS, severity_label
 
 logger = logging.getLogger(__name__)
 
-# Findings whose fix the panel can carry out itself, and the button's wording.
-ACTIONABLE: Final[dict[DiagnosticCode, str]] = {
-    DiagnosticCode.LINE_SATURATION: "Passer au tier suffisant",
-    DiagnosticCode.DEFICIT: "Ajuster ce nœud",
-    DiagnosticCode.BACKPRESSURE: "Ajuster ce nœud",
-}
+# Findings whose fix the panel can carry out itself.
+ACTIONABLE: Final[frozenset[DiagnosticCode]] = frozenset(
+    {
+        DiagnosticCode.LINE_SATURATION,
+        DiagnosticCode.DEFICIT,
+        DiagnosticCode.BACKPRESSURE,
+    }
+)
+
+
+def fix_label(code: DiagnosticCode) -> str:
+    """The button's wording, built when the button is and not at import."""
+    if code is DiagnosticCode.LINE_SATURATION:
+        return _("Passer au tier suffisant")
+    return _("Ajuster ce nœud")
 
 _ROLE_DIAGNOSTIC: Final = int(Qt.ItemDataRole.UserRole)
 
@@ -52,9 +62,9 @@ class DiagnosticsPanel(QWidget):
         super().__init__(parent)
         self._report: FactoryReport | None = None
 
-        self.errors = QCheckBox("Erreurs", self)
-        self.warnings = QCheckBox("Avertissements", self)
-        self.infos = QCheckBox("Informations", self)
+        self.errors = QCheckBox(_("Erreurs"), self)
+        self.warnings = QCheckBox(_("Avertissements"), self)
+        self.infos = QCheckBox(_("Informations"), self)
         for box in (self.errors, self.warnings, self.infos):
             box.setChecked(True)
             box.toggled.connect(self.refresh)
@@ -64,7 +74,7 @@ class DiagnosticsPanel(QWidget):
         self.list.currentItemChanged.connect(self._announce_target)
         self.list.itemActivated.connect(self._announce_target)
 
-        self.fix_button = QPushButton("Corriger", self)
+        self.fix_button = QPushButton(_("Corriger"), self)
         self.fix_button.setEnabled(False)
         self.fix_button.clicked.connect(self._request_fix)
 
@@ -82,6 +92,14 @@ class DiagnosticsPanel(QWidget):
 
         self._binding = DocumentBinding()
         self.set_document(document)
+
+    def retranslate(self) -> None:
+        """The three filters and the fix button, which are built once and stay."""
+        self.errors.setText(_("Erreurs"))
+        self.warnings.setText(_("Avertissements"))
+        self.infos.setText(_("Informations"))
+        self._update_fix_button()
+        self.refresh()
 
     # ------------------------------------------------------------------ data
 
@@ -152,9 +170,12 @@ class DiagnosticsPanel(QWidget):
 
     def _update_fix_button(self) -> None:
         finding = self.current_diagnostic()
-        label = ACTIONABLE.get(finding.code) if finding is not None else None
-        self.fix_button.setEnabled(label is not None)
-        self.fix_button.setText(label or "Aucune correction automatique")
+        fixable = finding is not None and finding.code in ACTIONABLE
+        self.fix_button.setEnabled(fixable)
+        if fixable and finding is not None:
+            self.fix_button.setText(fix_label(finding.code))
+        else:
+            self.fix_button.setText(_("Aucune correction automatique"))
 
     def _request_fix(self) -> None:
         finding = self.current_diagnostic()
@@ -164,8 +185,8 @@ class DiagnosticsPanel(QWidget):
 
 
 def _row_for(finding: Diagnostic) -> QListWidgetItem:
-    target = finding.node_id or finding.edge_id or "usine"
-    item = QListWidgetItem(f"[{SEVERITY_LABELS[finding.severity]}] {target}\n{finding.message}")
+    target = finding.node_id or finding.edge_id or _("usine")
+    item = QListWidgetItem(f"[{severity_label(finding.severity)}] {target}\n{finding.message}")
     item.setForeground(QColor(SEVERITY_COLOURS[finding.severity]))
     item.setData(_ROLE_DIAGNOSTIC, finding)
     item.setToolTip(finding.message)
@@ -174,11 +195,11 @@ def _row_for(finding: Diagnostic) -> QListWidgetItem:
 
 def _empty_row(report: FactoryReport | None) -> QListWidgetItem:
     if report is None or not report.nodes:
-        text = "Rien à signaler : l'usine est vide."
+        text = _("Rien à signaler : l'usine est vide.")
     elif not report.diagnostics:
-        text = "Aucun diagnostic : l'usine est nominale."
+        text = _("Aucun diagnostic : l'usine est nominale.")
     else:
-        text = "Aucun diagnostic de ce niveau."
+        text = _("Aucun diagnostic de ce niveau.")
     item = QListWidgetItem(text)
     item.setFlags(Qt.ItemFlag.NoItemFlags)
     item.setForeground(QColor(theme.TEXT_MUTED))

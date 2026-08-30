@@ -15,6 +15,7 @@ something true about the factory.
 from enum import StrEnum
 
 from satisplanner.core import constants
+from satisplanner.core.i18n import _
 from satisplanner.core.models import Item
 
 
@@ -31,14 +32,19 @@ class ItemFamily(StrEnum):
     OTHER = "other"
 
 
-# French, and shown as-is in the preferences box.
-FAMILY_LABELS: dict[ItemFamily, str] = {
-    ItemFamily.FLUID: "Fluides",
-    ItemFamily.RAW: "Ressources brutes",
-    ItemFamily.INGOT: "Lingots",
-    ItemFamily.SPACE_ELEVATOR: "Produits finis",
-    ItemFamily.OTHER: "Pièces intermédiaires",
-}
+def family_label(family: ItemFamily) -> str:
+    """How a family reads in the preferences box, in the language in force."""
+    match family:
+        case ItemFamily.FLUID:
+            return _("Fluides")
+        case ItemFamily.RAW:
+            return _("Ressources brutes")
+        case ItemFamily.INGOT:
+            return _("Lingots")
+        case ItemFamily.SPACE_ELEVATOR:
+            return _("Produits finis")
+        case ItemFamily.OTHER:
+            return _("Pièces intermédiaires")
 
 
 def family_of(item: Item) -> ItemFamily:

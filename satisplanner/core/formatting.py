@@ -1,15 +1,32 @@
-"""French formatting of the numbers the planner shows.
+"""Formatting of the numbers the planner shows, in the language it is set to.
 
 One set of rules, used by the diagnostics and by the canvas alike: a rate written
 "66,667 %" in a warning must read the same on a node. Keeping them here rather than
 in each layer is what stops the two from drifting apart.
 
-Qt-free, like everything in ``core``.
+Qt-free, like everything in ``core`` -- and that is why ``QLocale`` is not what
+decides the decimal separator. What decides it is :func:`satisplanner.core.i18n
+.language`, the same switch the sentences follow, which has a second virtue beyond
+the layering: a French user on an English Windows gets a French interface **and**
+French numbers, where ``QLocale.system()`` would have given them one of each.
+
+Only two rules actually differ, and they are the two a reader notices:
+
+* the **decimal separator** -- ``24,549`` against ``24.549``. A comma read as a
+  thousands separator turns twenty-four into twenty-four thousand, which is the
+  whole reason this exists;
+* the **space before the percent sign** -- ``81,8 %`` against ``81.8%``. French
+  typography wants it, English typography does not.
+
+Thousands are grouped in neither: the figures here are rates per minute and rarely
+reach four digits, and a separator that is a space in one language and a comma in
+the other is a way of being misread in both.
 """
 
 import unicodedata
 from typing import Final
 
+from satisplanner.core.i18n import Language, language
 from satisplanner.core.models import Item
 
 # Rates are shown to the thousandth: 66,667 a minute is the honest way to write two
@@ -26,12 +43,17 @@ _MINUTES_PER_HOUR: Final = 60
 _SECONDS_PER_MINUTE: Final = 60
 
 
+def decimal_separator() -> str:
+    """What separates the units from the tenths, in the language in force."""
+    return "," if language() is Language.FRENCH else "."
+
+
 def number(value: float, decimals: int = DECIMALS) -> str:
-    """Compact French number: comma as decimal separator, no trailing zeros."""
+    """Compact number, with no trailing zeros and the separator of the language."""
     rounded = round(value, decimals)
     if rounded == int(rounded):
         return str(int(rounded))
-    return f"{rounded}".replace(".", ",")
+    return f"{rounded}".replace(".", decimal_separator())
 
 
 def unit(item: Item | None) -> str:
@@ -45,7 +67,9 @@ def rate(value: float, item: Item | None) -> str:
 
 
 def percent(ratio: float) -> str:
-    return f"{number(ratio * 100, PERCENT_DECIMALS)} %"
+    """``81,8 %`` in French, ``81.8%`` in English: the space is French typography."""
+    space = " " if language() is Language.FRENCH else ""
+    return f"{number(ratio * 100, PERCENT_DECIMALS)}{space}%"
 
 
 def differ(actual: float, nominal: float | None) -> bool:
@@ -87,7 +111,11 @@ def pair_number(actual: float, nominal: float | None) -> str:
 
 
 def duration(minutes: float) -> str:
-    """Seconds under a minute, hours over an hour, minutes in between."""
+    """Seconds under a minute, hours over an hour, minutes in between.
+
+    The three symbols are the same in both languages -- ``s``, ``min`` and ``h`` are
+    SI, not French -- so only the number changes.
+    """
     if minutes < 1:
         return f"{number(minutes * _SECONDS_PER_MINUTE)} s"
     if minutes < _MINUTES_PER_HOUR:
@@ -96,12 +124,16 @@ def duration(minutes: float) -> str:
 
 
 def of(name: str) -> str:
-    """``de X`` or ``d'X``, whichever French wants in front of this word.
+    """``de X``, ``d'X`` or ``of X``, whichever the language in force wants.
 
-    Six lines rather than a sentence that reads "de Ordinateur". The rule is the
-    ordinary one -- elision before a vowel and before a mute h -- and the list of
-    aspirated h words the game uses is empty, so there is nothing to except.
+    Six lines rather than a sentence that reads "de Ordinateur". The French rule is
+    the ordinary one -- elision before a vowel and before a mute h -- and the list of
+    aspirated h words the game uses is empty, so there is nothing to except. English
+    elides nothing and the function is then a single word, which is why the sentence
+    that uses it can stay one sentence in both languages instead of two.
     """
+    if language() is Language.ENGLISH:
+        return f"of {name}"
     stripped = "".join(
         char
         for char in unicodedata.normalize("NFKD", name[:1].casefold())

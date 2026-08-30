@@ -17,6 +17,7 @@ from PySide6.QtCore import QBuffer, QByteArray, QMarginsF, QRectF, QSizeF, Qt
 from PySide6.QtGui import QColor, QImage, QPageSize, QPainter, QPdfWriter, QTextDocument
 from PySide6.QtWidgets import QGraphicsScene
 
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData
 from satisplanner.core.results import FactoryReport
 from satisplanner.ui import report_html, theme
@@ -126,7 +127,7 @@ def export_pdf(
     writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
     writer.setResolution(PDF_RESOLUTION)
     writer.setPageMargins(QMarginsF(*(PDF_MARGIN_MM,) * 4))
-    writer.setTitle("SatisPlanner — usine")
+    writer.setTitle(_("SatisPlanner — usine"))
 
     painter = QPainter()
     if not painter.begin(writer):

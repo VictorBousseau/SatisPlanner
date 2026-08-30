@@ -43,14 +43,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData, ItemForm
 from satisplanner.ui import theme
 from satisplanner.ui.catalogue import (
-    SECTION_LABELS,
     PaletteEntry,
     build_entries,
-    fold,
     machine_choices,
+    says_alternate,
+    section_label,
     transport_choices,
 )
 from satisplanner.ui.icon_provider import IconProvider
@@ -248,7 +249,9 @@ class PaletteList(QListView):
 def _alternate_marker(entry: PaletteEntry) -> str:
     """The French labels already say so for most alternates ("Alternative : ..."),
     so the marker is only added where the game left it out."""
-    return " (alternative)" if entry.is_alternate and "alternative" not in fold(entry.label) else ""
+    if entry.is_alternate and not says_alternate(entry.label):
+        return _(" (alternative)")
+    return ""
 
 
 class PaletteWidget(QWidget):
@@ -280,17 +283,17 @@ class PaletteWidget(QWidget):
         self.entries = list(entries) if entries is not None else build_entries(game_data)
 
         self.search = QLineEdit(self)
-        self.search.setPlaceholderText("Rechercher une recette, un minerai, une sortie...")
+        self.search.setPlaceholderText(_("Rechercher une recette, un minerai, une sortie..."))
         self.search.setClearButtonEnabled(True)
 
         self.machine = QComboBox(self)
-        self.machine.addItem("Toutes les machines", ANY_MACHINE)
+        self.machine.addItem(_("Toutes les machines"), ANY_MACHINE)
         for class_name, label in machine_choices(game_data):
             self.machine.addItem(label, class_name)
 
-        self.alternates = QCheckBox("Inclure les recettes alternatives", self)
+        self.alternates = QCheckBox(_("Inclure les recettes alternatives"), self)
         self.alternates.setChecked(True)
-        self.events = QCheckBox("Afficher les objets d'événement (FICSMAS)", self)
+        self.events = QCheckBox(_("Afficher les objets d'événement (FICSMAS)"), self)
         self.events.setChecked(False)
 
         self.belt_tier = QComboBox(self)
@@ -309,11 +312,31 @@ class PaletteWidget(QWidget):
         self._connect()
         self.refresh()
 
+    def retranslate(self) -> None:
+        """The labels this widget wrote once, put back in the language in force.
+
+        The entries themselves are not here: they are rebuilt by the window, from
+        the catalogue, because they are also what a drop on the canvas is decoded
+        with. What is left is the chrome -- and chrome that stays French under an
+        English interface is exactly what a reader notices first.
+        """
+        self.search.setPlaceholderText(_("Rechercher une recette, un minerai, une sortie..."))
+        self.machine.setItemText(0, _("Toutes les machines"))
+        self.alternates.setText(_("Inclure les recettes alternatives"))
+        self.events.setText(_("Afficher les objets d'événement (FICSMAS)"))
+        self.belt_label.setText(_("Convoyeur par défaut"))
+        self.pipe_label.setText(_("Tuyauterie par défaut"))
+        self.refresh()
+
     def _build_layout(self) -> None:
         tiers = QFormLayout()
         tiers.setContentsMargins(0, 0, 0, 0)
-        tiers.addRow("Convoyeur par défaut", self.belt_tier)
-        tiers.addRow("Tuyauterie par défaut", self.pipe_tier)
+        # Kept as attributes rather than handed to the layout as plain text: a form
+        # row's label is otherwise unreachable, and this one has to change language.
+        self.belt_label = QLabel(_("Convoyeur par défaut"), self)
+        self.pipe_label = QLabel(_("Tuyauterie par défaut"), self)
+        tiers.addRow(self.belt_label, self.belt_tier)
+        tiers.addRow(self.pipe_label, self.pipe_tier)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
@@ -389,6 +412,16 @@ class PaletteWidget(QWidget):
         self.model.icons = icons
         self.refresh()
 
+    def set_entries(self, entries: Sequence[PaletteEntry]) -> None:
+        """Adopt a freshly built list, after the interface changed language.
+
+        The search text, the machine filter and the two toggles are left where the
+        user put them: changing language is not a reason to lose the query someone
+        was in the middle of typing.
+        """
+        self.entries = list(entries)
+        self.refresh()
+
     def visible_entries(self) -> list[PaletteEntry]:
         """Entries surviving the query and the toggles, in section order."""
         query = self.search.text().strip()
@@ -412,7 +445,7 @@ class PaletteWidget(QWidget):
         rows: list[PaletteEntry | str] = []
         section = ""
         for entry in entries[:MAX_VISIBLE_ENTRIES]:
-            heading = SECTION_LABELS[entry.kind]
+            heading = section_label(entry.kind)
             if heading != section:
                 section = heading
                 rows.append(heading)
@@ -423,5 +456,7 @@ class PaletteWidget(QWidget):
 
 def _count_text(total: int) -> str:
     if total > MAX_VISIBLE_ENTRIES:
-        return f"{total} résultats, {MAX_VISIBLE_ENTRIES} affichés — affinez la recherche"
-    return f"{total} résultat(s)"
+        return _("{total} résultats, {shown} affichés — affinez la recherche").format(
+            total=total, shown=MAX_VISIBLE_ENTRIES
+        )
+    return _("{total} résultat(s)").format(total=total)

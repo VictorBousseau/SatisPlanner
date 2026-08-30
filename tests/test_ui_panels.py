@@ -585,7 +585,7 @@ def test_overwriting_is_possible_but_never_the_default(
     def press_overwrite(box: QMessageBox) -> int:
         default = box.defaultButton()
         defaults.append("" if default is None else default.text())
-        return click_button("Ecraser")(box)
+        return click_button("Écraser")(box)
 
     monkeypatch.setattr(QMessageBox, "exec", press_overwrite)
     window.save_action.trigger()

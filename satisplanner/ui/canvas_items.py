@@ -52,10 +52,11 @@ from satisplanner.core.graph import (
     port_line_budget,
     unit_count,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData, Item, ItemForm, Purity, SplitterMode
 from satisplanner.core.results import EdgeSolution, LimitingFactor, NodeSolution
 from satisplanner.ui import item_colours, theme
-from satisplanner.ui.catalogue import PURITY_LABELS, SPLITTER_MODE_LABELS
+from satisplanner.ui.catalogue import purity_label, splitter_mode_label
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.item_colours import ItemPalette
 
@@ -107,7 +108,11 @@ EDGE_LABEL_WIDTH: Final = 130.0
 # Port item class of a buffer whose content is not decided yet: it accepts whatever
 # arrives first, and the graph infers the item from that line.
 ANY_ITEM: Final = ""
-ANY_ITEM_LABEL: Final = "contenu indéterminé"
+
+
+def any_item_label() -> str:
+    """What an undecided port is called. A function, so it follows the language."""
+    return _("contenu indéterminé")
 
 
 @dataclass(frozen=True)
@@ -154,15 +159,21 @@ PURITY_BY_FIELD: Final[dict[Field, Purity]] = {
     field: purity for purity, field in SATELLITE_FIELDS.items()
 }
 
-# How many satellites of one purity read on the face of a node. Plural agreement is
-# written out rather than computed: "impur" does not take an s the way "normal"
-# takes "normaux", and a rule that gets one of the three wrong is worse than three
-# entries in a table.
-SATELLITE_WORDS: Final[dict[Purity, tuple[str, str]]] = {
-    Purity.IMPURE: ("impur", "impurs"),
-    Purity.NORMAL: ("normal", "normaux"),
-    Purity.PURE: ("pur", "purs"),
-}
+def satellite_word(purity: Purity, count: int) -> str:
+    """How many satellites of one purity read on the face of a node.
+
+    Plural agreement is written out rather than computed: "impur" does not take an s
+    the way "normal" takes "normaux", and a rule that gets one of the three wrong is
+    worse than six sentences. English needs the six all the same -- it agrees in its
+    own places -- so the pairs are translated whole rather than assembled.
+    """
+    match purity:
+        case Purity.IMPURE:
+            return _("impur") if count == 1 else _("impurs")
+        case Purity.NORMAL:
+            return _("normal") if count == 1 else _("normaux")
+        case Purity.PURE:
+            return _("pur") if count == 1 else _("purs")
 
 
 @dataclass(frozen=True)
@@ -438,8 +449,8 @@ class NodeItem(QGraphicsItem):
 
     def _row_name(self, item_class: str) -> str:
         if item_class == ANY_ITEM:
-            return ANY_ITEM_LABEL
-        return self.game_data.item(item_class).display_name_fr
+            return any_item_label()
+        return self.game_data.item(item_class).name
 
     def _measure_width(self, rows: tuple[tuple[str, str, str], ...]) -> float:
         metrics = QFontMetricsF(self._row_font())
@@ -603,17 +614,17 @@ class NodeItem(QGraphicsItem):
     def _default_label(self) -> str:
         match self.node:
             case MachineNode() as machine:
-                return self.game_data.recipe(machine.recipe_class).display_name_fr
+                return self.game_data.recipe(machine.recipe_class).name
             case (
                 ResourceNode() | ResourceWellNode() | ExternalSourceNode() | OutputNode()
             ) as endpoint:
-                return self.game_data.item(endpoint.item_class).display_name_fr
+                return self.game_data.item(endpoint.item_class).name
             case WaterExtractorNode() as pump:
-                return self.game_data.building(pump.extractor_class).display_name_fr
+                return self.game_data.building(pump.extractor_class).name
             case GeneratorNode() | GeothermalNode() as generator:
-                return self.game_data.building(generator.generator_class).display_name_fr
+                return self.game_data.building(generator.generator_class).name
             case StorageNode() as storage:
-                return self.game_data.building(storage.storage_class).display_name_fr
+                return self.game_data.building(storage.storage_class).name
             case SplitterNode() | MergerNode():
                 return self._attachment_name()
 
@@ -626,8 +637,8 @@ class NodeItem(QGraphicsItem):
         """
         building = attachment_building(self.node, self.content_item, self.game_data)
         if building is not None and building in self.game_data.buildings:
-            return self.game_data.buildings[building].display_name_fr
-        return "Répartiteur" if isinstance(self.node, SplitterNode) else "Groupeur"
+            return self.game_data.buildings[building].name
+        return _("Répartiteur") if isinstance(self.node, SplitterNode) else _("Groupeur")
 
     def subtitle(self) -> str:
         """The line under the title, as one string. Assembled from the segments."""
@@ -645,32 +656,35 @@ class NodeItem(QGraphicsItem):
         match self.node:
             case MachineNode() as machine:
                 recipe = self.game_data.recipe(machine.recipe_class)
-                building = self.game_data.building(recipe.building_class).display_name_fr
+                building = self.game_data.building(recipe.building_class).name
                 count = formatting.number(machine.machine_count)
                 return [
                     Segment(building),
                     Segment(" — "),
-                    Segment(f"{count} machine(s)", Field.QUANTITY),
+                    Segment(_("{count} machine(s)").format(count=count), Field.QUANTITY),
                     *_clock_segments(machine.clock_speed),
                 ]
             case ResourceNode() as deposit:
-                extractor = self.game_data.building(deposit.extractor_class).display_name_fr
+                extractor = self.game_data.building(deposit.extractor_class).name
                 # The purity is on the face of the node because nothing else shows it
                 # and everything depends on it: the same miner pulls 120, 240 or 480.
                 return [
                     Segment(formatting.number(deposit.count), Field.QUANTITY),
                     Segment(" "),
                     Segment(extractor, Field.EXTRACTOR),
-                    Segment(" — gisement "),
-                    Segment(PURITY_LABELS[deposit.purity].lower(), Field.PURITY),
+                    Segment(_(" — gisement ")),
+                    Segment(purity_label(deposit.purity).lower(), Field.PURITY),
                     *_clock_segments(deposit.clock_speed),
                 ]
             case ResourceWellNode() as well:
                 return self._well_segments(well)
             case WaterExtractorNode() as pump:
                 return [
-                    Segment(f"{formatting.number(pump.count)} unité(s)", Field.QUANTITY),
-                    Segment(" — débit fixe"),
+                    Segment(
+                        _("{count} unité(s)").format(count=formatting.number(pump.count)),
+                        Field.QUANTITY,
+                    ),
+                    Segment(_(" — débit fixe")),
                     *_clock_segments(pump.clock_speed),
                 ]
             case GeneratorNode() as generator:
@@ -680,10 +694,13 @@ class NodeItem(QGraphicsItem):
                 power = self.game_data.generators[generator.generator_class].power_mw
                 total = formatting.number(power * generator.count)
                 return [
-                    Segment(f"{formatting.number(generator.count)} unité(s)", Field.QUANTITY),
+                    Segment(
+                        _("{count} unité(s)").format(count=formatting.number(generator.count)),
+                        Field.QUANTITY,
+                    ),
                     Segment(" — "),
-                    Segment(self.game_data.item(generator.fuel_class).display_name_fr, Field.FUEL),
-                    Segment(f" — {total} MW produits"),
+                    Segment(self.game_data.item(generator.fuel_class).name, Field.FUEL),
+                    Segment(_(" — {total} MW produits").format(total=total)),
                 ]
             case GeothermalNode() as geyser:
                 # The purity is on the face of the node for the same reason a
@@ -694,21 +711,24 @@ class NodeItem(QGraphicsItem):
                 )
                 total = formatting.number(produced * geyser.count)
                 return [
-                    Segment(f"{formatting.number(geyser.count)} unité(s)", Field.QUANTITY),
-                    Segment(" — geyser "),
-                    Segment(PURITY_LABELS[geyser.purity].lower(), Field.PURITY),
-                    Segment(f" — {total} MW en moyenne"),
+                    Segment(
+                        _("{count} unité(s)").format(count=formatting.number(geyser.count)),
+                        Field.QUANTITY,
+                    ),
+                    Segment(_(" — geyser ")),
+                    Segment(purity_label(geyser.purity).lower(), Field.PURITY),
+                    Segment(_(" — {total} MW en moyenne").format(total=total)),
                 ]
             case ExternalSourceNode() as source:
                 item = self.game_data.item(source.item_class)
                 return [
-                    Segment("apport externe "),
+                    Segment(_("apport externe ")),
                     Segment(formatting.rate(source.rate_per_minute, item), Field.QUANTITY),
                 ]
             case StorageNode() as storage:
                 return self._storage_segments(storage)
             case OutputNode() as output:
-                return [Segment("rejet assumé" if output.is_sink else "sortie de l'usine")]
+                return [Segment(_("rejet assumé") if output.is_sink else _("sortie de l'usine"))]
             case SplitterNode() | MergerNode():
                 return self._attachment_segments()
 
@@ -724,18 +744,17 @@ class NodeItem(QGraphicsItem):
         extractor = self.game_data.extractors.get(node.extractor_class)
         activator = extractor.activator_class if extractor else None
         head = (
-            self.game_data.building(activator).display_name_fr
+            self.game_data.building(activator).name
             if activator and activator in self.game_data.buildings
-            else "Puits de ressource"
+            else _("Puits de ressource")
         )
         segments = [Segment(head), Segment(" — ")]
         for index, purity in enumerate(Purity):
             count = node.satellites.get(purity, 0)
-            singular, plural = SATELLITE_WORDS[purity]
             if index:
                 segments.append(Segment(" · "))
             segments.append(Segment(str(count), SATELLITE_FIELDS[purity]))
-            segments.append(Segment(f" {singular if count == 1 else plural}"))
+            segments.append(Segment(f" {satellite_word(purity, count)}"))
         segments.extend(_clock_segments(node.clock_speed))
         return segments
 
@@ -842,14 +861,14 @@ class NodeItem(QGraphicsItem):
         nothing a reader needed and makes the line fit; the cuts do the rest.
         """
         if self.content_item is None:
-            return [Segment("tampon — contenu indéterminé")]
-        name = self.game_data.item(self.content_item).display_name_fr
-        origin = "fixe" if storage.item_class else "déduit"
+            return [Segment(_("tampon — contenu indéterminé"))]
+        name = self.game_data.item(self.content_item).name
+        origin = _("fixe") if storage.item_class else _("déduit")
         return [
-            Segment("tampon — "),
+            Segment(_("tampon — ")),
             Segment(name),
             Segment(f" ({origin})"),
-            Segment(" — stock "),
+            Segment(_(" — stock ")),
             Segment(formatting.number(storage.initial_content), Field.QUANTITY),
         ]
 
@@ -865,15 +884,27 @@ class NodeItem(QGraphicsItem):
         assert isinstance(node, SplitterNode | MergerNode)
         wide = port_line_budget(node, is_output=isinstance(node, SplitterNode))
         used = self.branch_count
-        word = "sortie" if isinstance(node, SplitterNode) else "entrée"
-        role = "répartiteur" if isinstance(node, SplitterNode) else "groupeur"
-        if isinstance(node, SplitterNode) and node.mode is not SplitterMode.STANDARD:
-            role += f" {SPLITTER_MODE_LABELS[node.mode].lower()}"
+        if isinstance(node, SplitterNode):
+            # The mode is an adjective, and the two languages do not put an
+            # adjective on the same side of its noun: "répartiteur intelligent"
+            # against "smart splitter". So the pair is one sentence, not two words.
+            role = (
+                _("répartiteur")
+                if node.mode is SplitterMode.STANDARD
+                else _("répartiteur {mode}").format(mode=splitter_mode_label(node.mode).lower())
+            )
+            ports = _(" — {used} sortie(s) sur {wide}")
+        else:
+            role = _("groupeur")
+            ports = _(" — {used} entrée(s) sur {wide}")
         head: list[Segment] = [Segment(f"{role} — ")]
         if self.content_item is None:
-            return [Segment(f"{role} — contenu indéterminé"), *self._branch_segments()]
-        head.append(Segment(self.game_data.item(self.content_item).display_name_fr))
-        head.append(Segment(f" — {used} {word}(s) sur {wide}"))
+            return [
+                Segment(role + _(" — contenu indéterminé")),
+                *self._branch_segments(),
+            ]
+        head.append(Segment(self.game_data.item(self.content_item).name))
+        head.append(Segment(ports.format(used=used, wide=wide)))
         return head + self._branch_segments()
 
     def _branch_segments(self) -> list[Segment]:
@@ -1083,7 +1114,7 @@ class NodeItem(QGraphicsItem):
         painter.setPen(self._row_colour(item_class, is_output=is_output))
         centre = Qt.AlignmentFlag.AlignVCenter
         if item_class == ANY_ITEM:
-            painter.drawText(cell, centre | Qt.AlignmentFlag.AlignLeft, ANY_ITEM_LABEL)
+            painter.drawText(cell, centre | Qt.AlignmentFlag.AlignLeft, any_item_label())
             return
 
         item = self.game_data.item(item_class)
@@ -1095,7 +1126,7 @@ class NodeItem(QGraphicsItem):
             name_cell,
             centre | Qt.AlignmentFlag.AlignLeft,
             metrics.elidedText(
-                item.display_name_fr, Qt.TextElideMode.ElideRight, name_cell.width()
+                item.name, Qt.TextElideMode.ElideRight, name_cell.width()
             ),
         )
         if rate:
@@ -1199,11 +1230,15 @@ class NodeItem(QGraphicsItem):
         if port is None:
             self.setToolTip(self._node_tooltip())
         elif port.item_class == ANY_ITEM:
-            self.setToolTip("entrée : n'importe quel item, le tampon prend celui qui arrive")
+            self.setToolTip(_("entrée : n'importe quel item, le tampon prend celui qui arrive"))
         else:
             item = self.game_data.item(port.item_class)
-            side = "sortie" if port.is_output else "entrée"
-            self.setToolTip(f"{side} : {item.display_name_fr} ({formatting.unit(item)})")
+            pattern = (
+                _("sortie : {item} ({unit})")
+                if port.is_output
+                else _("entrée : {item} ({unit})")
+            )
+            self.setToolTip(pattern.format(item=item.name, unit=formatting.unit(item)))
         super().hoverMoveEvent(event)
 
     def _node_tooltip(self) -> str:
@@ -1213,14 +1248,22 @@ class NodeItem(QGraphicsItem):
         if self.solution.machine_count is not None:
             useful = formatting.number(self.solution.useful_machine_count or 0.0)
             lines.append(
-                f"{useful} machine(s) utile(s) sur "
-                f"{formatting.number(self.solution.machine_count)}, "
-                f"{self.solution.integer_machine_count} a batir"
+                _("{useful} machine(s) utile(s) sur {built}, {integer} à bâtir").format(
+                    useful=useful,
+                    built=formatting.number(self.solution.machine_count),
+                    integer=self.solution.integer_machine_count,
+                )
             )
         if self.solution.power_mw:
-            lines.append(f"{formatting.number(self.solution.power_mw)} MW consommés")
+            lines.append(
+                _("{power} MW consommés").format(power=formatting.number(self.solution.power_mw))
+            )
         if self.solution.power_produced_mw:
-            lines.append(f"{formatting.number(self.solution.power_produced_mw)} MW produits")
+            lines.append(
+                _("{power} MW produits").format(
+                    power=formatting.number(self.solution.power_produced_mw)
+                )
+            )
         return "\n".join(lines)
 
 
@@ -1296,22 +1339,25 @@ class EdgeItem(QGraphicsPathItem):
             return ""
         item = self.game_data.item(self.solution.item_class)
         transport = self.game_data.buildings.get(self.solution.transport_class)
-        name = transport.display_name_fr if transport else self.solution.transport_class
+        name = transport.name if transport else self.solution.transport_class
         lines = [
-            f"{item.display_name_fr} — {formatting.rate(self.solution.rate_per_minute, item)}",
+            f"{item.name} — {formatting.rate(self.solution.rate_per_minute, item)}",
             f"{name} : {formatting.rate(self.solution.capacity_per_minute, item)} "
             f"({formatting.percent(self.solution.saturation)})",
         ]
         if self.solution.is_saturated:
             upgrade = self.game_data.smallest_transport_for(item.form, self.solution.demanded_rate)
             advice = (
-                self.game_data.buildings[upgrade.class_name].display_name_fr
+                self.game_data.buildings[upgrade.class_name].name
                 if upgrade is not None
-                else "aucun palier ne suffit, doublez la ligne"
+                else _("aucun palier ne suffit, doublez la ligne")
             )
             lines.append(
-                f"Saturée : {formatting.rate(self.solution.demanded_rate, item)} demandes, "
-                f"{formatting.rate(self.solution.blocked_rate, item)} refoules — {advice}"
+                _("Saturée : {demanded} demandes, {blocked} refoulés — {advice}").format(
+                    demanded=formatting.rate(self.solution.demanded_rate, item),
+                    blocked=formatting.rate(self.solution.blocked_rate, item),
+                    advice=advice,
+                )
             )
         return "\n".join(lines)
 
@@ -1380,7 +1426,7 @@ def _clock_segments(clock_speed: float) -> list[Segment]:
     """
     if clock_speed == 1.0:
         return []
-    return [Segment(" — cadence "), Segment(formatting.percent(clock_speed), Field.CLOCK)]
+    return [Segment(_(" — cadence ")), Segment(formatting.percent(clock_speed), Field.CLOCK)]
 
 
 def curve(start: QPointF, end: QPointF) -> QPainterPath:

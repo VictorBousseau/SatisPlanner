@@ -51,40 +51,62 @@ from satisplanner.core.graph import (
     SplitterNode,
     WaterExtractorNode,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import Purity
 from satisplanner.core.results import FactoryReport, LimitingFactor, NodeSolution
 from satisplanner.ui import edits, theme
 from satisplanner.ui.binding import DocumentBinding
 from satisplanner.ui.catalogue import (
-    PURITY_LABELS,
-    SPLITTER_MODE_LABELS,
     extractor_choices,
     fuel_choices,
+    purity_label,
+    purity_labels,
+    splitter_mode_label,
+    splitter_mode_labels,
 )
 from satisplanner.ui.document import FactoryDocument
 from satisplanner.ui.edits import quantity_of
 
 logger = logging.getLogger(__name__)
 
-KIND_LABELS: Final[dict[str, str]] = {
-    "resource": "Gisement",
-    "water_extractor": "Pompe",
-    "external_source": "Entrée",
-    "machine": "Machine",
-    "generator": "Générateur",
-    "storage": "Tampon",
-    "output": "Sortie",
-    "splitter": "Répartiteur",
-    "merger": "Groupeur",
-}
+def kind_label(kind: str) -> str:
+    """What the Type column calls a node. Unknown kinds keep their own word."""
+    match kind:
+        case "resource":
+            return _("Gisement")
+        case "water_extractor":
+            return _("Pompe")
+        case "external_source":
+            return _("Entrée")
+        case "machine":
+            return _("Machine")
+        case "generator":
+            return _("Générateur")
+        case "storage":
+            return _("Tampon")
+        case "output":
+            return _("Sortie")
+        case "splitter":
+            return _("Répartiteur")
+        case "merger":
+            return _("Groupeur")
+        case _:
+            return kind
 
-LIMITING_LABELS: Final[dict[LimitingFactor, str]] = {
-    LimitingFactor.NONE: "—",
-    LimitingFactor.INPUTS: "déficit d'intrants",
-    LimitingFactor.OUTPUTS: "contre-pression",
-    LimitingFactor.LINE: "ligne trop petite",
-    LimitingFactor.BLOCKED: "sous-produit bloque",
-}
+
+def limiting_label(limiting: LimitingFactor) -> str:
+    """Why a node is not at 100 %, in two or three words."""
+    match limiting:
+        case LimitingFactor.NONE:
+            return "—"
+        case LimitingFactor.INPUTS:
+            return _("déficit d'intrants")
+        case LimitingFactor.OUTPUTS:
+            return _("contre-pression")
+        case LimitingFactor.LINE:
+            return _("ligne trop petite")
+        case LimitingFactor.BLOCKED:
+            return _("sous-produit bloqué")
 
 LIMITING_COLOURS: Final[dict[LimitingFactor, str]] = {
     LimitingFactor.NONE: theme.STATE_NOMINAL,
@@ -109,21 +131,23 @@ COLUMN_OUTPUTS: Final = 10
 COLUMN_LIMITING: Final = 11
 COLUMN_RATIO: Final = 12
 
-HEADERS: Final[tuple[str, ...]] = (
-    "Nœud",
-    "Type",
-    "Recette / contenu",
-    "Quantité",
-    "Cadence",
-    "Pureté",
-    "Extracteur",
-    "Carburant",
-    "Mode",
-    "Entrées /min",
-    "Sorties /min",
-    "Facteur limitant",
-    "État",
-)
+def headers() -> tuple[str, ...]:
+    """The column headings, in the language in force when the table is built."""
+    return (
+        _("Nœud"),
+        _("Type"),
+        _("Recette / contenu"),
+        _("Quantité"),
+        _("Cadence"),
+        _("Pureté"),
+        _("Extracteur"),
+        _("Carburant"),
+        _("Mode"),
+        _("Entrées /min"),
+        _("Sorties /min"),
+        _("Facteur limitant"),
+        _("État"),
+    )
 
 COLUMN_WIDTHS: Final[dict[int, int]] = {
     COLUMN_NODE: 95,
@@ -203,7 +227,8 @@ class NodeTableModel(QAbstractTableModel):
         rows = [node.id for node in self.document.graph.sorted_nodes()]
         if rows == self._rows:
             if rows:
-                self.dataChanged.emit(self.index(0, 0), self.index(len(rows) - 1, len(HEADERS) - 1))
+                last = self.index(len(rows) - 1, len(headers()) - 1)
+                self.dataChanged.emit(self.index(0, 0), last)
             return
         self.beginResetModel()
         self._rows = rows
@@ -214,7 +239,7 @@ class NodeTableModel(QAbstractTableModel):
         return 0 if parent.isValid() else len(self._rows)
 
     def columnCount(self, parent: Index = QModelIndex()) -> int:  # noqa: B008
-        return 0 if parent.isValid() else len(HEADERS)
+        return 0 if parent.isValid() else len(headers())
 
     def headerData(
         self,
@@ -224,7 +249,7 @@ class NodeTableModel(QAbstractTableModel):
     ) -> Any:
         if role != Qt.ItemDataRole.DisplayRole or orientation is not Qt.Orientation.Horizontal:
             return None
-        return HEADERS[section]
+        return headers()[section]
 
     def node_id_at(self, row: int) -> str | None:
         return self._rows[row] if 0 <= row < len(self._rows) else None
@@ -296,7 +321,7 @@ class NodeTableModel(QAbstractTableModel):
             case _ if column == COLUMN_NODE:
                 return node.id
             case _ if column == COLUMN_KIND:
-                return KIND_LABELS[node.kind.value]
+                return kind_label(node.kind.value)
             case _ if column == COLUMN_LABEL:
                 return node.label or (solution.label if solution else "")
             case _ if column == COLUMN_QUANTITY:
@@ -312,7 +337,7 @@ class NodeTableModel(QAbstractTableModel):
                     return "—"
                 return self._item_name(node.fuel_class)
             case _ if column == COLUMN_MODE:
-                return SPLITTER_MODE_LABELS[node.mode] if isinstance(node, SplitterNode) else "—"
+                return splitter_mode_label(node.mode) if isinstance(node, SplitterNode) else "—"
             case _ if column == COLUMN_INPUTS:
                 if solution is None:
                     return "—"
@@ -322,13 +347,13 @@ class NodeTableModel(QAbstractTableModel):
                     return "—"
                 return self._flows(solution.outputs, solution.nominal_outputs)
             case _ if column == COLUMN_LIMITING:
-                return LIMITING_LABELS[solution.limiting] if solution else "—"
+                return limiting_label(solution.limiting) if solution else "—"
             case _:
                 return formatting.percent(solution.ratio) if solution else "—"
 
     def _quantity_text(self, node: Node) -> str:
         if isinstance(node, ResourceWellNode):
-            return f"{node.satellite_count} satellite(s)"
+            return _("{count} satellite(s)").format(count=node.satellite_count)
         quantity = quantity_of(node)
         if quantity is None:
             return "—"
@@ -344,34 +369,34 @@ class NodeTableModel(QAbstractTableModel):
         a place of its own to be double-clicked.
         """
         if isinstance(node, ResourceNode | GeothermalNode):
-            return PURITY_LABELS[node.purity]
+            return purity_label(node.purity)
         if isinstance(node, ResourceWellNode):
             written = [
-                f"{node.satellites.get(purity, 0)} {PURITY_LABELS[purity].lower()}"
+                f"{node.satellites.get(purity, 0)} {purity_label(purity).lower()}"
                 for purity in Purity
             ]
             return " · ".join(written)
         return "—"
 
     def _extractor_name(self, node: Node) -> str:
-        """The building working this node, French, or a dash when there is none."""
+        """The building working this node, by its game name, or a dash when none."""
         if not isinstance(node, ResourceNode | ResourceWellNode | WaterExtractorNode):
             return "—"
         building = self.document.game_data.buildings.get(node.extractor_class)
-        return building.display_name_fr if building else node.extractor_class
+        return building.name if building else node.extractor_class
 
     def _choices(self, node: Node, column: int) -> list[tuple[str, str]]:
         """What a cell of this column accepts, for the delegate's combo box."""
         if isinstance(node, GeneratorNode) and column == COLUMN_FUEL:
             return fuel_choices(self.document.game_data, node.generator_class)
         if isinstance(node, SplitterNode) and column == COLUMN_MODE:
-            return [(mode.value, label) for mode, label in SPLITTER_MODE_LABELS.items()]
+            return [(mode.value, label) for mode, label in splitter_mode_labels()]
         if isinstance(node, GeothermalNode) and column == COLUMN_PURITY:
-            return [(purity.value, label) for purity, label in PURITY_LABELS.items()]
+            return [(purity.value, label) for purity, label in purity_labels()]
         if not isinstance(node, ResourceNode):
             return []
         if column == COLUMN_PURITY:
-            return [(purity.value, label) for purity, label in PURITY_LABELS.items()]
+            return [(purity.value, label) for purity, label in purity_labels()]
         if column == COLUMN_EXTRACTOR:
             return extractor_choices(self.document.game_data, node.item_class)
         return []
@@ -393,7 +418,7 @@ class NodeTableModel(QAbstractTableModel):
 
     def _item_name(self, class_name: str) -> str:
         item = self.document.game_data.items.get(class_name)
-        return item.display_name_fr if item else class_name
+        return item.name if item else class_name
 
     def _foreground(self, column: int, solution: NodeSolution | None) -> QColor | None:
         if solution is None or column not in (COLUMN_LIMITING, COLUMN_RATIO):
@@ -406,21 +431,27 @@ class NodeTableModel(QAbstractTableModel):
         lines = [f"{solution.label} — {formatting.percent(solution.ratio)}"]
         if solution.machine_count is not None and solution.useful_machine_count is not None:
             lines.append(
-                f"{formatting.number(solution.useful_machine_count)} utile(s) sur "
-                f"{formatting.number(solution.machine_count)}, "
-                f"{solution.integer_machine_count} a batir"
+                _("{useful} utile(s) sur {built}, {integer} à bâtir").format(
+                    useful=formatting.number(solution.useful_machine_count),
+                    built=formatting.number(solution.machine_count),
+                    integer=solution.integer_machine_count,
+                )
             )
         if solution.clock_speed != 1.0:
             lines.append(
-                f"cadence {formatting.percent(solution.clock_speed)}"
-                + (f", {solution.power_shards} éclat(s)" if solution.power_shards else "")
+                _("cadence {clock}").format(clock=formatting.percent(solution.clock_speed))
+                + (
+                    _(", {count} éclat(s)").format(count=solution.power_shards)
+                    if solution.power_shards
+                    else ""
+                )
             )
-        for prefix, items in (
-            ("manque", solution.starved_items),
-            ("bloque par", solution.blocked_products),
+        for pattern, items in (
+            (_("manque : {items}"), solution.starved_items),
+            (_("bloqué par : {items}"), solution.blocked_products),
         ):
             if items:
-                lines.append(f"{prefix} : " + ", ".join(map(self._item_name, items)))
+                lines.append(pattern.format(items=", ".join(map(self._item_name, items))))
         return "\n".join(lines)
 
     # --------------------------------------------------------------- editing
@@ -539,7 +570,7 @@ class NodeTablePanel(QWidget):
         self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
 
         self.filter = QLineEdit(self)
-        self.filter.setPlaceholderText("Filtrer les nœuds...")
+        self.filter.setPlaceholderText(_("Filtrer les nœuds..."))
         self.filter.setClearButtonEnabled(True)
         self.filter.textChanged.connect(self.proxy.setFilterFixedString)
 
@@ -568,6 +599,17 @@ class NodeTablePanel(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.addWidget(self.filter)
         layout.addWidget(self.view, 1)
+
+
+    def retranslate(self) -> None:
+        """The one label of this panel that is written once and stays.
+
+        The column headings are not here: ``headerData`` asks :func:`headers` every
+        time Qt paints them, so they already follow. Saying so is worth a line --
+        the next reader will otherwise add them and wonder why nothing changed.
+        """
+        self.filter.setPlaceholderText(_("Filtrer les nœuds..."))
+        self.model.refresh()
 
     def set_document(self, document: FactoryDocument) -> None:
         """Show another factory. The filter box is left alone.

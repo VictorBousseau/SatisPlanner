@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from satisplanner.core import breakdown, planner
 from satisplanner.core.graph import AttachmentMode, FactoryGraph
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData
 from satisplanner.ui.catalogue import fold
 from satisplanner.ui.preferences import Preferences
@@ -47,11 +48,13 @@ logger = logging.getLogger(__name__)
 MAX_VISIBLE: Final = 300
 DEFAULT_RATE: Final = 2.0
 
-CAVEAT: Final = (
-    "Les gisements sont posés en pureté normale avec le premier extracteur venu : "
-    "ce qui se trouve sur votre carte n'est écrit nulle part dans les données du "
-    "jeu. Réglez-les, le reste suivra."
-)
+def caveat() -> str:
+    """What the generator cannot know, said where the factory is asked for."""
+    return _(
+        "Les gisements sont posés en pureté normale avec le premier extracteur venu : "
+        "ce qui se trouve sur votre carte n'est écrit nulle part dans les données du "
+        "jeu. Réglez-les, le reste suivra."
+    )
 
 
 def craftable_items(game_data: GameData) -> list[tuple[str, str]]:
@@ -63,7 +66,7 @@ def craftable_items(game_data: GameData) -> list[tuple[str, str]]:
         if slot.item_class in game_data.items
     }
     return sorted(
-        ((item_class, game_data.items[item_class].display_name_fr) for item_class in made),
+        ((item_class, game_data.items[item_class].name) for item_class in made),
         key=lambda pair: fold(pair[1]),
     )
 
@@ -80,7 +83,7 @@ class GenerateDialog(QDialog):
         super().__init__(parent)
         self.game_data = game_data
         self.preferences = preferences
-        self.setWindowTitle("Générer une usine")
+        self.setWindowTitle(_("Générer une usine"))
         self.setModal(True)
         self.choices: dict[str, str] = preferences.recipe_choices
 
@@ -97,21 +100,21 @@ class GenerateDialog(QDialog):
         self.rate.setSuffix(" /min")
 
         self.variant = QComboBox(self)
-        self.variant.addItem("Ratios exacts — machines en nombre décimal", userData=False)
-        self.variant.addItem("Arrondi au supérieur — constructible tel quel", userData=True)
+        self.variant.addItem(_("Ratios exacts — machines en nombre décimal"), userData=False)
+        self.variant.addItem(_("Arrondi au supérieur — constructible tel quel"), userData=True)
 
         self.recipe_item = QComboBox(self)
         self.recipe_choice = QComboBox(self)
         self.pinned = QLabel(self)
         self.pinned.setWordWrap(True)
 
-        self.caveat = QLabel(CAVEAT, self)
+        self.caveat = QLabel(caveat(), self)
         self.caveat.setWordWrap(True)
 
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Générer")
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(_("Générer"))
 
         self._build_layout()
         self._connect()
@@ -120,7 +123,7 @@ class GenerateDialog(QDialog):
 
     def _build_layout(self) -> None:
         form = QFormLayout()
-        form.addRow("Débit visé", self.rate)
+        form.addRow(_("Débit visé"), self.rate)
         form.addRow("Variante", self.variant)
 
         pinning = QHBoxLayout()
@@ -134,7 +137,7 @@ class GenerateDialog(QDialog):
         layout.addWidget(self.search)
         layout.addWidget(self.items, 1)
         layout.addLayout(form)
-        layout.addWidget(QLabel("Recette imposée (les alternatives se choisissent ici)", self))
+        layout.addWidget(QLabel(_("Recette imposée (les alternatives se choisissent ici)"), self))
         layout.addLayout(pinning)
         layout.addWidget(self.pinned)
         layout.addWidget(self.caveat)
@@ -181,7 +184,7 @@ class GenerateDialog(QDialog):
         self.recipe_choice.clear()
         if item_class:
             for recipe in breakdown.producers(self.game_data, str(item_class)):
-                self.recipe_choice.addItem(recipe.display_name_fr, userData=recipe.class_name)
+                self.recipe_choice.addItem(recipe.name, userData=recipe.class_name)
             pinned = self.choices.get(str(item_class))
             if pinned:
                 index = self.recipe_choice.findData(pinned)
@@ -208,15 +211,19 @@ class GenerateDialog(QDialog):
 
     def _describe_pinned(self) -> None:
         if not self.choices:
-            self.pinned.setText("Aucune recette imposée : partout la recette standard.")
+            self.pinned.setText(_("Aucune recette imposée : partout la recette standard."))
             return
         named = ", ".join(
-            f"{self.game_data.items[item].display_name_fr} → "
-            f"{self.game_data.recipes[recipe].display_name_fr}"
+            f"{self.game_data.items[item].name} → "
+            f"{self.game_data.recipes[recipe].name}"
             for item, recipe in sorted(self.choices.items())
             if item in self.game_data.items and recipe in self.game_data.recipes
         )
-        self.pinned.setText(f"{len(self.choices)} recette(s) imposée(s) : {named}")
+        self.pinned.setText(
+            _("{count} recette(s) imposée(s) : {named}").format(
+                count=len(self.choices), named=named
+            )
+        )
 
     # ----------------------------------------------------------------- result
 
@@ -230,7 +237,7 @@ class GenerateDialog(QDialog):
     def accept(self) -> None:
         """Refuse rather than close on nothing: an empty dialog is not a target."""
         if self.target() is None:
-            QMessageBox.warning(self, "Générer une usine", "Choisissez d'abord un objet.")
+            QMessageBox.warning(self, _("Générer une usine"), _("Choisissez d'abord un objet."))
             return
         self.preferences.recipe_choices = self.choices
         super().accept()

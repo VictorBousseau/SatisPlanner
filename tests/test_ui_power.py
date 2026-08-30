@@ -21,7 +21,7 @@ from pytestqt.qtbot import QtBot
 from satisplanner.core.graph import GeneratorNode
 from satisplanner.core.models import GameData
 from satisplanner.ui.catalogue import EntryKind, fuel_choices
-from satisplanner.ui.help_dialog import MODELLING_NOTES
+from satisplanner.ui.help_dialog import modelling_notes
 from satisplanner.ui.main_window import MainWindow
 from satisplanner.ui.table_panel import COLUMN_FUEL, COLUMN_QUANTITY, ChoiceDelegate
 from tests.conftest import temporary_settings
@@ -289,7 +289,7 @@ def test_the_report_names_the_deficit_and_says_it_brides_nothing(
 def test_the_help_states_that_electricity_is_a_counter(window: MainWindow) -> None:
     """The rule a user would otherwise discover by being surprised."""
     del window
-    joined = " ".join(MODELLING_NOTES)
+    joined = " ".join(modelling_notes())
     assert "compteur, pas une contrainte" in joined
     assert "disjoncte" in joined or "réseau" in joined
 
@@ -303,6 +303,6 @@ def test_the_help_owns_up_to_counting_idle_machines(window: MainWindow) -> None:
     machines this version excludes and is the low end of a *running* recipe.
     """
     del window
-    joined = " ".join(MODELLING_NOTES)
+    joined = " ".join(modelling_notes())
     assert "dimensionnement au pire cas" in joined
     assert "pas une mesure du jeu" in joined

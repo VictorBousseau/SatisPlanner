@@ -13,6 +13,13 @@ heuristic: French is full of unaccented words that look like accented ones --
 that guessed would either miss those or cry wolf on them. Adding a word is one line,
 and it is the line that stops the same mistake coming back.
 
+Beside it sits a **second, smaller dictionary of whole phrases**, :data:`PHRASES`, for
+the cases the first one cannot take. "Surplus non consomme" is wrong and *la machine
+consomme* is right; "sous-produit bloque" is wrong and *le répartiteur bloque tout* is
+right. The word cannot be listed without breaking the correct sentence, so the phrase
+is listed instead. It catches a repeat rather than a new mistake of the same shape,
+and that limit is stated here rather than left for someone to discover.
+
 Two kinds of string are deliberately out of scope.
 
 **Docstrings.** They are developer documentation and this project writes them in
@@ -22,6 +29,13 @@ English, which is a decision rather than an oversight.
 files, a diagnostic code is serialised, and the self-check names real files on disk.
 Those are listed in :data:`IDENTIFIERS` with the reason, and they are the only
 exceptions there are.
+
+**The ``{fields}`` of a translatable sentence.** Since the messages go through
+``_("…").format(…)``, a field name now sits inside the French text -- and a field
+name is a Python identifier, written in ASCII like every other identifier in this
+package. ``{iterations}`` is not the word *itérations* spelled wrong, it is the name
+of an argument, so the placeholders are removed before the text is read. The word
+next to them is still checked, which is what the guard is for.
 """
 
 import ast
@@ -59,6 +73,7 @@ ACCENTED: dict[str, str] = {
     "baties": "bâties",
     "batiment": "bâtiment",
     "batiments": "bâtiments",
+    "batir": "bâtir",
     "bloquee": "bloquée",
     "bouclee": "bouclée",
     "branchees": "branchées",
@@ -71,6 +86,7 @@ ACCENTED: dict[str, str] = {
     "chargees": "chargées",
     "cle": "clé",
     "codee": "codée",
+    "commencant": "commençant",
     "compressee": "compressée",
     "compressees": "compressées",
     "concernee": "concernée",
@@ -88,6 +104,7 @@ ACCENTED: dict[str, str] = {
     "declarees": "déclarées",
     "declarent": "déclarent",
     "decoder": "décoder",
+    "decompresse": "décompresse",
     "decompressee": "décompressée",
     "decompressees": "décompressées",
     "decrit": "décrit",
@@ -98,6 +115,7 @@ ACCENTED: dict[str, str] = {
     "deduits": "déduits",
     "defaut": "défaut",
     "deficit": "déficit",
+    "definitivement": "définitivement",
     "deja": "déjà",
     "dela": "delà",
     "demarrage": "démarrage",
@@ -125,6 +143,7 @@ ACCENTED: dict[str, str] = {
     "donnees": "données",
     "duree": "durée",
     "durees": "durées",
+    "echap": "échap",
     "echec": "échec",
     "echecs": "échecs",
     "echoue": "échoué",
@@ -133,6 +152,7 @@ ACCENTED: dict[str, str] = {
     "eclats": "éclats",
     "ecran": "écran",
     "ecrasement": "écrasement",
+    "ecraser": "écraser",
     "ecrit": "écrit",
     "ecrite": "écrite",
     "ecriture": "écriture",
@@ -213,9 +233,9 @@ ACCENTED: dict[str, str] = {
     "modifiees": "modifiées",
     "modifies": "modifiés",
     "necessaire": "nécessaire",
-    "numero": "numéro",
     "noeud": "nœud",
     "noeuds": "nœuds",
+    "numero": "numéro",
     "operation": "opération",
     "operationnel": "opérationnel",
     "operations": "opérations",
@@ -226,6 +246,7 @@ ACCENTED: dict[str, str] = {
     "peuplee": "peuplée",
     "piece": "pièce",
     "pieces": "pièces",
+    "precedent": "précédent",
     "prefere": "préféré",
     "preference": "préférence",
     "preferences": "préférences",
@@ -258,7 +279,9 @@ ACCENTED: dict[str, str] = {
     "refuses": "refusés",
     "regime": "régime",
     "regimes": "régimes",
+    "rejete": "rejeté",
     "rejouee": "rejouée",
+    "relachez": "relâchez",
     "renomme": "renommé",
     "reordonne": "réordonné",
     "reouverture": "réouverture",
@@ -300,6 +323,7 @@ ACCENTED: dict[str, str] = {
     "verification": "vérification",
     "verifications": "vérifications",
     "verifiee": "vérifiée",
+    "verifiez": "vérifiez",
     "violee": "violée",
 }
 
@@ -319,11 +343,45 @@ IDENTIFIERS: dict[str, frozenset[str]] = {
     ),
 }
 
+# The other half of the guard: the cases where the **word** is perfectly good French
+# and the **phrase** is not.
+#
+# "consomme", "bloque", "donne", "recycle", "conserves", "indexe" and the bare "a" are
+# all valid: *la machine consomme*, *le répartiteur bloque tout*, *un objectif se donne
+# en objets par minute*. None of them can join :data:`ACCENTED` without the guard
+# crying wolf on a correct sentence -- which is exactly the trap its docstring warns
+# about. So the phrase is what is listed, and it is listed because it was actually
+# written: every entry below was found in the interface and corrected.
+#
+# This catches a copy of the same mistake rather than a new one of the same shape. A
+# word list cannot do better here, and pretending otherwise would be worse than the
+# gap: a guard nobody trusts is a guard nobody reads.
+PHRASES: dict[str, str] = {
+    "Surplus non consomme": "Surplus non consommé",
+    "minerai consomme": "minerai consommé",
+    "fluide brut consomme": "fluide brut consommé",
+    "sous-produit bloque": "sous-produit bloqué",
+    "bloque par": "bloqué par",
+    "est donne en regard": "est donné en regard",
+    "recents conserves": "récents conservés",
+    "recycle {": "recyclé {",
+    "refoules": "refoulés",
+    "ne crédité pas": "ne crédite pas",
+    "A propos": "À propos",
+    "Rien a exporter": "Rien à exporter",
+    "indexe(s)": "indexé(s)",
+}
+
 # Case-insensitive, because a sentence starts with a capital and « Pieces » is as
 # wrong as « pieces ». The capital is put back by :func:`accented`.
 PATTERN = re.compile(
     r"\b(" + "|".join(sorted(ACCENTED, key=len, reverse=True)) + r")\b", re.IGNORECASE
 )
+
+# ``{item}``, ``{iterations}``, ``{ratio}``: the named fields of a sentence that goes
+# through ``.format()``. Replaced by a space rather than deleted, so the words on
+# either side keep their boundaries and stay checked.
+PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 
 
 def accented(word: str) -> str:
@@ -376,7 +434,8 @@ def offences_in(path: Path) -> list[tuple[int, str, str]]:
             continue
         if id(node) in skip or node.value in exempt:
             continue
-        for word in PATTERN.findall(node.value):
+        prose = PLACEHOLDER.sub(" ", node.value)
+        for word in PATTERN.findall(prose):
             found.append((node.lineno, word, node.value[:80].replace("\n", " ")))
     return found
 
@@ -392,6 +451,30 @@ def test_no_string_is_missing_its_accents(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
+def test_no_string_repeats_a_phrase_we_already_corrected(path: Path) -> None:
+    """The half of the guard a word list cannot cover.
+
+    Every phrase in :data:`PHRASES` was written in this interface at some point,
+    read as French, and shipped, because the word that was wrong is a word that is
+    right somewhere else. Listing the phrase is the only way to make the same one
+    fall the next time it is written.
+    """
+    text = path.read_text(encoding="utf-8")
+    tree = ast.parse(text, filename=str(path))
+    skip = docstring_nodes(tree)
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            continue
+        if id(node) in skip:
+            continue
+        for wrong, right in PHRASES.items():
+            if wrong in node.value:
+                found.append(f"  ligne {node.lineno} : « {wrong} » -- écrire « {right} »")
+    assert not found, "\n".join(found)
+
+
+@pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
 def test_every_source_file_is_utf_8(path: Path) -> None:
     """Accents are only safe if the file that holds them can be read back.
 
@@ -403,7 +486,12 @@ def test_every_source_file_is_utf_8(path: Path) -> None:
     raw.decode("utf-8")
 
 
-DOCUMENTS = ("README.md", "docs/format-usine.md")
+# The French documents, and only those. ``README.md`` is the English one and would
+# fail on every second word -- *ingredients*, *reference*, *deficit*, *unite* are all
+# perfectly correct English and all in the dictionary of French words that are wrong
+# without their accent. The rule this file enforces is "French written in French",
+# so what it must scan is the French.
+DOCUMENTS = ("README.fr.md", "docs/format-usine.md")
 
 # File names in this repository are deliberately ASCII, so a document that links to
 # ``docs/migration-repartiteurs.md`` is not misspelling a French word -- it is naming
@@ -417,9 +505,35 @@ def prose_of(line: str) -> str:
     return _PATH_LIKE.sub(" ", line)
 
 
+def test_the_two_readmes_point_at_each_other() -> None:
+    """Somebody landing on either one has to find the other in the first two lines.
+
+    GitHub shows ``README.md``, so that is the English one and the one a visitor
+    from elsewhere meets first. The French one is a click away and says so, and the
+    English one says so too -- a project whose front page is in a language you do
+    not read is a project you close.
+    """
+    english = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+    french = (PROJECT_ROOT / "README.fr.md").read_text(encoding="utf-8").splitlines()
+    assert "(README.fr.md)" in "".join(english[:4])
+    assert "(README.md)" in "".join(french[:4])
+
+
+def test_the_english_readme_is_honest_about_the_interface() -> None:
+    """It must say the interface is still French, above the fold and not in a footnote.
+
+    Someone who reads that and walks away is a user who may come back. Someone who
+    downloads 129 MB to find an interface they cannot read never does.
+    """
+    english = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+    head = english[: english.index("## What this tool does not do")]
+    assert "still in French" in head
+    assert "## Language" in head
+
+
 @pytest.mark.parametrize("name", DOCUMENTS)
 def test_the_documentation_is_written_in_french_too(name: str) -> None:
-    """The README and the format guide are read by the same person as the interface."""
+    """The French README and the format guide are read by the same person as the interface."""
     path = PROJECT_ROOT / name
     if not path.is_file():
         pytest.skip(f"{name} absent")

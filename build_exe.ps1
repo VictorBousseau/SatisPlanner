@@ -52,6 +52,7 @@ $AppName      = "SatisPlanner"
 $Entry        = "main.py"
 $ResourceDir  = "satisplanner\resources"
 $Database     = "$ResourceDir\game_1.2.sqlite"
+$Catalogue    = "$ResourceDir\en.json"
 $IconsDir     = "$ResourceDir\icons"
 $AppIcon      = "$ResourceDir\satisplanner.ico"
 
@@ -144,6 +145,7 @@ $Arguments = @(
     # chemins relatifs, et une source relative serait cherchee sous build\.
     "--add-data", "$((Resolve-Path $Database).Path);satisplanner\resources",
     "--add-data", "$((Resolve-Path $AppIcon).Path);satisplanner\resources",
+    "--add-data", "$((Resolve-Path $Catalogue).Path);satisplanner\resources",
     "--exclude-module", "tkinter",
     "--exclude-module", "pytest"
 )
@@ -172,6 +174,12 @@ if (-not (Test-Path $EmbeddedDatabase)) {
     Fail "la base n'a pas ete embarquee ($EmbeddedDatabase). L'application demarrerait avec une palette vide."
 }
 Write-Host "base embarquee : OK"
+
+$EmbeddedCatalogue = "$Internal\satisplanner\resources\en.json"
+if (-not (Test-Path $EmbeddedCatalogue)) {
+    Fail "le catalogue anglais n'a pas ete embarque ($EmbeddedCatalogue). L'interface anglaise resterait entierement en francais."
+}
+Write-Host "catalogue anglais embarque : OK"
 
 $EmbeddedIcons = "$Internal\satisplanner\resources\icons"
 if ($NoAssets) {

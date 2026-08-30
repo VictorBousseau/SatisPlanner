@@ -16,6 +16,7 @@ import time
 from typing import Final
 
 from satisplanner import __version__, logging_setup
+from satisplanner.core.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -31,22 +32,22 @@ ICON_FILENAME: Final = "satisplanner.ico"
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="satisplanner",
-        description="Planificateur d'usines théoriques pour Satisfactory.",
+        description=_("Planificateur d'usines théoriques pour Satisfactory."),
     )
     parser.add_argument("--version", action="version", version=f"SatisPlanner {__version__}")
-    parser.add_argument("--verbose", "-v", action="store_true", help="journalisation détaillée")
+    parser.add_argument("--verbose", "-v", action="store_true", help=_("journalisation détaillée"))
     parser.add_argument(
         "--startup-probe",
         action="store_true",
-        help="afficher la fenêtre, mesurer le temps de démarrage, puis quitter",
+        help=_("afficher la fenêtre, mesurer le temps de démarrage, puis quitter"),
     )
     parser.add_argument(
-        "--no-splash", action="store_true", help="ne pas afficher l'écran de démarrage"
+        "--no-splash", action="store_true", help=_("ne pas afficher l'écran de démarrage")
     )
     parser.add_argument(
         "--self-check",
         action="store_true",
-        help="dérouler la liste de vérification de l'exécutable, puis quitter",
+        help=_("dérouler la liste de vérification de l'exécutable, puis quitter"),
     )
     parser.add_argument(
         "--quiet",
@@ -70,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from satisplanner import paths
     from satisplanner.ui.crash import show_crash_report
-    from satisplanner.ui.localisation import install_french_translations
+    from satisplanner.ui.localisation import install_stored_language
     from satisplanner.ui.main_window import MainWindow
     from satisplanner.ui.splash import finish_splash, show_splash
     from satisplanner.ui.theme import apply_theme
@@ -86,7 +87,10 @@ def main(argv: list[str] | None = None) -> int:
     # Hung as soon as there is an application to show a box with, and before the
     # window is built: loading the catalogue is itself something that can fail.
     logging_setup.install_excepthook(show_crash_report)
-    install_french_translations()
+    # Before any dialog can be built: "Cancel" under a French question is this
+    # application's own text and Qt's text disagreeing. The window sets the
+    # language again from the same preference, and both are cheap.
+    install_stored_language()
     apply_theme(app)
 
     # Before the catalogue is read, which is the expensive half of what is left.
@@ -121,9 +125,9 @@ def _show_self_check(window: object, passed: bool, text: str) -> None:
 
     box = QMessageBox(window if isinstance(window, QWidget) else None)
     box.setIcon(QMessageBox.Icon.Information if passed else QMessageBox.Icon.Critical)
-    box.setWindowTitle("Vérification de l'exécutable")
+    box.setWindowTitle(_("Vérification de l'exécutable"))
     box.setText(
-        "Toutes les vérifications sont passées." if passed else "Une vérification a échoué."
+        _("Toutes les vérifications sont passées.") if passed else _("Une vérification a échoué.")
     )
     box.setDetailedText(text)
     box.exec()

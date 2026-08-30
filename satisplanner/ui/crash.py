@@ -15,6 +15,7 @@ import logging
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
 
+from satisplanner.core.i18n import _
 from satisplanner.logging_setup import CrashReport
 
 logger = logging.getLogger(__name__)
@@ -42,12 +43,14 @@ def show_crash_report(report: CrashReport) -> None:
     # order to be helped. The log path is in it too, so this button is a superset
     # of the other and the other is kept only for the reader who wants to open the
     # file rather than send its contents.
-    copy_details = box.addButton("Copier les détails", QMessageBox.ButtonRole.ActionRole)
+    copy_details = box.addButton(_("Copier les détails"), QMessageBox.ButtonRole.ActionRole)
     copy_details.clicked.connect(lambda: _copy(report.clipboard_text))
     _keep_open(box, copy_details)
 
     if report.log_path is not None:
-        copy_path = box.addButton("Copier le chemin du journal", QMessageBox.ButtonRole.ActionRole)
+        copy_path = box.addButton(
+            _("Copier le chemin du journal"), QMessageBox.ButtonRole.ActionRole
+        )
         copy_path.clicked.connect(lambda: _copy(str(report.log_path)))
         _keep_open(box, copy_path)
     box.exec()

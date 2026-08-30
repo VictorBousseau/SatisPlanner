@@ -515,6 +515,7 @@ def parse_items(
                 display_name=display_name,
                 display_name_fr=_label(class_name, display_name, labels),
                 description_fr=_label(class_name, cls.get("mDescription", ""), descriptions or {}),
+                description_en=cls.get("mDescription", ""),
                 form=form,
                 stack_size=conversions.stack_size(parse_float(cls.get("mCachedStackSize")), form),
                 icon_file=parse_icon_filename(
@@ -704,6 +705,10 @@ def parse_recipes(
                     ""
                     if availability is RecipeAvailability.PLACEABLE
                     else _label(machine, machine_names.get(machine, machine), labels)
+                ),
+                building_name_en=(
+                    "" if availability is RecipeAvailability.PLACEABLE
+                    else machine_names.get(machine, machine)
                 ),
             )
         )

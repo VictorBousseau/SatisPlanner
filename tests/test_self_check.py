@@ -64,8 +64,11 @@ def test_a_failing_step_is_a_line_and_not_a_traceback(
     assert "[ÉCHEC] Export PDF" in text
     assert "l'export a échoué" in text
     assert "Traceback" not in text
-    # And the checks after the failure still ran.
-    assert text.count("[OK   ]") == 7
+    # And every other check still ran. Counted against the runner's own list rather
+    # than against a number written here, so adding a step does not fail this test
+    # for a reason that has nothing to do with what it is about.
+    total = len(self_check.SelfCheck(window, tmp_path / "compte").run())
+    assert text.count("[OK   ]") == total - 1
 
 
 def test_the_report_names_where_the_resources_came_from(window: MainWindow, tmp_path: Path) -> None:

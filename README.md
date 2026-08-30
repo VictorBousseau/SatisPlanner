@@ -1,71 +1,90 @@
 # SatisPlanner
 
-Planificateur d'usines **théoriques** pour Satisfactory 1.2. On pose des nœuds sur un canvas
-(gisement → fonderie → constructeur → assembleuse, pétrole → raffinerie…), on les relie par des
-convoyeurs et des tuyauteries, et l'application calcule en régime permanent : débits, nombre de
-machines réellement utile, goulots d'étranglement, saturation des lignes, consommation électrique
-et liste des bâtiments à construire.
+*English — [Français](README.fr.md)*
 
-L'application est **autonome** : la base de recettes est embarquée dans l'exécutable, il n'y a
-rien à configurer, et **Satisfactory n'a pas besoin d'être installé** sur la machine qui l'exécute.
+> **The interface is still in French.** The English translation is under way and this page is
+> the first part of it. If you are here from Reddit: read this before you download 129 MB —
+> the [Language](#language) section says exactly where it stands, so you can decide now
+> rather than after the install.
 
-Ce n'est **ni un mod ni un lecteur de sauvegarde**. Aucune interaction avec le jeu en cours
-d'exécution, aucun accès réseau au runtime.
+A planner for **theoretical** Satisfactory 1.2 factories. You drop nodes on a canvas — ore node
+→ smelter → constructor → assembler, oil → refinery — join them with belts and pipes, and the
+application solves the steady state: throughputs, how many machines are actually useful,
+bottlenecks, line saturation, power draw, and the list of buildings to put down.
 
-## Ce que l'outil ne fait pas
+It is **self-contained**: the recipe database is embedded in the executable, there is nothing to
+configure, and **Satisfactory does not have to be installed** on the machine running it.
 
-Autant le dire avant d'ouvrir la fenêtre.
+It is **neither a mod nor a save-file reader**. No interaction with the running game, no network
+access at runtime.
 
-- **Il raisonne en débits, pas en géométrie.** Aucune notion de distance, d'élévation, ni de
-  hauteur de refoulement des pompes. Un tuyau dont le débit théorique passe sera déclaré valide,
-  même si en jeu il faudrait une pompe. Une usine validée ici tient sur le papier, pas
-  nécessairement sur le terrain.
-- **Régime permanent uniquement.** Les tampons sont des puits et des sources infinis, jamais des
-  réservoirs simulés dans le temps. L'application dit si les débits sont tenables et en combien de
-  temps un stock se vide, mais ne joue pas le film.
-- **Pas de Somersloop ni d'amplification de production.** Le surcadençage, lui, est modélisé :
-  de 1 % à 250 %, débits proportionnels et électricité en loi de puissance. (Somersloop en V2)
-- **L'électricité est un compteur, pas une contrainte.** Consommation et production sont
-  affichées côte à côte, et un déficit est signalé en erreur — mais il ne bride aucun débit. En
-  jeu, manquer de courant ne ralentit pas l'usine : cela disjoncte tout le réseau jusqu'à
-  intervention manuelle. Afficher tout à zéro n'apprendrait rien, et un bridage partiel serait une
-  invention. Les générateurs tournent à 100 % : leur surcadençage suit un exposant différent de
-  celui des machines. (V2)
-- **Deux modes, et c'est l'usine qui choisit.** En **simple** — le défaut d'une usine neuve — un
-  port porte autant de lignes qu'on veut, le partage max-min se fait là, et les raccords sont
-  déduits pour la liste de courses sans être dessinés : c'est le mode pour réfléchir aux débits.
-  En **fidèle**, la règle du jeu s'applique — un port, une ligne — et un répartiteur ou un groupeur
-  est un nœud qu'on pose et qu'on voit : c'est le mode pour construire. Le réglage vit dans le
-  document et voyage avec lui, parce qu'il change les chiffres. Les raccords ne sont jamais un
-  goulot — un répartiteur passe 2000 items/min quand le meilleur convoyeur plafonne à 1200 — mais
-  ils décident du partage.
-- **Toutes les machines du jeu sont au catalogue** : les 291 recettes que Satisfactory fabrique
-  dans une machine s'y posent, Mélangeur, Convertisseur, Accélérateur de particules et Encodeur
-  quantique compris. Ce qui reste dehors, ce sont les **26 recettes fabriquées à la main** à
-  l'atelier d'équipement — parachute, tronçonneuse, fusil — et elles n'y sont pas en silence : la
-  base les conserve et la fiche d'un objet les montre grisées, en disant qu'un atelier ne sera
-  jamais un nœud d'usine. Reste hors périmètre le Clean Pipeline.
-- **Le nombre de machines est une saisie**, pas un résultat — sauf si vous demandez l'inverse.
-  « Je veux 2 Cadres modulaires lourds par minute » est le **mode objectif**, et il construit
-  l'usine ; mais il n'**optimise** rien. Il suit la recette standard, ou celle que vous imposez,
-  sans jamais chercher la meilleure combinaison d'alternatives : cela demanderait un programme
-  linéaire, donc une dépendance, et c'est de la V2.
-- **Il ne connaît pas votre carte.** Une usine générée pose ses gisements en pureté normale avec
-  le premier extracteur venu, et le dit. Rien dans les fichiers du jeu ne sait où sont vos nœuds
-  ni ce qu'ils valent.
+## Language
 
-## Installation
+| | |
+| --- | --- |
+| The game's vocabulary — items, recipes, buildings, in-game descriptions | **both languages, already** |
+| Numbers — decimal separator, percent sign | **both languages** |
+| `.sfp` files and share codes | **language-independent**, proven by test |
+| Menus, panels, diagnostics, node faces, help page | **French only, for now** |
 
-### Pour utiliser l'application
+Nothing here is translated by hand from the game: item and building names come from the game's
+own `fr.json` and `en-US.json`. A *Façonneuse* becomes a **Manufacturer** because Coffee Stain
+says so, not because it looked like the right word.
 
-Récupérer le dossier construit, le décompresser où l'on veut, lancer `SatisPlanner.exe`. Il n'y a
-pas d'installateur, pas de dépendance à installer, rien à configurer. Windows peut afficher un
-avertissement SmartScreen au premier lancement — l'exécutable n'est pas signé.
+The 749 hand-written sentences of the interface are the work in progress. `--self-check` counts
+how many have an English twin, so no build can ship half-translated without saying so.
 
-### Pour développer
+**Developer documentation stays French only.** `docs/format-usine.md`, the code comments and the
+docstrings are for people working on the code, and a technical document translated twice drifts
+apart at the first change. The docstrings are in English already; the prose around them is not.
 
-Windows, Python 3.12. Le lanceur `py` est utilisé car `python` nu peut renvoyer le raccourci
-Microsoft Store.
+## What this tool does not do
+
+Better said before you open the window.
+
+- **It reasons about throughput, not geometry.** No notion of distance, elevation or pump head.
+  A pipe whose theoretical flow fits is declared valid even if the game would need a pump. A
+  factory validated here holds on paper, not necessarily on the ground.
+- **Steady state only.** Buffers are infinite sinks and sources, never tanks simulated over time.
+  The application tells you whether the rates hold and how long a stock takes to drain, but it
+  does not play the film.
+- **No Somersloop, no production amplification.** Overclocking *is* modelled: 1 % to 250 %,
+  throughput in proportion and power by a power law.
+- **Power is a counter, not a constraint.** Draw and production are shown side by side and a
+  shortfall is raised as an error — but it throttles nothing. In game, running out of power does
+  not slow the factory down: it trips the whole grid until someone resets it. Showing everything
+  at zero would teach nothing, and a partial throttle would be an invention.
+- **Two modes, and the factory picks.** In **simple** — what a new factory gets — a port carries
+  as many lines as you like, max-min sharing happens there, and fittings are deduced for the
+  shopping list without being drawn: this is the mode for thinking about rates. In **faithful**,
+  the game's rule applies — one port, one line — and a splitter or a merger is a node you place
+  and see: this is the mode for building. The setting lives in the document and travels with it,
+  because it changes the figures.
+- **Every machine in the game is in the catalogue**: the 291 recipes Satisfactory makes in a
+  machine can all be placed, Blender, Converter, Particle Accelerator and Quantum Encoder
+  included. What stays out is the **26 hand-crafted recipes** at the Equipment Workshop —
+  parachute, chainsaw, rifle — and they are not out in silence: the database keeps them and an
+  item card shows them greyed out, saying a workshop will never be a factory node.
+- **The machine count is an input**, not a result — unless you ask for the opposite. "I want 2
+  Heavy Modular Frames a minute" is the **goal mode**, and it builds the factory; but it
+  **optimises** nothing. It follows the standard recipe, or the one you pin, and never looks for
+  the best combination of alternates: that would need a linear program, hence a dependency.
+- **It does not know your map.** A generated factory puts its resource nodes at normal purity
+  with the first extractor available, and says so. Nothing in the game files knows where your
+  nodes are or what they are worth.
+
+## Install
+
+### To use it
+
+Get the built folder, unzip it wherever you like, run `SatisPlanner.exe`. No installer, no
+dependency, nothing to configure. Windows may show a SmartScreen warning on first launch — the
+executable is not signed.
+
+### To develop
+
+Windows, Python 3.12. The `py` launcher is used because a bare `python` can resolve to the
+Microsoft Store shim.
 
 ```bash
 py -3.12 -m venv .venv
@@ -73,13 +92,13 @@ py -3.12 -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"
 ```
 
-Lancer l'application :
+Run it:
 
 ```bash
 .venv/Scripts/python.exe main.py
 ```
 
-Vérifications :
+Checks:
 
 ```bash
 .venv/Scripts/python.exe -m pytest
@@ -87,355 +106,252 @@ Vérifications :
 .venv/Scripts/python.exe -m mypy
 ```
 
-### Les icônes n'arrivent pas avec le clone, et c'est voulu
+### The icons do not come with the clone, and that is deliberate
 
-**Après un `git clone`, `satisplanner/resources/icons/` n'existe pas.** Ce n'est pas un
-incident : le dossier est dans le `.gitignore` parce que les icônes appartiennent à Coffee
-Stain Studios et ne sont pas redistribuables. L'application démarre et fonctionne
-normalement — chaque classe sans fichier est dessinée par le repli génératif, qui est un
-mode de fonctionnement nominal — mais les vignettes seront des carrés colorés à initiales.
+**After `git clone`, `satisplanner/resources/icons/` does not exist.** That is not a fault: the
+folder is in `.gitignore` because the icons belong to Coffee Stain Studios and are not
+redistributable. The application starts and works normally — every class without a file is drawn
+by the generative fallback, which is a nominal mode of operation, not a degradation — but the
+thumbnails will be coloured squares with initials.
 
-Pour avoir les icônes du jeu sur une machine, il faut les extraire de **son propre
-exemplaire du jeu**, avec la procédure FModel décrite plus bas, puis déposer l'export dans
-l'un des deux dossiers que l'application indexe :
+To get the game's icons on a machine you have to extract them from **your own copy of the game**,
+with the FModel procedure below, then drop the export into either folder the application indexes:
 
-| Dossier | Ce qu'il sert |
-|---------|---------------|
-| `satisplanner/resources/icons/` | c'est celui-là qui part dans l'exe complet |
-| `%LOCALAPPDATA%\SatisPlanner\icons\` | ou le dossier désigné dans les préférences |
+| Folder | What it is for |
+|--------|----------------|
+| `satisplanner/resources/icons/` | this is the one that goes into the full build |
+| `%LOCALAPPDATA%\SatisPlanner\icons\` | or whichever folder the preferences name |
 
-L'arborescence interne n'a aucune importance : l'index est **récursif et par nom de
-fichier**. Gardez la structure que FModel produit.
+The internal tree does not matter: the index is **recursive and by file name**. Keep whatever
+structure FModel produced.
 
-Compteur de vérification, à la racine du dépôt :
+Counter, from the repository root:
 
 ```bash
 .venv\Scripts\python.exe -c 'from satisplanner.data import db; from satisplanner.data.icons import IconIndex, default_icon_roots; g = db.load_game_data_from_file(db.default_database_path()); x = IconIndex(default_icon_roots()); print(len(x), sum(x.resolve(o.icon_file) is None for o in g.items.values()), sum(x.resolve(o.icon_file) is None for o in g.buildings.values()))'
 ```
 
-Trois nombres : fichiers indexés, objets au repli, bâtiments au repli. Sur un clone nu,
-`0 195 32`. **Aide ▸ À propos** dit la même chose en une phrase, et le journal l'écrit à
-chaque démarrage — c'est ce qui distingue « je n'ai pas d'icônes » de « le repli
-fonctionne comme prévu », deux situations qui se ressemblent à l'écran et n'appellent pas
-la même réaction.
+Three numbers: files indexed, items on the fallback, buildings on the fallback. On a bare clone,
+`0 195 32`. **Help ▸ About** says the same thing in one sentence and the log writes it at every
+start — which is what tells "I have no icons" apart from "the fallback is working as designed",
+two situations that look alike on screen and call for opposite reactions.
 
-## Utilisation
+## Using it
 
-Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
+Palette on the left, open factories in the middle, three panels on the right.
 
-- **Onglets** : plusieurs usines ouvertes à la fois. `Ctrl+N` ou `Ctrl+T` pour un nouvel onglet,
-  `Ctrl+W` pour fermer celui du dessus, `Ctrl+Tab` pour passer au suivant ; ouvrir un fichier ou
-  importer un code de partage ouvre son propre onglet, et un fichier récent aussi. Le titre de
-  l'onglet porte le nom du fichier et un point quand il reste du travail non enregistré.
-  **Chaque onglet garde son zoom, son cadrage et sa sélection** : y revenir retrouve l'usine là où
-  on l'avait laissée. `Annuler` défait toujours dans l'usine qu'on regarde, jamais dans une autre.
-  Les préférences, la palette et les couleurs par objet restent communes à toute l'application.
-- **Palette** : recherche insensible aux accents et par mots indépendants (« alt plaque » trouve
-  « Alternative : plaque de fer moulée »), filtre par machine, bascules pour les recettes
-  alternatives et les objets d'événement, et le tier par défaut des nouvelles lignes.
-  Glisser-déposer vers le canvas, **Entrée** pour poser au centre de la vue, et
-  **double-clic pour ouvrir la fiche** de l'objet.
-- **Fiche d'objet** : double-clic dans la palette, ou clic droit ▸ « Fiche de… » sur un nœud.
-  Description du jeu, forme, taille de pile, points au collecteur AWESOME, puis toutes les recettes
-  qui le fabriquent — machine, durée de cycle, quantités par cycle et débits par minute,
-  sous-produits, électricité — puis celles qui le consomment, puis le coût en ressources brutes.
-  Chaque ingrédient est un lien vers sa propre fiche, avec précédent et suivant : on suit une
-  chaîne de fabrication comme on suit un wiki. Chaque recette porte un bouton « poser sur le
-  canvas ». Le coût en minerai est **indicatif et le dit** : il ne suit que les recettes standard
-  et ne crédite pas les sous-produits.
-  **Ce que le catalogue ne sait pas faire, la fiche le dit** au lieu de se taire : les recettes
-  que le jeu possède et qu'aucun nœud ne peut poser apparaissent grisées, sans bouton, avec ce
-  qui les en empêche — une machine pas encore modélisée, ou une fabrication à la main. Et un
-  objet qu'aucune recette du jeu ne produit dit d'où il vient : ramassé dans le monde, ou tombé
-  d'un bâtiment hors périmètre. Sans cela, « hors périmètre » et « absent des données » se
-  ressemblent, et c'est ce qui a fait croire à un trou sur la cellule d'uranium.
-- **Puits de ressource** : un nœud à part, et pas un gisement élargi. La pureté d'un puits est
-  **par satellite** — un pressuriseur en ouvre plusieurs d'un coup et rien ne dit qu'ils se
-  ressemblent — donc le nœud porte un décompte, « 1 impur · 2 normaux · 3 purs », chaque nombre
-  éditable d'un double-clic. C'est aussi le seul nœud qui pose **deux bâtiments** : le
-  pressuriseur, qui consomme les 150 MW à lui seul, et les satellites, qui n'en consomment
-  aucun et donnent 30, 60 ou 120 m³/min chacun. Trois ressources en ont dans le jeu — pétrole
-  brut, azote, eau — et **l'azote n'a que cela** : c'est ce qui ouvre l'acide nitrique, le
-  système de refroidissement, le cadre modulaire fusionné et la dernière phase.
-- **Gisements** : la pureté et le type d'extracteur se lisent sur le nœud
-  (« 1 Foreuse Mk.3 — gisement pur ») et se changent par clic droit ou par les colonnes du
-  tableau, sans supprimer le nœud ni ses lignes. **La pureté appartient au gisement** : elle
-  multiplie tous les extracteurs du nœud. Deux gisements de puretés différentes sont deux nœuds,
-  et c'est la seule façon de les représenter.
-- **Centrale nucléaire** : 2500 MW, 240 m³/min d'eau, et **des déchets sur un convoyeur** —
-  10 déchets d'uranium par minute, 1 déchet de plutonium, rien du tout avec une barre de
-  ficsonium. C'est le seul générateur du jeu qui remette de la matière dans l'usine, et la règle
-  du sous-produit s'y applique entière : **une centrale dont les déchets ne vont nulle part
-  s'arrête**, comme une raffinerie, et ne produit plus un mégawatt.
-- **Générateur géothermique** : ni entrée ni sortie, un nœud à part. C'est la **pureté du
-  geyser** qui décide, et elle se saisit comme celle d'un gisement parce que rien dans les
-  données du jeu ne dit où sont les geysers de votre carte. Le bilan compte la moyenne —
-  **100, 200 ou 400 MW** — qui sont les chiffres que le jeu imprime lui-même dans la description
-  du bâtiment. Pas de cadence : le jeu refuse de le surcadencer, seul de tous les générateurs.
-- **Puissance variable** : le Convertisseur, l'Accélérateur de particules et l'Encodeur quantique
-  consomment selon **ce qu'ils fabriquent** et non selon ce qu'ils sont. Leur plaque est à zéro et
-  le chiffre est porté par la recette, entre deux bornes que la consommation parcourt en jeu. Le
-  bilan retient la **moyenne**, soit le milieu de l'oscillation, parce que ce modèle est en régime
-  permanent ; la fiche d'objet affiche les deux bornes à côté — « 1000 MW en moyenne (0 à 2000) »
-  pour l'Encodeur, qu'il vaut mieux savoir avant de dimensionner une centrale.
-- **Cadence** : chaque extracteur et chaque machine se règle de 1 % à 250 % (clic droit ▸
-  « Cadence… », ou la colonne du tableau). Un nœud dont la cadence n'est pas 100 % l'affiche en
-  toutes lettres. Le débit suit la cadence exactement ; l'électricité suit une loi de puissance,
-  et les éclats de charge nécessaires apparaissent dans la liste de courses.
-- **Générateurs** : brûleur de biomasse, générateur à charbon et générateur à carburant. Le
-  carburant se lit sur le nœud (« 1 unité(s) — Charbon — 75 MW produits ») et se change par clic
-  droit ▸ « Carburant » ou par la colonne du tableau ; seuls les carburants que le bâtiment accepte
-  sont proposés. **L'eau d'appoint du générateur à charbon est une vraie entrée fluide** : elle se
-  raccorde par tuyauterie et subit les mêmes contraintes de capacité et de contre-pression que
-  n'importe quelle autre. Les débits sont déduits de la puissance produite et de la valeur
-  énergétique de l'item, jamais codés en dur.
-- **Raccords** : un **répartiteur** et un **groupeur** se posent depuis la section « Raccords » de
-  la palette. Un répartiteur prend une ligne et en ressort jusqu'à trois, un groupeur fait
-  l'inverse ; ils ne brident rien et ne gardent rien, mais ils décident du partage. Le **mode** se
-  lit sur le nœud sans un clic et se change par clic droit ou par la colonne du tableau :
-  **standard**, **intelligent** (une branche réglée) ou **programmable** (toutes). Le seul réglage
-  qui déplace des chiffres est **« surplus »** — cette branche ne prend que ce dont les autres
-  n'ont pas voulu — parce qu'une ligne ne porte qu'un objet : filtrer une branche sur ce qu'elle
-  transporte déjà ne change rien, et la filtrer sur autre chose la ferme. Les trois bâtiments ne
-  coûtent pas la même chose, et les matériaux de construction suivent.
-- **Générer une usine** (`Ctrl+G`) : « 2 Cadres modulaires lourds par minute » et l'usine se
-  développe seule, dans un onglet neuf — machines, lignes, raccords, gisements et sorties. Deux
-  variantes : **ratios exacts**, avec des machines en nombre décimal et tout à 100 %, ou **arrondi
-  au bâtiment entier**, constructible tel quel, avec un conteneur là où l'arrondi crée un surplus.
-  Une recette peut être **imposée par objet** — c'est là que les alternatives entrent, par choix et
-  non par calcul — et ce choix est retenu d'une session à l'autre. Ce qui en sort est une usine
-  ordinaire : modifiable, enregistrable, annulable. Le rapport de génération dit en tête ce qui
-  reste à régler, à commencer par la pureté des gisements.
-- **Édition en place** : **double-clic sur une valeur affichée sur un nœud** — nombre de machines,
-  cadence, pureté, extracteur, carburant, débit d'un apport externe, stock d'un tampon — ou sur une
-  ligne pour son tier. Entrée valide, Échap annule, une valeur hors domaine est refusée **sans être
-  effacée**, avec la raison dans la barre d'état. Les champs à valeurs discrètes ouvrent la même
-  liste déroulante que le tableau, jamais une saisie libre.
-- **Copier-coller** : `Ctrl+C` / `Ctrl+X` / `Ctrl+V`, plus `Ctrl+D` pour dupliquer sans toucher au
-  presse-papiers. Les lignes internes à la sélection suivent, celles qui en sortaient non — elles
-  n'auraient plus rien à quoi s'accrocher. Un collage est **une seule annulation**. La sélection
-  voyage dans le presse-papiers système au format code de partage, donc **entre deux onglets et
-  entre deux fenêtres**. Un presse-papiers qui contient autre chose est ignoré en silence.
-- **Modules** (`Ctrl+Maj+M` pour enregistrer, `Ctrl+B` pour la bibliothèque) : une sélection
-  s'enregistre sous un nom — « Plaque de fer 40/min » — et se réinsère dans n'importe quel projet,
-  au centre de la vue et **en une seule annulation**. La bibliothèque vit dans `%LOCALAPPDATA%`,
-  un fichier par module, et se cherche par nom, par description ou par objet produit. Renommer,
-  décrire, supprimer. Un module s'ouvre aussi **dans son propre onglet** pour être modifié puis
-  réenregistré sous le même nom ou sous un autre, et « Nouveau depuis ce module » démarre une usine
-  sur cette base.
+- **Tabs**: several factories open at once. `Ctrl+N` or `Ctrl+T` for a new tab, `Ctrl+W` to close
+  the top one, `Ctrl+Tab` to cycle. **Each tab keeps its own zoom, framing and selection**:
+  coming back finds the factory where you left it. `Undo` always undoes in the factory you are
+  looking at, never in another.
+- **Palette**: accent-insensitive search, word by word, filter by machine, toggles for alternate
+  recipes and event items. Drag to the canvas, **Enter** to drop at the centre of the view, and
+  **double-click to open an item's card**.
+- **Item card**: the game's description, form, stack size, AWESOME Sink points, then every recipe
+  that makes it — machine, cycle time, amounts per cycle and rates per minute, byproducts, power
+  — then the ones that consume it, then the cost in raw resources. Every ingredient is a link to
+  its own card, with back and forward: you follow a production chain the way you follow a wiki.
+  The ore cost is **indicative and says so**: it expands standard recipes only and credits no
+  byproducts.
+  **What the catalogue cannot make, the card says** instead of staying quiet: recipes the game
+  has and no node can place appear greyed out, without a button, with what stops them. And an
+  item no recipe in the game produces says where it comes from: picked up in the world, or a
+  byproduct. Without that, "out of scope" and "missing from the data" look the same.
+- **Resource wells**: a node kind of its own, not a widened deposit. A well's purity is **per
+  satellite** — one pressuriser opens several at once and nothing says they match — so the node
+  carries a tally, "1 impure · 2 normal · 3 pure", each number editable with a double-click. It
+  is also the only node that puts down **two buildings**: the pressuriser, which draws all
+  150 MW, and the satellites, which draw none and give 30, 60 or 120 m³/min each. Three
+  resources have wells — crude oil, nitrogen, water — and **nitrogen has nothing else**.
+- **Resource nodes**: purity and extractor type read on the node face and change by right-click
+  or from the table, without deleting the node or its lines. **Purity belongs to the deposit**:
+  it multiplies every extractor on the node. Two deposits of different purity are two nodes.
+- **Nuclear power plant**: 2500 MW, 240 m³/min of water, and **waste on a conveyor** — 10 uranium
+  waste a minute, 1 plutonium waste, nothing at all on a ficsonium rod. It is the only generator
+  in the game that puts matter back into the factory, and the byproduct rule applies in full: **a
+  plant whose waste goes nowhere stops**, like a refinery, and produces not one megawatt.
+- **Geothermal generator**: no input, no output, a node of its own. The **geyser's purity**
+  decides, and it is typed in like a deposit's because nothing in the game files knows where the
+  geysers on your map are. The balance counts the mean — **100, 200 or 400 MW** — which are the
+  figures the game prints in the building's own description.
+- **Variable power**: the Converter, the Particle Accelerator and the Quantum Encoder draw
+  according to **what they are making**, not to what they are. Their nameplate is zero and the
+  figure is on the recipe, between two bounds the draw travels between in game. The balance keeps
+  the **mean**; the item card shows both bounds beside it — "1000 MW on average (0 to 2000)" for
+  the Encoder, worth knowing before sizing a power plant.
+- **Clock speed**: every extractor and every machine sets from 1 % to 250 %. Throughput follows
+  the clock exactly; power follows a power law, and the power shards needed appear in the
+  shopping list.
+- **Generators**: biomass burner, coal generator, fuel generator, nuclear plant. The fuel reads
+  on the node face and changes by right-click or from the table; only fuels the building accepts
+  are offered. **The coal generator's make-up water is a real fluid input**: it is piped in and
+  subject to the same capacity and back-pressure rules as anything else. Rates are derived from
+  the power produced and the item's energy value, never hard-coded.
+- **Fittings**: a **splitter** and a **merger** are placed from the palette. A splitter takes one
+  line and puts out up to three, a merger does the reverse; they throttle nothing and keep
+  nothing, but they decide the sharing. The **mode** reads on the node without a click:
+  **standard**, **smart** (one branch set) or **programmable** (all of them). The only setting
+  that moves figures is **overflow** — that branch takes only what the others did not want —
+  because a line carries one item: filtering a branch on what it already carries changes nothing,
+  and filtering it on something else closes it.
+- **Generate a factory** (`Ctrl+G`): "2 Heavy Modular Frames per minute" and the factory lays
+  itself out in a fresh tab — machines, lines, fittings, resource nodes and exits. Two variants:
+  **exact ratios**, with fractional machine counts and everything at 100 %, or **rounded to whole
+  buildings**, buildable as it stands, with a container wherever the rounding leaves a surplus. A
+  recipe can be **pinned per item** — that is where alternates come in, by choice and not by
+  calculation. What comes out is an ordinary factory: editable, savable, undoable.
+- **In-place editing**: **double-click a value shown on a node** — machine count, clock, purity,
+  extractor, fuel, external rate, buffer stock — or a line for its tier. Enter commits, Escape
+  cancels, an out-of-range value is refused **without being erased**, with the reason in the
+  status bar.
+- **Copy and paste**: `Ctrl+C` / `Ctrl+X` / `Ctrl+V`, plus `Ctrl+D` to duplicate without touching
+  the clipboard. Lines internal to the selection follow, lines leaving it do not. A paste is **one
+  undo**. The selection travels through the system clipboard as a share code, so **between tabs
+  and between windows**.
+- **Modules** (`Ctrl+Shift+M` to save, `Ctrl+B` for the library): a selection is saved under a
+  name — "Iron Plate 40/min" — and re-inserted into any project, at the centre of the view and in
+  **one undo**. An inserted module is a **copy**: editing it afterwards does not change the
+  module, and editing the module does not change the factories it is already in.
+- **Deployed machines** (`Ctrl+M`, off by default): one thumbnail per built machine, in a grid.
+  **Purely visual**: no figure changes.
+- **Canvas**: a connection is dragged from an output port to an input port. **An impossible link
+  is refused during the drag** — the line turns red with the reason in a tooltip — not reported
+  afterwards.
+- **Table**: one row per node, sorting, filtering, selection synchronised both ways with the
+  canvas, editable "Quantity" column, plus clock, purity, extractor and fuel.
+- **Totals**: raw materials, fluids and byproducts, power, shopping list, construction materials.
+  When the factory is living off a stock, a red banner and two columns of figures — "with stocks"
+  and "steady state" — replace the silence that would look like success.
+- **Construction materials**: what you must have made before you can build the factory,
+  aggregated per item, read from the game's own build recipes. One level deep. **Belts and pipes
+  are not costed**: their cost is paid by length and the tool knows no distance. The blank is
+  explicit and counts the lines concerned.
+- **Diagnostics**: sorted by level, filterable, **clickable** — selecting a line selects and
+  centres the node or line concerned. When a diagnostic names a fix, a button applies it.
 
-  Deux choses sont écrites à l'écran parce qu'on les suppose à l'envers. Un module inséré est une
-  **copie** : le modifier ensuite ne change pas le module, et modifier le module ne change pas les
-  usines où il est déjà. Et les débits affichés sont ceux du module **seul**, calculés à
-  l'enregistrement en le résolvant avec ses entrées servies et ses sorties écoulées — sans quoi un
-  module pris au milieu d'une chaîne s'étiquetterait « produit zéro ». C'est une étiquette, pas une
-  promesse : inséré dans une usine qui l'affame, il en fera moins.
-- **Machines déployées** (`Ctrl+M`, désactivé par défaut) : une vignette par machine bâtie, en
-  grille, avec une vignette partielle pour un compte fractionnaire et « … ×N » au-delà du plafond.
-  Clic droit sur un nœud pour y déroger — afficher, masquer, ou suivre la préférence. **Purement
-  visuel** : aucun chiffre ne change, aucun nœud ni ligne de liste de courses en plus.
-- **Canvas** : une connexion se tire d'un port de sortie vers un port d'entrée. **Une liaison
-  impossible est refusée pendant le tirage** — le trait devient rouge avec la raison en infobulle
-  — et non signalée après coup. Clic droit sur un nœud pour l'ajuster à ses intrants ou fixer son
-  nombre de machines ; clic droit sur une ligne pour changer de tier ou passer au tier suffisant.
-- **Tableau** : un nœud par ligne, tri, filtre, sélection synchronisée dans les deux sens avec le
-  canvas, colonne « Quantité » éditable — machines, extracteurs, débit d'un apport externe ou
-  stock initial d'un tampon selon le type de nœud — plus « Cadence », « Pureté », « Extracteur »
-  et « Carburant ». Les trois dernières se choisissent dans une liste, jamais en tapant du texte.
-- **Totaux** : matières brutes, fluides et sous-produits, électricité, liste de courses, matériaux
-  de construction. Quand l'usine vit sur un stock, un bandeau rouge et deux colonnes de chiffres —
-  « avec les stocks » et « régime établi » — remplacent le silence qui laisserait croire à une
-  réussite.
-- **Matériaux de construction** : ce qu'il faut avoir fabriqué avant de pouvoir bâtir l'usine,
-  agrégé par objet. Les coûts sont lus dans les recettes du jeu — un bâtiment se construit par une
-  recette comme le reste — et multipliés par les comptes de la liste de courses. Un niveau de
-  profondeur : dix fonderies coûtent cinquante barres de fer, pas le minerai qu'il faut pour les
-  faire. **Les convoyeurs et les tuyaux n'y sont pas chiffrés** : leur coût se paie à la longueur,
-  et l'outil ne connaît aucune distance. Le blanc est explicite et compte les lignes concernées.
-- **Diagnostics** : triés par niveau, filtrables, **cliquables** — sélectionner une ligne
-  sélectionne et centre le nœud ou la ligne concernée. Quand un diagnostic nomme une correction,
-  un bouton l'applique.
+**Help ▸ Gestures and shortcuts** (`F1`) lists every canvas gesture and every shortcut. The
+shortcut table is built from the window's real actions: it cannot drift out of step with the code.
 
-**Aide ▸ Gestes et raccourcis** (`F1`) liste tous les gestes du canvas et tous les raccourcis. La
-table des raccourcis est construite à partir des actions réelles de la fenêtre : elle ne peut pas
-se désynchroniser du code.
+## Files and sharing
 
-**Fichier ▸ Préférences** (`Ctrl+,`) : tier de convoyeur et de tuyauterie par défaut, dossier
-d'icônes, nombre de fichiers récents conservés, affichage par défaut des recettes alternatives et
-des objets d'événement.
+A factory saves as `.sfp`: a ZIP holding `factory.json`, a `manifest.json` (application version,
+game data version, date, schema version) and a `thumbnail.png`.
 
-## Fichiers et partage
+The format is documented field by field in [`docs/format-usine.md`](docs/format-usine.md) — in
+French — with a complete working example, [`docs/exemple-usine.json`](docs/exemple-usine.json),
+covering all **eleven** node kinds, which the test suite loads, solves and checks at 100 %
+everywhere so it cannot go stale in silence.
 
-Une usine s'enregistre en `.sfp` : une archive ZIP contenant `factory.json`, un `manifest.json`
-(version de l'application, version des données de jeu, date, version de schéma) et une vignette
-`thumbnail.png`.
+The same graph shares as one line of text, `SFP1:<base64url(zlib(json))>`, with "copy the code"
+and "import from a code". A truncated, corrupted, badly pasted or future-version code is refused
+by a sentence — never by a traceback.
 
-Le format est décrit champ par champ dans [`docs/format-usine.md`](docs/format-usine.md), avec un
-exemple complet et fonctionnel — [`docs/exemple-usine.json`](docs/exemple-usine.json), couvrant les
-**onze** types de nœuds — que la suite de tests charge, résout et vérifie à 100 % partout, pour
-qu'il ne puisse pas se périmer en silence. Le même document décrit aussi le `.sfm` de la
-bibliothèque de modules, dont la charge utile est un code de partage et non un second format.
+**Neither the file nor the share code depends on the interface language.** A factory designed in
+French opens as the same factory in English, node for node and figure for figure. Three explicit
+tests hold that, because it is the kind of regression you only ever see on someone else's machine.
 
-Le même graphe se partage en une ligne de texte, `SFP1:<base64url(zlib(json))>`, avec « copier le
-code » et « importer depuis un code ». Un code tronqué, corrompu, mal collé ou venu d'une version
-future est refusé par une phrase en français — jamais par une trace d'exécution.
+**A file referencing a class that no longer exists still opens**, but the nodes concerned are
+removed and named, and the rest of the layout is kept. The document is then marked "PARTIAL
+OPEN" in the title, and a reflex `Ctrl+S` cannot overwrite the original without an explicit
+confirmation recalling what was dropped.
 
-**Un fichier qui référence une classe disparue s'ouvre quand même**, mais les nœuds concernés sont
-retirés et nommés, et le reste de la disposition est conservé. Le document est alors marqué
-« OUVERTURE PARTIELLE » dans le titre, et un `Ctrl+S` réflexe ne peut pas écraser le fichier
-d'origine sans une confirmation explicite rappelant ce qui a été retiré. C'est le seul endroit de
-l'application où un geste machinal pourrait détruire le travail de quelqu'un d'autre.
+`satisplanner/data/factory_file.py` holds the **single migration entry point**:
+`migrate(payload, schema_version)` lifts a document one version at a time. The current schema is
+**9**.
 
-`satisplanner/data/factory_file.py` porte le **point d'entrée unique de migration** :
-`migrate(payload, schema_version)` fait remonter un document une version à la fois. Il a servi pour
-la première fois avec la cadence : un fichier de schéma 1 s'ouvre tel quel, la cadence prenant sa
-valeur par défaut de 100 %, et le document est noté comme converti. Le numéro de schéma a été
-incrémenté malgré l'absence de conversion à faire, pour qu'une V1 refuse un fichier V1.1 par une
-phrase plutôt que par une erreur de validation.
+### Why the major numbers follow each other so closely
 
-Le schéma courant est le **9**. Le passage du 4 au 5 est le premier qui écrit quelque chose et le
-premier qui puisse déplacer un chiffre : les répartiteurs qu'une disposition supposait sont
-matérialisés, les lignes reprises à travers eux, et un partage en 5 ou en 7 cesse d'être égal
-parce qu'il ne l'est pas dans le jeu. Le relevé des vingt-et-une usines de référence, avec
-l'ancienne et la nouvelle part de chaque branche touchée, est dans
-[`docs/migration-repartiteurs.md`](docs/migration-repartiteurs.md). Le passage du 5 au 6 ne fait
-rien, et c'est le propos : un répartiteur écrit avant les modes est un `standard`, et un standard
-est le cas du programmable où rien n'est écrit sur aucune branche. Le passage du 6 au 7 lit le
-mode dans le contenu : un document qui porte un répartiteur a été pensé en mode fidèle, un
-document qui n'en porte aucun s'ouvre en simple, et personne n'a rien à migrer. Le passage du
-7 au 8 n'écrit rien non plus : aucun document antérieur ne pouvait contenir un puits de
-ressource, faute de moyen d'en dessiner un, et le 8 au 9 pas davantage pour le geyser.
+**The major number tracks the document schema, and nothing else.** A schema 7 file is refused by a
+2.0 build exactly as a schema 6 file was by a 1.1: the file is the only interface this application
+exposes to its own past, and breaking it is what a major is for. The consequence surprises anyone
+who has not read this: widening the catalogue to everything the game can make ran **three majors
+in a few weeks** — 3.0 for the two fitting modes, 4.0 for the resource well, 5.0 for the missing
+generators — because each of those three adds a node kind, hence a file format an earlier build
+cannot read.
 
-### Pourquoi les numéros majeurs se suivent de si près
+Versions that did **not** touch the document stayed minor: 3.1 brought in the Blender and the 69
+out-of-scope recipes by changing only the **database** schema, which is embedded and does not
+travel.
 
-**Le numéro majeur suit le schéma de document, et rien d'autre.** Un fichier de schéma 7 est
-refusé par un build 2.0 exactement comme un schéma 6 l'était par un 1.1 : le fichier est la seule
-interface que cette application expose à son propre passé, et la casser est ce à quoi sert un
-majeur. La conséquence surprend quand on ne l'a pas lue : en élargissant le catalogue à tout ce
-que le jeu sait fabriquer, **trois majeures se sont succédé en quelques semaines** — 3.0 pour les
-deux modes de raccord, 4.0 pour le puits de ressource, 5.0 pour les générateurs manquants — parce
-que chacune de ces trois-là ajoute un type de nœud, donc un format de fichier qu'un build
-antérieur ne sait pas lire.
+Exports: PNG of the canvas, PDF with the canvas on page one and, optionally, the totals and the
+diagnostics on page two.
 
-Ce n'est ni un dérapage ni une inflation cosmétique. Les versions qui n'ont **pas** touché au
-document sont restées mineures : 3.1 a fait entrer le Mélangeur et les 69 recettes hors périmètre
-en ne changeant que le schéma de la **base de données**, qui est embarquée et ne voyage pas.
-Grouper trois formats incompatibles sous un seul majeur pour que la suite soit plus jolie viderait
-le numéro de ce qu'il annonce.
+## Logs and incidents
 
-Exports : PNG du canvas, PDF avec le canvas en première page et, au choix, les totaux et les
-diagnostics en seconde.
+The application writes to `%LOCALAPPDATA%\SatisPlanner\logs\`:
 
-## Journal et incidents
+- `satisplanner.log` — the normal course of things, rotated (1 MB, three generations);
+- `crash.log` — native crashes, the ones that leave no Python traceback.
 
-L'application écrit un journal dans `%LOCALAPPDATA%\SatisPlanner\logs\` :
+Every uncaught exception is logged with its full traceback, then summarised on screen in one
+readable sentence with the path to the log.
 
-- `satisplanner.log` — le déroulé normal, avec rotation (1 Mo, trois générations) ;
-- `crash.log` — les plantages natifs, ceux qui ne laissent aucune trace Python.
+## Game icons (FModel procedure)
 
-Toute exception non rattrapée est journalisée avec sa trace complète, puis résumée à l'écran en
-une phrase compréhensible accompagnée du chemin du journal. Le code de sortie est journalisé lui
-aussi : un journal qui s'arrête n'est jamais ambigu. Le chemin du journal est rappelé dans
-**Aide ▸ À propos**.
+The application works **with no icons at all**: every class without a file is drawn by
+`ui/icon_provider.py` — a rounded square whose hue comes from a stable hash of the class name,
+with the label's initials in the middle. That is the nominal mode, not a degradation, and it is
+what the distributable build does.
 
-## Icônes du jeu (procédure FModel)
+The game's icons belong to Coffee Stain Studios and are not redistributable. To have them at
+home, extract them from your own copy of the game:
 
-L'application fonctionne **sans aucune icône** : chaque classe sans fichier est dessinée par
-`ui/icon_provider.py` — un carré arrondi dont la teinte vient d'un hachage stable du nom de
-classe, avec les initiales du libellé français au centre. C'est le fonctionnement nominal, pas
-une dégradation, et c'est ce que fait la variante distribuable de l'exécutable.
-
-Les icônes du jeu appartiennent à Coffee Stain Studios et ne sont pas redistribuables. Pour les
-avoir chez soi, il faut les extraire de son propre exemplaire du jeu :
-
-1. Installer **FModel** (<https://fmodel.app>).
-2. Ajouter le répertoire de paks :
+1. Install **FModel** (<https://fmodel.app>).
+2. Add the paks directory:
    `…\Steam\steamapps\common\Satisfactory\FactoryGame\Content\Paks`.
-3. Laisser FModel détecter la version d'Unreal Engine. S'il demande de la choisir, prendre
-   l'entrée UE 5.x qui permet aux archives de se charger : c'est autovérifiant, avec une version
-   fausse rien ne s'ouvre.
-4. Dans l'arborescence, aller dans `FactoryGame/Content/FactoryGame`. Les icônes utiles sont les
-   textures nommées `*_256` : `IconDesc_AssemblerMk1_256`, `GasMask_256`, etc.
-5. Clic droit sur un dossier ▸ **Export Folder's Packages Textures (.png)**. Faire les dossiers
-   `Resource`, `Buildable` et `Equipment` ; l'arborescence produite n'a pas d'importance.
-6. Ouvrir **Fichier ▸ Préférences** dans SatisPlanner et désigner le dossier d'export — ou
-   déposer les fichiers dans `%LOCALAPPDATA%\SatisPlanner\icons\`, qui est le dossier par défaut.
+3. Let FModel detect the Unreal Engine version. If it asks, take the UE 5.x entry that lets the
+   archives load: it is self-verifying, since nothing opens with the wrong one.
+4. In the tree, go to `FactoryGame/Content/FactoryGame`. The useful icons are the textures named
+   `*_256`: `IconDesc_AssemblerMk1_256`, `GasMask_256`, and so on.
+5. Right-click a folder ▸ **Export Folder's Packages Textures (.png)**. Do `Resource`,
+   `Buildable` and `Equipment`; the resulting tree does not matter.
+6. Open **File ▸ Preferences** in SatisPlanner and point it at the export folder — or drop the
+   files into `%LOCALAPPDATA%\SatisPlanner\icons\`, which is the default.
 
-Le dossier est indexé immédiatement, récursivement, **par nom de fichier** : peu importe la façon
-dont FModel a rangé son export, seul le nom compte. La barre d'état indique combien de fichiers
-ont été indexés. Pour savoir lesquels manquent encore, la régénération de la base les liste :
-
-```bash
-.venv/Scripts/python.exe -m satisplanner.data.build --game-dir "C:\...\Satisfactory" --icons-dir "C:\mon\export"
-```
-
-`satisplanner/resources/icons/` est ignoré par git et n'est **jamais** versionné. C'est la
-raison d'être de la variante `-NoAssets`, et c'est aussi pourquoi une seconde machine
-installée par `git clone` démarre sans icônes : voir « Les icônes n'arrivent pas avec le
-clone » dans la section Installation.
-
-Les **icônes de bâtiments** demandent une attention de plus. Le jeu ne les déclare qu'en
-`_512` — `IconDesc_SmelterMk1_512` et non `_256` — alors que la base attend le nom en
-`_256`. Après l'export, renommez-les :
+**Building icons need one extra step.** The game only declares them as `_512` —
+`IconDesc_SmelterMk1_512`, not `_256` — while the database expects the `_256` name. After the
+export, rename them:
 
 ```bash
 Get-ChildItem -Recurse -Filter '*_512.png' | Rename-Item -NewName { $_.Name -replace '_512\.png$','_256.png' }
 ```
 
-Sans ce renommage les 32 bâtiments restent au repli quoi qu'on exporte, et le compteur
-ci-dessus le montre : son troisième nombre ne descend pas.
+Without that rename the 32 buildings stay on the fallback whatever you export, and the counter
+above shows it: its third number does not go down.
 
-## Données du jeu
+## Game data
 
-La base SQLite est un **artefact livré** : générée une fois à la conception, versionnée, embarquée
-dans l'exe. Rien n'y écrit d'horodatage, donc régénérer depuis la même version du jeu produit le
-même fichier et un diff vide.
-
-Régénération (à relancer quand le jeu change de version) :
+The SQLite database is a **shipped artefact**: generated once, versioned, embedded in the exe.
+Nothing writes a timestamp into it, so regenerating from the same game version produces the same
+file and an empty diff.
 
 ```bash
 .venv/Scripts/python.exe -m satisplanner.data.build --game-dir "C:\Program Files (x86)\Steam\steamapps\common\Satisfactory"
 ```
 
-Le CLI découvre seul son fichier source dans `CommunityResources/Docs` : `en-US.json` en référence
-de structure, `fr.json` pour les libellés, avec repli sur une autre variante anglaise puis sur
-`Docs.json`. Aucun nom de fichier n'est codé en dur, et le fichier retenu est affiché.
+The CLI finds its own source file in `CommunityResources/Docs`: `en-US.json` as the structural
+reference, `fr.json` for the labels, falling back to another English variant and then to
+`Docs.json`. No file name is hard-coded, and the one chosen is printed.
 
-Fixture de test : `tools/extract_fixture.py` extrait des mêmes fichiers une tranche de quelques
-centaines de kilo-octets vers `tests/fixtures/`, en conservant l'encodage UTF-16 LE et le BOM
-d'origine — les tests traversent donc le même chemin de décodage que la production.
-
-## Construction de l'exécutable
+## Building the executable
 
 ```bash
 .\build_exe.ps1 -NoAssets -Clean
 ```
 
-Deux variantes, et la différence est juridique avant d'être technique :
+Two variants, and the difference is legal before it is technical:
 
-| Commande | Contenu | Usage |
-|----------|---------|-------|
-| `.\build_exe.ps1` | avec les icônes présentes dans `resources/icons/` | privé uniquement |
-| `.\build_exe.ps1 -NoAssets` | sans aucune icône du jeu | **c'est celle qui se distribue** |
+| Command | Contents | Use |
+|---------|----------|-----|
+| `.\build_exe.ps1` | with the icons present in `resources/icons/` | private only |
+| `.\build_exe.ps1 -NoAssets` | with no game icon at all | **this is the one that is distributed** |
 
-Le script vérifie **après** la construction que la base est bien dans le dossier produit et que la
-variante `-NoAssets` ne contient effectivement aucune icône. Un exe parfait qui n'affiche plus
-rien parce qu'une donnée n'a pas été embarquée est le piège classique de l'empaquetage, et il ne
-se voit qu'en le lançant.
+The script checks **after** the build that the database made it into the produced folder and that
+the `-NoAssets` variant really contains no icon. A perfect executable that shows nothing because
+a data file was not embedded is the classic packaging trap, and it only shows when you run it.
 
-Le build est en `--onedir` et non `--onefile` : un `--onefile` se décompresse dans un dossier
-temporaire à chaque lancement, ce qui ajoute plusieurs secondes au démarrage. Le dossier se
-compresse en zip pour l'envoi ; la lenteur, elle, ne se compresse pas. (Voir aussi `NOTICE.md` :
-les DLL de Qt restent des fichiers distincts et remplaçables, ce que la LGPL apprécie.)
-
-Mesure du démarrage :
-
-```bash
-Measure-Command { Start-Process 'dist\publiable\SatisPlanner\SatisPlanner.exe' -ArgumentList '--startup-probe' -Wait }
-```
-
-L'icône de l'exécutable est dessinée par `tools/make_app_icon.py` et versionnée. Elle ne reprend
-aucun élément graphique du jeu.
+The build is `--onedir`, not `--onefile`: a `--onefile` unpacks into a temporary folder at every
+launch, adding seconds to the startup. The folder zips for sending; the slowness does not.
 
 ## Architecture
 
@@ -443,234 +359,106 @@ aucun élément graphique du jeu.
 ui  -->  core  <--  data
 ```
 
-`core/` est un domaine pur : il n'importe jamais Qt et ne lit jamais la base de données. Les
-données lui parviennent par injection (`data.db.load_game_data` produit le catalogue
-`core.models.GameData`). `tests/test_architecture.py` vérifie cette règle par analyse statique des
-imports et échoue sinon.
+`core/` is a pure domain: it never imports Qt and never reads the database. Data reaches it by
+injection (`data.db.load_game_data` produces the `core.models.GameData` catalogue).
+`tests/test_architecture.py` checks that rule by static analysis of the imports.
 
-À l'intérieur de `core/`, l'ordre des dépendances est
-`models → formatting, graph → results → validation → engine` : les diagnostics lisent un rapport
-résolu sans jamais calculer de débit, et le moteur les appelle en fin de résolution. `formatting`
-tient les règles d'écriture françaises des nombres — une seule fois, pour que « 66,667 % » s'écrive
-pareil dans un avertissement et sur un nœud.
+Inside `core/`, the dependency order is `models → formatting, graph → results → validation →
+engine`: the diagnostics read a solved report without ever computing a rate, and the engine calls
+them at the end of the resolution. `formatting` holds the number-writing rules — once, so that
+"66,667 %" reads the same in a warning and on a node — and follows the interface language rather
+than `QLocale`, because `core` has no Qt to ask.
 
-`ui/` ne contient pas de logique de calcul : `document.py` porte le graphe édité et la pile
-d'annulation, `commands.py` les opérations, `catalogue.py` la passerelle entre le catalogue et la
-palette (sans Qt, donc testable sans fenêtre), `canvas.py` / `canvas_items.py` le rendu,
-`report_html.py` le rapport en HTML — partagé par le panneau des totaux et l'export PDF, pour que
-la page imprimée et le panneau à côté ne puissent pas afficher deux chiffres différents.
+`ui/` holds no computation: `document.py` carries the edited graph and the undo stack,
+`commands.py` the operations, `catalogue.py` the bridge between the catalogue and the palette
+(Qt-free, hence testable without a window), `canvas.py` / `canvas_items.py` the rendering,
+`report_html.py` the HTML report — shared by the totals panel and the PDF export, so the printed
+page and the panel beside it cannot show two different figures.
 
-`core/interface.py` calcule ce qu'un morceau d'usine prend et rend **seul**, en le résolvant avec
-ses ports ouverts servis d'un côté et écoulés de l'autre ; `data/module_file.py` range la
-bibliothèque, dont la charge utile est **le code de partage** — pas un second format, ce qui lui
-donne gratuitement la migration de schéma, le refus d'une version future, et la prise en charge
-des types de nœuds qui n'existent pas encore.
+`paths.py` answers the two questions packaging separates: where the read-only resources are
+(beside the package in development, in `sys._MEIPASS` once frozen) and where to write (under
+`%LOCALAPPDATA%`, never beside the executable — a program installed under `Program Files` cannot
+write there, and the first thing it would try to write is the crash log).
 
-`document_tab.py` réunit ce qui appartient à une usine ouverte et à elle seule — son document, sa
-scène, sa vue — et `binding.py` tient les connexions du document affiché : tout ce qui est branché
-est noté, et le débranchement rejoue cette note. Oublier de défaire une connexion demanderait
-d'oublier de la faire, ce qui est la seule protection sérieuse contre un panneau qui se met à jour
-deux fois sans que rien ne se voie. `MainWindow._activate` est le seul endroit qui sait que
-l'usine regardée a changé : il y débranche, rebranche, et désigne la pile d'annulation active.
+## The engine
 
-`data/factory_file.py` lit et écrit les usines : c'est de l'entrée-sortie, donc c'est dans `data/`,
-au même titre que le parseur du jeu et la base SQLite.
-
-`paths.py` répond aux deux questions que l'empaquetage sépare : où sont les ressources en lecture
-seule (à côté du paquet en développement, dans `sys._MEIPASS` une fois gelé) et où écrire (sous
-`%LOCALAPPDATA%`, jamais à côté de l'exécutable — un programme installé sous `Program Files` ne
-peut pas y écrire, et la première chose qu'il essaierait d'y écrire serait le journal de plantage).
-
-## Le moteur
-
-Calcul en régime permanent. Une seule grandeur par nœud, son **taux de fonctionnement** :
+Steady-state computation. One quantity per node, its **operating ratio**:
 
 ```
-taux = min( satisfaction de chaque entrée, absorption de chaque sortie )
+ratio = min( satisfaction of each input, absorption of each output )
 ```
 
 ```bash
 .venv/Scripts/python.exe tools/show_report.py tests/fixtures/graphs/plastic_chain.json
 ```
 
-affiche le `FactoryReport` complet en console : nœuds, lignes, bilan en trois catégories (solides,
-fluides et sous-produits, électricité), liste de courses et diagnostics.
+prints the whole `FactoryReport` to the console: nodes, lines, balance in three categories
+(solids, fluids and byproducts, power), shopping list and diagnostics.
 
-Un `solve()` enchaîne en réalité plusieurs points fixes : la réponse, sa **jumelle sans plafond de
-ligne** — qui donne le débit qu'une ligne *voudrait* porter, et donc le tier à installer — et,
-quand un tampon se vide, la même paire résolue une seconde fois avec les tampons ne fournissant
-rien. C'est ce second jeu de chiffres que porte `FactoryReport.sustained`.
+A `solve()` actually chains several fixed points: the answer, its **twin with no line ceiling** —
+which gives the rate a line *would* carry, hence the tier to install — and, when a buffer drains,
+the same pair solved a second time with the buffers supplying nothing.
 
-Les deux sont **conditionnels**. La jumelle n'est calculée que si un plafond de transport a
-réellement changé ce qui a été livré quelque part : un gisement surdimensionné dont l'offre est
-rognée par la courroie alors que la machine en aval reçoit malgré tout tout ce qu'elle peut avaler
-ne coûte rien de plus. Et la seconde paire n'existe que si un tampon se vide. Une usine bien
-dimensionnée n'est donc résolue qu'**une seule fois**.
+Both are **conditional**. A well-sized factory is therefore solved **once**.
 
 ## Performance
 
 ```bash
 .venv/Scripts/python.exe tools/benchmark.py
-.venv/Scripts/python.exe tools/benchmark.py --profile 500
 ```
 
-mesure trois gestes — une résolution complète, une édition qui change les chiffres jusqu'à
-l'affichage à jour, un déplacement de nœud — sur des usines générées de 50, 200 et 500 nœuds
-(`tests/benchmark_graphs.py`, déterministe et versionné). `tests/test_performance.py` en tire des
-seuils, et surtout des règles qui ne dépendent d'aucune machine : **un déplacement ne déclenche
-jamais de résolution**, un rapport aux mêmes nœuds ne réinitialise jamais le tableau.
+measures three gestures — a full solve, an edit that changes the figures through to the refreshed
+display, a node move — on generated factories of 50, 200 and 500 nodes.
+`tests/test_performance.py` derives thresholds from them, and above all rules that depend on no
+machine: **a move never triggers a solve**, a report with the same nodes never resets the table.
 
-Une position est portée par un signal distinct de celui qui annonce un changement de *forme*
-(`nodesMoved` contre `graphChanged`) : ranger son usine ne fait tourner ni le moteur, ni la
-reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement reste annulable.
+## Design decisions
 
-## Décisions de conception
+The full list, with the reasoning behind each, is in the French README under
+[« Décisions de conception »](README.fr.md#décisions-de-conception). The ones worth knowing
+before you trust a figure:
 
-1. **Aucun chiffre deviné.** Les débits sont dérivés des données du jeu par des conversions
-   centralisées (`satisplanner/data/conversions.py`), chacune documentant son champ source, sa
-   formule et sa valeur de contrôle, et testées contre une table de référence (convoyeurs 60 → 1200
-   items/min, tuyauteries 300 / 600 m³/min, foreuses 60 / 120 / 240, etc.). Si une formule dérive,
-   le test échoue immédiatement au lieu de propager l'erreur. **En cas de désaccord entre une valeur
-   attendue et les fichiers du jeu, les fichiers font foi** — c'est ainsi qu'a été détectée la
-   recette d'Ordinateur, dont les ingrédients ont changé depuis la 1.0.
-2. **Blocage des sous-produits évalué sur la topologie, pas sur le débit.** Une machine est bloquée
-   (taux = 0) uniquement s'il n'existe aucune sortie pour l'un de ses produits. Si une sortie existe
-   mais n'absorbe qu'une fraction du débit, on applique une contre-pression continue (taux < 1) —
-   ce qui reproduit le débit moyen réel du jeu. Évaluer le blocage sur le débit rendrait le point
-   fixe bistable.
-3. **Le nombre de machines est une entrée**, saisie par l'utilisateur. Le moteur restitue en regard
-   le nombre réellement utile compte tenu des intrants et l'écart.
-4. **L'itération de point fixe part optimiste et descend.** Tous les taux valent 1 au départ, et la
-   suite décroît jusqu'à se stabiliser. Partir de zéro donne une réponse dégénérée : dans une boucle
-   de recyclage, « tout est arrêté » est un état parfaitement cohérent dont un solveur initialisé à
-   zéro ne sort jamais. Le comportement réel est le **plus grand** état cohérent.
-5. **La capacité des lignes est une contrainte.** Un convoyeur Mk.1 alimenté à 480/min en transporte
-   60 et refoule le reste en amont, exactement comme dans le jeu. Le diagnostic donne les deux
-   chiffres — le débit porté et le débit demandé — parce que c'est le second qui nomme le tier à
-   installer. Ce débit demandé vient d'une résolution jumelle où les plafonds sont ignorés : il est
-   calculé, pas estimé.
-6. **L'allocation est une répartition max-min, pas une répartition proportionnelle.** Un répartiteur
-   donne à chaque sortie une part égale et, quand l'une sature, partage le reste également entre les
-   autres. 60 lingots pour deux consommateurs qui en demandent 30 et 60 donnent donc 30 et 30 — le
-   petit est servi entièrement — et non 20 et 40, qui feraient boiter les deux.
-7. **Un rapport peut mentir treize minutes.** Une usine dont les citernes se vident tourne au débit
-   affiché, jusqu'à ce qu'elles soient vides. `FactoryReport.is_sustainable` passe à faux dès qu'un
-   tampon a un débit net négatif, et le rapport porte alors le régime réellement établi, résolu une
-   seconde fois avec les tampons ne fournissant plus rien.
-8. **Un fichier qui référence une classe disparue s'ouvre quand même**, mais le nœud concerné est
-   retiré et nommé. Le garder serait pire : le solveur, le canvas et le tableau cherchent tous sa
-   recette dans le catalogue et sont en droit de l'y trouver. Ce que l'utilisateur risquait de
-   perdre — la disposition de tout le reste — est préservé, et le document est marqué de façon que
-   la perte ne puisse pas être propagée au fichier d'origine par inadvertance.
-9. **Concevoir et construire ne veulent pas la même chose, donc l'usine dit laquelle.** Le mode
-   des raccords est un champ du document et non une préférence : une usine partagée doit s'ouvrir
-   dans le mode où elle a été pensée, sinon ses chiffres changent chez le destinataire. Ce n'est
-   pas ce qu'on fait d'une palette de couleurs, et c'est justement la différence — celui-ci change
-   les résultats. Les deux modes ne sont **pas deux moteurs** : un raccord est un nœud ordinaire
-   doté d'une plaque signalétique, donc le mode fidèle est le même code avec des nœuds en plus et
-   le mode simple le même code avec aucun. Vérifié plutôt qu'argumenté : les usines de référence
-   résolues en mode simple sont comparées champ par champ à un instantané produit par la build qui
-   précédait les raccords explicites (`tests/fixtures/reports_avant_lot4.json`). La seule chose qui
-   diffère est **qui compte les raccords** — déduits d'un côté, comptés de l'autre — et l'écart est
-   expliqué dans la page d'aide, parce que c'est la question qu'on se pose en basculant.
-10. **Un port porte une ligne, et un nœud a autant de ports qu'il a de bâtiments.** `ceil(count)`
-   par objet et par sens : huit fonderies alimentant huit consommateurs n'ont besoin d'aucun
-   répartiteur, une seule fonderie en a besoin d'un dès la deuxième ligne. Les répartiteurs et les
-   groupeurs sont donc des nœuds, posés et comptés là où ils sont, coût de construction compris. Un
-   partage en arbre réel ne donne des parts égales que lorsque le nombre de lignes se ramène à des
-   moitiés et des tiers : 2, 3, 4, 6, 9 oui, 5 et 7 non — et c'est le jeu qui est ainsi.
-   En revanche **les convoyeurs et les tuyaux ne sont pas chiffrés** : leur coût se paie à la
-   longueur, l'outil ne connaît aucune distance, et une estimation tirée d'une longueur moyenne
-   serait un chiffre inventé posé au milieu de chiffres exacts. Un blanc qui se voit vaut mieux
-   qu'un total qu'on croit complet.
-11. **Une usine générée est une usine ordinaire.** « Deux cadres modulaires lourds par minute »
-   se développe récursivement en machines, lignes et raccords, sans solveur et sans optimisation :
-   recette standard partout sauf là où l'utilisateur en impose une autre, et le même résultat à
-   l'octet près à chaque fois. Ce qui en sort se modifie, s'enregistre et s'annule comme le reste.
-   La vérification est un **contrôle croisé** : l'usine est résolue par le moteur, et ce qu'elle
-   consomme en matières premières est confronté au coût brut que la fiche de l'objet calcule par un
-   tout autre chemin. Les deux tombent d'accord à la décimale sur quatre objets de profondeurs
-   différentes.
-12. **Le répartiteur standard est le cas particulier du programmable**, pas une seconde
-   implémentation. Un programmable dont toutes les branches sont en « n'importe lequel » rend les
-   mêmes chiffres au bit près, par le même code. Ce qui change les débits est le mode **surplus** :
-   une branche qui ne prend que ce dont les autres n'ont pas voulu, servie en dernier par le même
-   mécanisme que les puits illimités. Une ligne porte un objet, donc filtrer une branche sur autre
-   chose la ferme — c'est signalé, pas deviné — et le jeu ne filtre que les convoyeurs : il n'y a
-   pas de jonction de pipeline intelligente.
-13. **La palette est un modèle, pas une liste d'objets.** Construire l'icône de chaque entrée à
-    l'ouverture coûtait neuf millisecondes fois sept cents, soit une fenêtre figée neuf secondes.
-    Qt ne demande au modèle que les lignes qu'il s'apprête à peindre.
-14. **Le surcadençage est proportionnel sur le débit et exponentiel sur l'électricité.**
-    L'exposant est **lu dans les données** (`mPowerConsumptionExponent`), jamais codé en dur : le
-    jeu utilise 1,321929 pour tout ce qui produit et 1,6 ailleurs. À 250 %, une machine consomme
-    donc environ 3,36 fois son nominal, et exactement 2,5 fois à 200 % — l'exposant vaut log₂(2,5),
-    ce qui n'est pas un hasard. Le nombre d'éclats se déduit de `mExtraPotential` ; seul le nombre
-    d'emplacements (trois) n'est pas exporté et vit dans `core/constants.py`, avec un test qui
-    vérifie que la borne de 250 % reste égale à ce que trois éclats achètent réellement.
-15. **Chaque champ modifiable n'a qu'une implémentation, pas trois qui s'accordent.**
-    `ui/edits.py` porte la validation et la commande ; le menu contextuel, la cellule du tableau
-    et le double-clic sur le nœud l'appellent tous les trois. La première version en avait deux,
-    écrites pour donner le même résultat et vérifiées par un test — ce qui tient à trois champs
-    et se casse au quatrième. Le test correspondant ne compare pas des résultats mais **les
-    libellés des commandes empilées par les trois chemins** : c'est la seule chose qui puisse
-    prouver qu'il n'y a bien qu'une porte.
-16. **La consommation compte les machines à l'arrêt, la production ne compte que ce qui brûle.**
-    L'asymétrie est volontaire. Côté consommation c'est un **dimensionnement au pire cas et non
-    une mesure du jeu** : les fichiers ne déclarent qu'une consommation nominale et aucune
-    consommation de veille. Le seul second chiffre du jeu, `mEstimatedMininumPowerConsumption`,
-    n'existe que sur les trois machines à puissance variable — désormais au catalogue — et désigne
-    le bas de la plage d'une recette **en marche**, pas une veille : il ne dit donc rien de ce
-    qu'une machine arrêtée consomme. Inventer une valeur réduite serait pire que compter au
-    maximum. Côté production, en revanche, la donnée est sans ambiguïté : un générateur sans
-    carburant ne brûle rien et ne produit rien.
-17. **La puissance appartient à la paire machine + recette, et la plaque fixe en est le cas
-    particulier.** Trois machines déclarent `mPowerConsumption` à zéro et portent leur
-    consommation sur la recette, sous la forme `constant + facteur` : leur tirage oscille au lieu
-    de tenir en place. Comme ce modèle est en régime permanent, il en retient **le milieu**, qui
-    est la moyenne de toute oscillation symétrique autour de son centre — et deux paramètres sans
-    troisième pour décrire une forme disent symétrique. Prendre le maximum dimensionnerait chaque
-    centrale sur une pointe qu'aucune usine ne tient ; prendre le minimum sous-estimerait une
-    facture réelle. Ce n'était pas une généralisation gratuite : l'Accélérateur a **deux** paliers,
-    500 MW sur les diamants et 1000 sur la matière noire, et aucun chiffre porté par le bâtiment
-    ne peut être juste pour les deux. Deux recettes du jeu portent en outre une plage sur une
-    machine qui a sa propre plaque ; le jeu les ignore, ce parseur aussi, mais il les **nomme**.
-18. **L'électricité est comptée, jamais allouée.** C'est le seul endroit du projet où un
-    diagnostic d'erreur ne se traduit pas par un taux réduit, et c'est délibéré : en jeu, un
-    déficit ne ralentit pas l'usine, il déclenche une coupure générale jusqu'à intervention
-    manuelle. Afficher « tout à zéro » n'apprendrait rien et un bridage partiel serait une
-    invention. Le test qui compte n'est pas que les chiffres soient justes, c'est que la même
-    usine résolue avec et sans assez de générateurs donne exactement les mêmes débits.
-19. **L'écran de démarrage est un `QLabel`, pas un `QSplashScreen`.** Afficher un `QSplashScreen`
-    coûte, mesuré, un peu plus d'une seconde sur cette plateforme, quelle que soit l'image : un
-    écran d'attente qui rallonge l'attente n'est pas un écran d'attente. Un label sans cadre
-    affichant la même image coûte seize millisecondes.
+1. **No number is guessed.** Rates are derived from the game files by centralised conversions
+   (`satisplanner/data/conversions.py`), each documenting its source field, its formula and its
+   control value, and tested against a reference table. **When an expected value and the game
+   files disagree, the files win** — which is how the Computer recipe was caught after its
+   ingredients changed since 1.0.
+2. **Byproduct blocking is judged on the topology, not on the rate.** A machine is blocked
+   (ratio = 0) only if one of its products has no exit at all. If an exit exists but absorbs a
+   fraction, back pressure applies (ratio < 1). Judging blocking on the rate would make the fixed
+   point bistable.
+3. **The fixed-point iteration starts optimistic and comes down.** Every ratio starts at 1 and
+   the sequence decreases until it settles. Starting at zero gives a degenerate answer: in a
+   recycling loop, "everything is stopped" is a perfectly consistent state a solver initialised
+   at zero never leaves. Real behaviour is the **largest** consistent state.
+4. **Allocation is max-min, not proportional.** 60 ingots for two consumers asking 30 and 60 give
+   30 and 30 — the small one is served in full — and not 20 and 40, which would leave both short.
+5. **A report can lie for thirteen minutes.** A factory draining its tanks runs at the figures
+   shown, until they are empty. `FactoryReport.is_sustainable` goes false as soon as a buffer has
+   a negative net rate, and the report then carries the regime that actually holds.
+6. **Power is counted, never allocated.** The test that matters is not that the figures are right,
+   it is that the same factory solved with and without enough generators gives exactly the same
+   throughputs.
+7. **Designing and building do not want the same thing, so the factory says which.** The fitting
+   mode is a document field and not a preference: a shared factory must open in the mode it was
+   thought in, or its figures change for the recipient. The two modes are **not two engines** —
+   a fitting is an ordinary node with a nameplate — and that is verified rather than argued: the
+   reference factories solved in simple mode are compared field by field against a snapshot taken
+   by the build that preceded explicit fittings.
+8. **Power belongs to the machine-and-recipe pair, and a fixed nameplate is the particular case.**
+   Three machines declare `mPowerConsumption` at zero and put their draw on the recipe as
+   `constant + factor`. Being a steady-state model, it keeps the **midpoint**, which is the mean
+   of any oscillation symmetric about its centre.
 
-## Backlog V2
+## What is left
 
-**Ce qui reste tient en huit lignes, et c'est le résultat de la série close en 5.0.0.**
-Toutes les machines et tous les générateurs du jeu sont au catalogue, et la moitié des
-entrées d'hier — Mélangeur, puits de ressource, puissance variable, centrale nucléaire,
-géothermique — sont parties parce qu'elles sont faites. Le reste se range en deux tas :
-ce qui demanderait une **dépendance ou une autre formule**, et ce qui demanderait un
-**modèle plus fin des raccords**. Rien n'y est un manque du catalogue.
-
-- Somersloop et amplification de production : autre formule, autre travail.
-- Surcadençage des générateurs : l'exposant de production n'est pas celui de consommation, et la
-  sémantique n'est pas la même. À traiter pour lui-même.
-- **Choix automatique des recettes alternatives** dans le mode objectif : le générateur suit la
-  recette standard sauf indication contraire, et choisir la meilleure sous contrainte demande un
-  programme linéaire, donc une dépendance.
-- **Répartiteur intelligent à trois sorties filtrées** : le jeu en règle les trois, une par objet,
-  et le programmable en accepte plusieurs par sortie. Le modèle actuel n'en règle qu'une pour
-  l'intelligent et une valeur par sortie pour le programmable, ce qui est plus restrictif.
-- **Groupeur prioritaire** : la réponse du jeu au répartiteur intelligent, côté groupage.
-- Simulation temporelle des tampons, pour voir le film et pas seulement l'état final.
-- Interopérabilité avec satisfactory-calculator.com.
-- Internationalisation anglaise.
+The remaining backlog is eight lines, and none of it is a gap in the catalogue: Somersloop and
+production amplification, generator overclocking, automatic choice of alternate recipes (which
+needs a linear program), a finer model of smart splitters and priority mergers, time simulation
+of buffers, interoperability with satisfactory-calculator.com — and this English interface.
 
 ## Licence
 
-Code sous licence MIT (voir `LICENSE`). Satisfactory, ses données et ses icônes sont la propriété
-de Coffee Stain Studios et ne sont pas couverts par cette licence : voir `NOTICE.md`, qui distingue
-les trois choses qui cohabitent dans ce dépôt et rappelle les obligations LGPL de Qt.
+Code under the MIT licence (see `LICENSE`). Satisfactory, its data and its icons are the property
+of Coffee Stain Studios and are not covered by it: see `NOTICE.md`, which separates the three
+things that live together in this repository and recalls Qt's LGPL obligations.

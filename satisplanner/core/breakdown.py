@@ -41,7 +41,7 @@ def producers(game_data: GameData, item_class: str) -> list[Recipe]:
         for recipe in game_data.recipes.values()
         if any(slot.item_class == item_class for slot in recipe.products)
     ]
-    return sorted(made, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
+    return sorted(made, key=lambda recipe: (recipe.is_alternate, recipe.name))
 
 
 def consumers(game_data: GameData, item_class: str) -> list[Recipe]:
@@ -51,7 +51,7 @@ def consumers(game_data: GameData, item_class: str) -> list[Recipe]:
         for recipe in game_data.recipes.values()
         if any(slot.item_class == item_class for slot in recipe.ingredients)
     ]
-    return sorted(used, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
+    return sorted(used, key=lambda recipe: (recipe.is_alternate, recipe.name))
 
 
 def generator_sources(game_data: GameData, item_class: str) -> list[tuple[Generator, str]]:
@@ -83,7 +83,7 @@ def unavailable_producers(game_data: GameData, item_class: str) -> list[Recipe]:
         for recipe in game_data.unavailable_recipes.values()
         if any(slot.item_class == item_class for slot in recipe.products)
     ]
-    return sorted(made, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
+    return sorted(made, key=lambda recipe: (recipe.is_alternate, recipe.name))
 
 
 def unavailable_consumers(game_data: GameData, item_class: str) -> list[Recipe]:
@@ -93,7 +93,7 @@ def unavailable_consumers(game_data: GameData, item_class: str) -> list[Recipe]:
         for recipe in game_data.unavailable_recipes.values()
         if any(slot.item_class == item_class for slot in recipe.ingredients)
     ]
-    return sorted(used, key=lambda recipe: (recipe.is_alternate, recipe.display_name_fr))
+    return sorted(used, key=lambda recipe: (recipe.is_alternate, recipe.name))
 
 
 def standard_recipe(game_data: GameData, item_class: str) -> Recipe | None:

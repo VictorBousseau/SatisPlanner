@@ -1,8 +1,13 @@
 """Diagnostics: turning a solved factory into sentences a player can act on.
 
 This module reads a graph and its report and produces findings; it never computes
-flows. Messages are in French and displayed verbatim, so they always carry the
-number that lets the user fix the problem -- a rate, a ratio, a tier.
+flows. Messages are displayed verbatim, so they always carry the number that lets the
+user fix the problem -- a rate, a ratio, a tier.
+
+Written in French and translated through :func:`satisplanner.core.i18n._`, which is
+why every sentence here is a literal with named ``{fields}`` rather than an f-string:
+a key has to be findable in the source to be counted and to be translated. These are
+the sentences a user reads most, so they were the first to go through the catalogue.
 """
 
 import math
@@ -30,6 +35,7 @@ from satisplanner.core.graph import (
     pass_through_item,
     storage_item,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData, Item, SplitterMode, UnknownClassError
 from satisplanner.core.results import (
     FLOW_EPSILON,
@@ -74,11 +80,11 @@ def _convergence(report: FactoryReport) -> Iterator[Diagnostic]:
     yield Diagnostic(
         severity=Severity.ERROR,
         code=DiagnosticCode.NOT_CONVERGED,
-        message=(
-            f"La résolution n'a pas convergé en {report.iterations} itérations : les débits "
-            f"affichés sont ceux de la dernière itération et sont instables. "
-            f"Une boucle de recyclage est probablement mal bouclée."
-        ),
+        message=_(
+            "La résolution n'a pas convergé en {iterations} itérations : les débits "
+            "affichés sont ceux de la dernière itération et sont instables. "
+            "Une boucle de recyclage est probablement mal bouclée."
+        ).format(iterations=report.iterations),
     )
 
 
@@ -108,13 +114,20 @@ def _edge_structure(edge: Edge, game_data: GameData) -> Iterator[Diagnostic]:
         )
         return
     if not matches:
-        needed = "une tuyauterie" if item.form.is_fluid else "un convoyeur"
+        # Two whole sentences rather than one with a noun spliced into it: an
+        # article agrees with its noun in French and the two languages do not put
+        # them in the same place, so a fragment is a sentence nobody can translate.
+        pattern = (
+            _("{item} ne peut pas circuler dans {transport} : il faut une tuyauterie.")
+            if item.form.is_fluid
+            else _("{item} ne peut pas circuler dans {transport} : il faut un convoyeur.")
+        )
         yield Diagnostic(
             severity=Severity.ERROR,
             code=DiagnosticCode.INCOMPATIBLE_FORM,
-            message=(
-                f"{item.display_name_fr} ne peut pas circuler dans "
-                f"{_building_name(edge.transport_class, game_data)} : il faut {needed}."
+            message=pattern.format(
+                item=item.name,
+                transport=_building_name(edge.transport_class, game_data),
             ),
             edge_id=edge.id,
         )
@@ -128,10 +141,13 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             yield Diagnostic(
                 severity=Severity.ERROR,
                 code=DiagnosticCode.INCOMPATIBLE_RECIPE,
-                message=(
-                    f"La recette « {recipe.display_name_fr} » se fabrique dans "
-                    f"{_building_name(recipe.building_class, game_data)}, pas dans "
-                    f"{_building_name(declared, game_data)}."
+                message=_(
+                    "La recette « {recipe} » se fabrique dans {expected}, "
+                    "pas dans {declared}."
+                ).format(
+                    recipe=recipe.name,
+                    expected=_building_name(recipe.building_class, game_data),
+                    declared=_building_name(declared, game_data),
                 ),
                 node_id=node.id,
             )
@@ -147,10 +163,9 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
             yield Diagnostic(
                 severity=Severity.WARNING,
                 code=DiagnosticCode.UNCONNECTED_NODE,
-                message=(
-                    f"Aucune ligne n'apporte {game_data.item(item_class).display_name_fr} : "
-                    f"l'entrée n'est pas raccordée."
-                ),
+                message=_(
+                    "Aucune ligne n'apporte {item} : l'entrée n'est pas raccordée."
+                ).format(item=game_data.item(item_class).name),
                 node_id=node.id,
             )
 
@@ -158,7 +173,7 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.AMBIGUOUS_BUFFER,
-            message=(
+            message=_(
                 "Le contenu de ce tampon est indéterminé : raccordez une seule entrée, "
                 "ou choisissez explicitement l'item stocké."
             ),
@@ -172,14 +187,23 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
         # Two different items on its lines, or none at all. Either way there is no
         # building to count for it and nothing flows, which is worth saying out loud
         # rather than leaving as an empty row on the canvas.
-        role = "répartiteur" if isinstance(node, SplitterNode) else "groupeur"
+        message = (
+            _(
+                "Ce répartiteur ne transporte rien de déterminé : une ligne ne porte "
+                "qu'un item, donc toutes celles qui y arrivent et en partent doivent "
+                "porter le même."
+            )
+            if isinstance(node, SplitterNode)
+            else _(
+                "Ce groupeur ne transporte rien de déterminé : une ligne ne porte "
+                "qu'un item, donc toutes celles qui y arrivent et en partent doivent "
+                "porter le même."
+            )
+        )
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.AMBIGUOUS_BUFFER,
-            message=(
-                f"Ce {role} ne transporte rien de déterminé : une ligne ne porte qu'un item, "
-                f"donc toutes celles qui y arrivent et en partent doivent porter le même."
-            ),
+            message=message,
             node_id=node.id,
         )
 
@@ -194,7 +218,7 @@ def _node_structure(node: Node, graph: FactoryGraph, game_data: GameData) -> Ite
         yield Diagnostic(
             severity=Severity.INFO,
             code=DiagnosticCode.UNCONNECTED_NODE,
-            message="Ce nœud n'est raccordé à rien : il ne participe pas au calcul.",
+            message=_("Ce nœud n'est raccordé à rien : il ne participe pas au calcul."),
             node_id=node.id,
         )
 
@@ -225,7 +249,7 @@ def _branch_filters(
         yield Diagnostic(
             severity=Severity.ERROR,
             code=DiagnosticCode.BRANCH_FILTER,
-            message=(
+            message=_(
                 "Le jeu n'a pas de jonction de pipeline filtrante : un raccord sur un "
                 "fluide ne peut être que standard. Repassez-le en standard, ou triez "
                 "en amont."
@@ -237,11 +261,11 @@ def _branch_filters(
         yield Diagnostic(
             severity=Severity.ERROR,
             code=DiagnosticCode.BRANCH_FILTER,
-            message=(
-                f"Un répartiteur intelligent ne règle qu'une seule de ses branches ; "
-                f"{len(named) + _overflows(written)} le sont ici. Passez-le en "
-                f"programmable, ou remettez les autres en « n'importe lequel »."
-            ),
+            message=_(
+                "Un répartiteur intelligent ne règle qu'une seule de ses branches ; "
+                "{count} le sont ici. Passez-le en programmable, ou remettez les "
+                "autres en « n'importe lequel »."
+            ).format(count=len(named) + _overflows(written)),
             node_id=node.id,
         )
 
@@ -251,11 +275,14 @@ def _branch_filters(
             yield Diagnostic(
                 severity=Severity.WARNING,
                 code=DiagnosticCode.BRANCH_FILTER,
-                message=(
-                    f"La branche vers {target} est filtrée sur "
-                    f"{wanted.display_name_fr if wanted else setting}, que cette ligne "
-                    f"ne transporte jamais : elle porte "
-                    f"{game_data.item(carried).display_name_fr}. Rien ne passera par là."
+                message=_(
+                    "La branche vers {branch} est filtrée sur {wanted}, que cette "
+                    "ligne ne transporte jamais : elle porte {carried}. Rien ne "
+                    "passera par là."
+                ).format(
+                    branch=target,
+                    wanted=wanted.name if wanted else setting,
+                    carried=game_data.item(carried).name,
                 ),
                 node_id=node.id,
             )
@@ -265,10 +292,10 @@ def _branch_filters(
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.BRANCH_FILTER,
-            message=(
-                f"Réglage(s) conservé(s) pour une branche qui n'existe plus : "
-                f"{', '.join(stale)}. Sans effet tant que la ligne n'est pas redessinée."
-            ),
+            message=_(
+                "Réglage(s) conservé(s) pour une branche qui n'existe plus : "
+                "{branches}. Sans effet tant que la ligne n'est pas redessinée."
+            ).format(branches=", ".join(stale)),
             node_id=node.id,
         )
 
@@ -276,7 +303,7 @@ def _branch_filters(
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.BRANCH_FILTER,
-            message=(
+            message=_(
                 "Toutes les branches sont en « surplus » : il n'y a donc rien à "
                 "refuser en premier, et le raccord se comporte comme un standard."
             ),
@@ -295,16 +322,16 @@ def _generator_structure(node: GeneratorNode, game_data: GameData) -> Iterator[D
     if generator is None or generator.accepts(node.fuel_class):
         return
     accepted = ", ".join(
-        game_data.item(fuel.item_class).display_name_fr for fuel in generator.fuels
+        game_data.item(fuel.item_class).name for fuel in generator.fuels
     )
     fuel = game_data.items.get(node.fuel_class)
     yield Diagnostic(
         severity=Severity.ERROR,
         code=DiagnosticCode.INCOMPATIBLE_RECIPE,
-        message=(
-            f"{_building_name(node.generator_class, game_data)} ne brûle pas "
-            f"{fuel.display_name_fr if fuel else node.fuel_class} : "
-            f"carburants acceptés, {accepted}."
+        message=_("{building} ne brûle pas {fuel} : carburants acceptés, {accepted}.").format(
+            building=_building_name(node.generator_class, game_data),
+            fuel=fuel.name if fuel else node.fuel_class,
+            accepted=accepted,
         ),
         node_id=node.id,
     )
@@ -320,16 +347,14 @@ def _well_structure(node: ResourceWellNode, game_data: GameData) -> Iterator[Dia
     extractor = game_data.extractors.get(node.extractor_class)
     if extractor is not None and node.item_class not in (extractor.allowed_items or ()):
         allowed = ", ".join(
-            game_data.item(item).display_name_fr for item in extractor.allowed_items
+            game_data.item(item).name for item in extractor.allowed_items
         )
         yield Diagnostic(
             severity=Severity.ERROR,
             code=DiagnosticCode.INCOMPATIBLE_RECIPE,
-            message=(
-                f"Un puits de ressource ne s'ouvre pas sur "
-                f"{game_data.item(node.item_class).display_name_fr} : "
-                f"seuls {allowed} en ont."
-            ),
+            message=_(
+                "Un puits de ressource ne s'ouvre pas sur {item} : seuls {allowed} en ont."
+            ).format(item=game_data.item(node.item_class).name, allowed=allowed),
             node_id=node.id,
         )
     if node.satellite_count == 0:
@@ -338,7 +363,7 @@ def _well_structure(node: ResourceWellNode, game_data: GameData) -> Iterator[Dia
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.UNCONNECTED_NODE,
-            message=(
+            message=_(
                 "Ce puits n'a aucun satellite : rien n'est extrait, et le pressuriseur "
                 "consomme quand même sa puissance nominale."
             ),
@@ -366,29 +391,73 @@ def _blocked(node: Node, solution: NodeSolution, game_data: GameData) -> Iterato
     if not solution.blocked_products:
         return
     names = ", ".join(
-        game_data.item(item_class).display_name_fr for item_class in solution.blocked_products
+        game_data.item(item_class).name for item_class in solution.blocked_products
     )
-    plural = "s" if len(solution.blocked_products) > 1 else ""
-    if isinstance(node, SplitterNode | MergerNode):
-        subject = "le répartiteur" if isinstance(node, SplitterNode) else "le groupeur"
-        message = (
-            f"{names} n'a{plural} aucune sortie au-delà de ce raccord : {subject} ne laisse "
-            f"rien passer et bloque tout ce qui l'alimente. Raccordez une de ses branches."
-        )
-    else:
-        # A power plant is not "a machine" to a reader, and its output is not what
-        # is blocked -- the current keeps flowing until the waste stops it.
-        subject = "la centrale" if isinstance(node, GeneratorNode) else "la machine"
-        message = (
-            f"{names} n'a{plural} aucune sortie : {subject} est totalement bloquée et ne "
-            f"produit rien. Raccordez une ligne vers un consommateur, un tampon, ou une "
-            f"sortie marquée « rejet assumé »."
-        )
+    # Written out in full rather than assembled from a subject and a plural mark.
+    # Both languages make the verb agree, and neither puts the agreement where the
+    # other does, so the whole sentence is the smallest piece that can be translated.
+    message = _blocked_sentence(node, plural=len(solution.blocked_products) > 1).format(
+        names=names
+    )
     yield Diagnostic(
         severity=Severity.ERROR,
         code=DiagnosticCode.BLOCKED_BYPRODUCT,
         message=message,
         node_id=node.id,
+    )
+
+
+def _blocked_sentence(node: Node, *, plural: bool) -> str:
+    """The blockage, worded for what is blocked and for how many items it is.
+
+    A power plant is not "a machine" to a reader, and its output is not what is
+    blocked -- the current keeps flowing until the waste stops it. A splitter with
+    nothing behind it blocks just as surely and reads as the dead end it is.
+    """
+    if isinstance(node, SplitterNode):
+        if plural:
+            return _(
+                "{names} n'ont aucune sortie au-delà de ce raccord : le répartiteur ne "
+                "laisse rien passer et bloque tout ce qui l'alimente. Raccordez une de "
+                "ses branches."
+            )
+        return _(
+            "{names} n'a aucune sortie au-delà de ce raccord : le répartiteur ne laisse "
+            "rien passer et bloque tout ce qui l'alimente. Raccordez une de ses branches."
+        )
+    if isinstance(node, MergerNode):
+        if plural:
+            return _(
+                "{names} n'ont aucune sortie au-delà de ce raccord : le groupeur ne "
+                "laisse rien passer et bloque tout ce qui l'alimente. Raccordez une de "
+                "ses branches."
+            )
+        return _(
+            "{names} n'a aucune sortie au-delà de ce raccord : le groupeur ne laisse "
+            "rien passer et bloque tout ce qui l'alimente. Raccordez une de ses branches."
+        )
+    if isinstance(node, GeneratorNode):
+        if plural:
+            return _(
+                "{names} n'ont aucune sortie : la centrale est totalement bloquée et ne "
+                "produit rien. Raccordez une ligne vers un consommateur, un tampon, ou "
+                "une sortie marquée « rejet assumé »."
+            )
+        return _(
+            "{names} n'a aucune sortie : la centrale est totalement bloquée et ne "
+            "produit rien. Raccordez une ligne vers un consommateur, un tampon, ou une "
+            "sortie marquée « rejet assumé »."
+        )
+    if plural:
+        return _(
+            "{names} n'ont aucune sortie : la machine est totalement bloquée et ne "
+            "produit rien. Raccordez une ligne vers un consommateur, un tampon, ou une "
+            "sortie marquée « rejet assumé »."
+        )
+    return _(
+        "{names} n'a aucune sortie : la machine est totalement bloquée et ne produit "
+        "rien. Raccordez une ligne vers un consommateur, un tampon, ou une sortie "
+        "marquée « rejet assumé »."
     )
 
 
@@ -410,9 +479,17 @@ def required_inputs(node: Node, game_data: GameData) -> dict[str, float]:
             return {}
 
 
-def _consumer_noun(node: Node) -> str:
-    """How to name a starved consumer in a sentence, subject and verb agreeing."""
-    return "Le générateur" if isinstance(node, GeneratorNode) else "La machine"
+def _deficit_sentence(node: Node) -> str:
+    """The shortfall, naming the starved consumer for what it is."""
+    if isinstance(node, GeneratorNode):
+        return _(
+            "Déficit de {item} : {missing} manquants sur {required} requis. Le "
+            "générateur tourne à {ratio} ({useful} unité(s) utile(s) sur {units})."
+        )
+    return _(
+        "Déficit de {item} : {missing} manquants sur {required} requis. La machine "
+        "tourne à {ratio} ({useful} unité(s) utile(s) sur {units})."
+    )
 
 
 def _deficit(
@@ -426,7 +503,7 @@ def _deficit(
     if not isinstance(node, MachineNode | GeneratorNode) or solution.blocked_products:
         return
     needed = required_inputs(node, game_data)
-    subject = _consumer_noun(node)
+    pattern = _deficit_sentence(node)
     units = node.machine_count if isinstance(node, MachineNode) else node.count
     for item_class in solution.starved_items:
         required = needed.get(item_class, 0.0)
@@ -443,11 +520,13 @@ def _deficit(
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.DEFICIT,
-            message=(
-                f"Déficit de {item.display_name_fr} : {_rate(missing, item)} manquants sur "
-                f"{_rate(required, item)} requis. {subject} tourne à "
-                f"{_percent(solution.ratio)} ({_number(solution.useful_machine_count or 0)} "
-                f"unité(s) utile(s) sur {_number(units)})."
+            message=pattern.format(
+                item=item.name,
+                missing=_rate(missing, item),
+                required=_rate(required, item),
+                ratio=_percent(solution.ratio),
+                useful=_number(solution.useful_machine_count or 0),
+                units=_number(units),
             ),
             node_id=node.id,
         )
@@ -475,11 +554,11 @@ def _throttled(
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.BACKPRESSURE,
-            message=(
-                f"Contre-pression : la sortie n'est absorbée qu'à {_percent(solution.ratio)}, "
-                f"donc la machine ne tourne qu'à {_percent(solution.ratio)}. "
-                f"Évacuez davantage, ou réduisez le nombre de machines."
-            ),
+            message=_(
+                "Contre-pression : la sortie n'est absorbée qu'à {ratio}, donc la "
+                "machine ne tourne qu'à {ratio}. Évacuez davantage, ou réduisez le "
+                "nombre de machines."
+            ).format(ratio=_percent(solution.ratio)),
             node_id=node.id,
         )
         return
@@ -493,11 +572,11 @@ def _throttled(
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.SURPLUS,
-            message=(
-                f"Surplus non consomme : {_rate(wasted, item)} de capacité inutilisée "
-                f"({_percent(solution.ratio)} de la source exploitée). "
-                f"Consommez davantage, ou retirez de la capacité d'extraction."
-            ),
+            message=_(
+                "Surplus non consommé : {wasted} de capacité inutilisée ({ratio} de la "
+                "source exploitée). Consommez davantage, ou retirez de la capacité "
+                "d'extraction."
+            ).format(wasted=_rate(wasted, item), ratio=_percent(solution.ratio)),
             node_id=node.id,
         )
 
@@ -551,22 +630,37 @@ def _lines(game_data: GameData, report: FactoryReport) -> Iterator[Diagnostic]:
             continue
         item = game_data.item(solution.item_class)
         upgrade = game_data.smallest_transport_for(item.form, solution.demanded_rate)
-        current = _building_name(solution.transport_class, game_data)
+        # The advice is part of the sentence and not a fragment glued to its end:
+        # its first letter used to be capitalised by hand, which is a way of saying
+        # it was never really a sentence of its own.
+        lines = math.ceil(solution.demanded_rate / solution.capacity_per_minute)
         if upgrade is not None and upgrade.class_name != solution.transport_class:
-            advice = f"passez en {_building_name(upgrade.class_name, game_data)}"
+            pattern = _(
+                "Ligne saturée : {demanded} demandes pour {capacity} de capacité en "
+                "{current} ({saturation}). Le débit est bridé à {carried} et {blocked} "
+                "refluent en amont. Passez en {upgrade}."
+            )
         else:
-            lines = math.ceil(solution.demanded_rate / solution.capacity_per_minute)
-            advice = f"aucun palier ne suffit : doublez la ligne sur {lines} voies"
+            pattern = _(
+                "Ligne saturée : {demanded} demandes pour {capacity} de capacité en "
+                "{current} ({saturation}). Le débit est bridé à {carried} et {blocked} "
+                "refluent en amont. Aucun palier ne suffit : doublez la ligne sur "
+                "{lines} voies."
+            )
         yield Diagnostic(
             severity=Severity.WARNING,
             code=DiagnosticCode.LINE_SATURATION,
-            message=(
-                f"Ligne saturée : {_rate(solution.demanded_rate, item)} demandes pour "
-                f"{_rate(solution.capacity_per_minute, item)} de capacité en {current} "
-                f"({_percent(solution.saturation)}). Le débit est bridé à "
-                f"{_rate(solution.rate_per_minute, item)} et "
-                f"{_rate(solution.blocked_rate, item)} refluent en amont. "
-                f"{advice[0].upper()}{advice[1:]}."
+            message=pattern.format(
+                demanded=_rate(solution.demanded_rate, item),
+                capacity=_rate(solution.capacity_per_minute, item),
+                current=_building_name(solution.transport_class, game_data),
+                saturation=_percent(solution.saturation),
+                carried=_rate(solution.rate_per_minute, item),
+                blocked=_rate(solution.blocked_rate, item),
+                upgrade=(
+                    _building_name(upgrade.class_name, game_data) if upgrade is not None else ""
+                ),
+                lines=lines,
             ),
             edge_id=solution.edge_id,
         )
@@ -587,24 +681,28 @@ def _sustainability(game_data: GameData, report: FactoryReport) -> Iterator[Diag
     if report.is_sustainable:
         return
     autonomy = report.shortest_autonomy_minutes
-    deadline = f" pendant {_duration(autonomy)}" if autonomy is not None else ""
     drained = ", ".join(
         f"{buffer.node_id} ({_rate(buffer.net, _buffer_item(buffer.item_class, game_data))})"
         for buffer in report.draining_buffers
     )
-    established = ""
+    if autonomy is not None:
+        message = _(
+            "Ces débits ne sont pas tenables : ils vivent sur un stock pendant "
+            "{autonomy}. Tampon(s) en vidage : {drained}."
+        ).format(autonomy=_duration(autonomy), drained=drained)
+    else:
+        message = _(
+            "Ces débits ne sont pas tenables : ils vivent sur un stock. "
+            "Tampon(s) en vidage : {drained}."
+        ).format(drained=drained)
     if report.sustained is not None:
-        established = (
-            " Le régime établi, une fois les stocks épuisés, est donne en regard : "
-            f"{_outputs_summary(report.sustained, game_data)}."
-        )
+        message += " " + _(
+            "Le régime établi, une fois les stocks épuisés, est donné en regard : {outputs}."
+        ).format(outputs=_outputs_summary(report.sustained, game_data))
     yield Diagnostic(
         severity=Severity.WARNING,
         code=DiagnosticCode.NOT_SUSTAINABLE,
-        message=(
-            f"Ces débits ne sont pas tenables : ils vivent sur un stock{deadline}. "
-            f"Tampon(s) en vidage : {drained}.{established}"
-        ),
+        message=message,
     )
 
 
@@ -615,9 +713,15 @@ def _buffer_item(item_class: str | None, game_data: GameData) -> Item | None:
 def _outputs_summary(report: FactoryReport, game_data: GameData) -> str:
     """Final outputs of a report, as a short French enumeration."""
     if not report.final_outputs:
-        return "plus aucune production"
+        return _("plus aucune production")
+    # "de X" here and not ``formatting.of``, which would elide into "d'Eau": this
+    # sentence has never elided and a translation lot is not the place to start.
+    # The inconsistency with the plan's summary is real and left alone on purpose.
     return ", ".join(
-        f"{_rate(rate, game_data.item(item_class))} de {game_data.item(item_class).display_name_fr}"
+        _("{rate} de {item}").format(
+            rate=_rate(rate, game_data.item(item_class)),
+            item=game_data.item(item_class).name,
+        )
         for item_class, rate in sorted(report.final_outputs.items())
     )
 
@@ -642,12 +746,15 @@ def _power(report: FactoryReport) -> Iterator[Diagnostic]:
     yield Diagnostic(
         severity=Severity.ERROR,
         code=DiagnosticCode.POWER_DEFICIT,
-        message=(
-            f"Déficit électrique : {_number(report.power_total_mw)} MW consommés pour "
-            f"{_number(report.power_production_mw)} MW produits, soit "
-            f"{_number(abs(report.power_balance_mw))} MW manquants. En jeu, le réseau "
-            f"disjoncte entièrement jusqu'à intervention manuelle : les débits affichés "
-            f"ci-dessus ne sont donc pas bridés, ils supposent le courant rétabli."
+        message=_(
+            "Déficit électrique : {consumed} MW consommés pour {produced} MW produits, "
+            "soit {missing} MW manquants. En jeu, le réseau disjoncte entièrement "
+            "jusqu'à intervention manuelle : les débits affichés ci-dessus ne sont donc "
+            "pas bridés, ils supposent le courant rétabli."
+        ).format(
+            consumed=_number(report.power_total_mw),
+            produced=_number(report.power_production_mw),
+            missing=_number(abs(report.power_balance_mw)),
         ),
     )
 
@@ -670,10 +777,13 @@ def _buffers(
             yield Diagnostic(
                 severity=Severity.INFO,
                 code=DiagnosticCode.BUFFER_FILLING,
-                message=(
-                    f"Tampon en remplissage : +{_rate(buffer.net, item)}, "
-                    f"saturé en {_duration(buffer.minutes_to_full)} "
-                    f"({_number(buffer.capacity)} de capacité)."
+                message=_(
+                    "Tampon en remplissage : +{net}, saturé en {deadline} "
+                    "({capacity} de capacité)."
+                ).format(
+                    net=_rate(buffer.net, item),
+                    deadline=_duration(buffer.minutes_to_full),
+                    capacity=_number(buffer.capacity),
                 ),
                 node_id=buffer.node_id,
             )
@@ -681,10 +791,12 @@ def _buffers(
             yield Diagnostic(
                 severity=Severity.WARNING,
                 code=DiagnosticCode.BUFFER_DRAINING,
-                message=(
-                    f"Tampon en vidage : {_rate(buffer.net, item)}, vide en "
-                    f"{_duration(buffer.minutes_to_empty)}. Le régime permanent n'est pas "
-                    f"tenable une fois le stock épuisé."
+                message=_(
+                    "Tampon en vidage : {net}, vide en {deadline}. Le régime permanent "
+                    "n'est pas tenable une fois le stock épuisé."
+                ).format(
+                    net=_rate(buffer.net, item),
+                    deadline=_duration(buffer.minutes_to_empty),
                 ),
                 node_id=buffer.node_id,
             )
@@ -692,7 +804,7 @@ def _buffers(
             yield Diagnostic(
                 severity=Severity.INFO,
                 code=DiagnosticCode.BUFFER_FILLING,
-                message="Tampon à l'équilibre : entrées et sorties se compensent.",
+                message=_("Tampon à l'équilibre : entrées et sorties se compensent."),
                 node_id=buffer.node_id,
             )
 
@@ -709,6 +821,6 @@ _duration = formatting.duration
 
 def _building_name(class_name: str, game_data: GameData) -> str:
     try:
-        return game_data.building(class_name).display_name_fr
+        return game_data.building(class_name).name
     except UnknownClassError:
         return class_name

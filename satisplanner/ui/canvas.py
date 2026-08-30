@@ -63,18 +63,19 @@ from satisplanner.core.graph import (
     storage_item,
     unit_count,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import ItemForm, Purity, SplitterMode
 from satisplanner.core.results import FactoryReport
 from satisplanner.ui import clipboard, edits, theme
 from satisplanner.ui.canvas_items import ANY_ITEM, EdgeItem, Field, NodeItem, Port, curve
 from satisplanner.ui.catalogue import (
-    PURITY_LABELS,
-    SPLITTER_MODE_LABELS,
     PaletteEntry,
     branch_label,
     build_entries,
     extractor_choices,
     fuel_choices,
+    purity_labels,
+    splitter_mode_labels,
     transport_choices,
 )
 from satisplanner.ui.commands import (
@@ -277,6 +278,10 @@ class FactoryScene(QGraphicsScene):
             self.removeItem(item)
         self.nodes.clear()
         self.rebuild()
+
+    def set_entries(self, entries: Sequence[PaletteEntry]) -> None:
+        """Adopt a freshly built entry list, which is what a drop is decoded with."""
+        self.entries = list(entries)
 
     def dispose(self) -> None:
         """Detach from the document and let go of every item, in that order.
@@ -492,7 +497,7 @@ class FactoryScene(QGraphicsScene):
         pen = QPen(colour, 2.0, Qt.PenStyle.DashLine)
         self._band.setPen(pen)
         self._band.setToolTip(reason)
-        self.selectionSummaryChanged.emit(reason or "Relachez sur une entrée compatible.")
+        self.selectionSummaryChanged.emit(reason or _("Relâchez sur une entrée compatible."))
 
     def _finish_band(self, at: QPointF) -> None:
         assert self._band is not None and self._band_origin is not None
@@ -509,7 +514,9 @@ class FactoryScene(QGraphicsScene):
         target_id, item_class = landing
         problem = self.connect_nodes(node_id, target_id, item_class)
         self.selectionSummaryChanged.emit(
-            f"Raccordement refusé : {problem}" if problem is not None else ""
+            _("Raccordement refusé : {problem}").format(problem=problem)
+            if problem is not None
+            else ""
         )
 
     def connect_nodes(self, source: str, target: str, item_class: str) -> str | None:
@@ -522,7 +529,7 @@ class FactoryScene(QGraphicsScene):
         problem = can_connect(self.document, source, target, item_class, transport)
         if problem is not None:
             return problem
-        label = self.document.game_data.item(item_class).display_name_fr
+        label = self.document.game_data.item(item_class).name
         self.document.undo_stack.push(
             ConnectCommand(self.document, source, target, item_class, transport, label)
         )
@@ -658,10 +665,11 @@ class FactoryScene(QGraphicsScene):
             return
         parts = []
         if nodes:
-            parts.append(f"{nodes} nœud(s)")
+            parts.append(_("{count} nœud(s)").format(count=nodes))
         if edges:
-            parts.append(f"{edges} ligne(s)")
-        self.selectionSummaryChanged.emit(" et ".join(parts) + " sélectionné(s)")
+            parts.append(_("{count} ligne(s)").format(count=edges))
+        joined = _(" et ").join(parts)
+        self.selectionSummaryChanged.emit(joined + _(" sélectionné(s)"))
 
     # -------------------------------------------------------------- clipboard
 
@@ -670,7 +678,9 @@ class FactoryScene(QGraphicsScene):
         node_ids = [item.node.id for item in self.selected_nodes()]
         if not clipboard.write(self.document.graph, node_ids):
             return False
-        self.selectionSummaryChanged.emit(f"{len(node_ids)} nœud(s) copié(s).")
+        self.selectionSummaryChanged.emit(
+            _("{count} nœud(s) copié(s).").format(count=len(node_ids))
+        )
         return True
 
     def cut_selection(self) -> bool:
@@ -722,7 +732,9 @@ class FactoryScene(QGraphicsScene):
         created = command.node_ids
         self.document.undo_stack.push(command)
         self.select_nodes(created)
-        self.selectionSummaryChanged.emit(f"{len(created)} nœud(s) collé(s).")
+        self.selectionSummaryChanged.emit(
+            _("{count} nœud(s) collé(s).").format(count=len(created))
+        )
         return True
 
     # --------------------------------------------------------------- deleting
@@ -734,12 +746,11 @@ class FactoryScene(QGraphicsScene):
             return
         pieces = []
         if nodes:
-            pieces.append(f"{len(nodes)} nœud(s)")
+            pieces.append(_("{count} nœud(s)").format(count=len(nodes)))
         if edges:
-            pieces.append(f"{len(edges)} ligne(s)")
-        self.document.undo_stack.push(
-            RemoveCommand(self.document, nodes, edges, f"suppression de {' et '.join(pieces)}")
-        )
+            pieces.append(_("{count} ligne(s)").format(count=len(edges)))
+        title = _("suppression de {pieces}").format(pieces=_(" et ").join(pieces))
+        self.document.undo_stack.push(RemoveCommand(self.document, nodes, edges, title))
 
     # ---------------------------------------------------------- context menus
 
@@ -779,18 +790,18 @@ class FactoryScene(QGraphicsScene):
         menu = QMenu(parent)
         subject = self.headline_item(item.node.id)
         if subject is not None:
-            name = self.document.game_data.item(subject).display_name_fr
-            card = QAction(f"Fiche de {name}", menu)
+            name = self.document.game_data.item(subject).name
+            card = QAction(_("Fiche de {item}").format(item=name), menu)
             card.triggered.connect(
                 lambda _checked=False, cls=subject: self.itemCardRequested.emit(cls)
             )
             menu.addAction(card)
             menu.addSeparator()
         if isinstance(item.node, MachineNode):
-            adjust = QAction("Ajuster ce nœud à ses intrants", menu)
+            adjust = QAction(_("Ajuster ce nœud à ses intrants"), menu)
             adjust.triggered.connect(lambda: self.adjust_node(item.node.id))
             menu.addAction(adjust)
-            count = QAction("Nombre de machines...", menu)
+            count = QAction(_("Nombre de machines..."), menu)
             count.triggered.connect(lambda: self.ask_machine_count(item.node.id, parent))
             menu.addAction(count)
         if isinstance(item.node, ResourceNode):
@@ -831,8 +842,8 @@ class FactoryScene(QGraphicsScene):
         by three miners by three purities is a hundred entries -- so it belongs on
         the node that is already on the canvas.
         """
-        menu = QMenu("Pureté du gisement", parent)
-        for purity, label in PURITY_LABELS.items():
+        menu = QMenu(_("Pureté du gisement"), parent)
+        for purity, label in purity_labels():
             action = QAction(label, menu)
             action.setCheckable(True)
             action.setChecked(node.purity is purity)
@@ -844,8 +855,8 @@ class FactoryScene(QGraphicsScene):
 
     def _splitter_mode_menu(self, node: SplitterNode, parent: QMenu) -> QMenu:
         """Which of the three splitters this is. A choice of building, and a price."""
-        menu = QMenu("Mode du répartiteur", parent)
-        for mode, label in SPLITTER_MODE_LABELS.items():
+        menu = QMenu(_("Mode du répartiteur"), parent)
+        for mode, label in splitter_mode_labels():
             action = QAction(label, menu)
             action.setCheckable(True)
             action.setChecked(node.mode is mode)
@@ -869,7 +880,12 @@ class FactoryScene(QGraphicsScene):
         menus: list[QMenu] = []
         for edge in self.document.graph.outgoing(node.id):
             neighbour = self.document.graph.node(edge.target)
-            menu = QMenu(f"Branche vers {neighbour.label or neighbour.id}", parent)
+            menu = QMenu(
+                _("Branche vers {branch}").format(
+                    branch=neighbour.label or neighbour.id
+                ),
+                parent,
+            )
             current = branch_filter(node, edge.target)
             for setting in settings:
                 action = QAction(branch_label(setting, self.document.game_data), menu)
@@ -916,11 +932,11 @@ class FactoryScene(QGraphicsScene):
         A plain toggle would silently turn "follow the global setting" into a fixed
         choice the first time it was clicked, and the user would have no way back.
         """
-        menu = QMenu("Rendu déployé", parent)
+        menu = QMenu(_("Rendu déployé"), parent)
         for value, label in (
-            (None, "Suivre la préférence"),
-            (True, "Afficher les machines"),
-            (False, "Masquer les machines"),
+            (None, _("Suivre la préférence")),
+            (True, _("Afficher les machines")),
+            (False, _("Masquer les machines")),
         ):
             action = QAction(label, menu)
             action.setCheckable(True)
@@ -936,11 +952,12 @@ class FactoryScene(QGraphicsScene):
         node = self.document.graph.node(node_id)
         if node.show_deployed is deployed:
             return
-        label = {
-            None: "rendu déployé : préférence",
-            True: "rendu déployé : affiché",
-            False: "rendu déployé : masqué",
-        }[deployed]
+        if deployed is None:
+            label = _("rendu déployé : préférence")
+        elif deployed:
+            label = _("rendu déployé : affiché")
+        else:
+            label = _("rendu déployé : masqué")
         self.document.undo_stack.push(
             SetNodeFieldCommand(self.document, node_id, "show_deployed", deployed, label)
         )
@@ -980,8 +997,8 @@ class FactoryScene(QGraphicsScene):
         arriving leaves it undecidable, and a buffer pinned by hand must be
         un-pinnable -- otherwise it refuses the next line without saying why.
         """
-        menu = QMenu("Contenu du tampon", parent)
-        deduced = QAction("Déduit des lignes raccordées", menu)
+        menu = QMenu(_("Contenu du tampon"), parent)
+        deduced = QAction(_("Déduit des lignes raccordées"), menu)
         deduced.setCheckable(True)
         deduced.setChecked(node.item_class is None)
         deduced.triggered.connect(lambda: self.set_storage_item(node.id, None))
@@ -990,7 +1007,7 @@ class FactoryScene(QGraphicsScene):
 
         arriving = sorted({edge.item_class for edge in self.document.graph.incoming(node.id)})
         for item_class in arriving:
-            label = self.document.game_data.item(item_class).display_name_fr
+            label = self.document.game_data.item(item_class).name
             action = QAction(label, menu)
             action.setCheckable(True)
             action.setChecked(node.item_class == item_class)
@@ -1011,9 +1028,11 @@ class FactoryScene(QGraphicsScene):
         if node.item_class == item_class:
             return
         label = (
-            "déduction du contenu"
+            _("déduction du contenu")
             if item_class is None
-            else f"contenu fixé à {self.document.game_data.item(item_class).display_name_fr}"
+            else _("contenu fixé à {item}").format(
+                item=self.document.game_data.item(item_class).name
+            )
         )
         self.document.undo_stack.push(
             SetNodeFieldCommand(self.document, node_id, "item_class", item_class, label)
@@ -1053,8 +1072,8 @@ class FactoryScene(QGraphicsScene):
         game_data = self.document.game_data
         upgrade = self.sufficient_tier(edge.id)
         if upgrade is not None:
-            label = game_data.building(upgrade).display_name_fr
-            action = QAction(f"Passer au tier suffisant ({label})", menu)
+            label = game_data.building(upgrade).name
+            action = QAction(_("Passer au tier suffisant ({tier})").format(tier=label), menu)
             action.triggered.connect(lambda: self.upgrade_line(edge.id))
             menu.addAction(action)
             menu.addSeparator()
@@ -1092,7 +1111,7 @@ class FactoryScene(QGraphicsScene):
         node = self.document.graph.node(node_id)
         assert isinstance(node, MachineNode)
         if abs(suggestion - node.machine_count) < 1e-9:
-            self.selectionSummaryChanged.emit("Ce nœud est déjà à la bonne taille.")
+            self.selectionSummaryChanged.emit(_("Ce nœud est déjà à la bonne taille."))
             return
         self.set_quantity(node_id, suggestion)
 
@@ -1108,13 +1127,18 @@ class FactoryScene(QGraphicsScene):
         shard = self.document.game_data.overclock_shard()
         hint = ""
         if shard is not None:
-            name = self.document.game_data.item(shard.class_name).display_name_fr
-            hint = f"\nAu-delà de 100 %, chaque machine consomme des {name}."
+            name = self.document.game_data.item(shard.class_name).name
+            hint = _("\nAu-delà de 100 %, chaque machine consomme des {item}.").format(
+                item=name
+            )
         value, accepted = QInputDialog.getDouble(
             parent,
-            "Cadence",
-            f"Cadence en pourcentage ({formatting.percent(constants.MIN_CLOCK_SPEED)} a "
-            f"{formatting.percent(constants.MAX_CLOCK_SPEED)}) :{hint}",
+            _("Cadence"),
+            _("Cadence en pourcentage ({low} a {high}) :").format(
+                low=formatting.percent(constants.MIN_CLOCK_SPEED),
+                high=formatting.percent(constants.MAX_CLOCK_SPEED),
+            )
+            + hint,
             node.clock_speed * 100.0,
             constants.MIN_CLOCK_SPEED * 100.0,
             constants.MAX_CLOCK_SPEED * 100.0,
@@ -1128,8 +1152,8 @@ class FactoryScene(QGraphicsScene):
         assert isinstance(node, MachineNode)
         value, accepted = QInputDialog.getDouble(
             parent,
-            "Nombre de machines",
-            "Machines construites (les décimales sont admises) :",
+            _("Nombre de machines"),
+            _("Machines construites (les décimales sont admises) :"),
             node.machine_count,
             0.0,
             10_000.0,

@@ -72,7 +72,12 @@ logger = logging.getLogger(__name__)
 # game that puts matter back into the factory -- and `generators.power_min_mw`,
 # `power_max_mw` and `has_purity` carry the geothermal one, whose output swings and
 # depends on the geyser it stands on rather than on any fuel.
-SCHEMA_VERSION: Final = 11
+# 12 added the English halves the interface needed to speak English:
+# `items.description_en` and `recipes.building_name_en`. The three display names were
+# already stored in both languages -- the parser has read `en-US.json` for structure
+# and `fr.json` for labels since the first version -- so what was missing was exactly
+# two columns, and no term of the game is translated here either.
+SCHEMA_VERSION: Final = 12
 
 # The documentation files carry no version field: this is the game version we
 # target and validate against, declared here rather than read from the data.
@@ -101,9 +106,10 @@ CREATE TABLE items (
     class_name      TEXT PRIMARY KEY,
     display_name    TEXT NOT NULL,
     display_name_fr TEXT NOT NULL,
-    -- mDescription, French when the locale has one. Empty rather than null: an
-    -- item with no blurb in the data shows none, and nothing is written for it.
+    -- mDescription, in both languages. Empty rather than null: an item with no
+    -- blurb in the data shows none, and nothing is written for it.
     description_fr  TEXT NOT NULL DEFAULT '',
+    description_en  TEXT NOT NULL DEFAULT '',
     form            TEXT NOT NULL CHECK (form IN ('solid', 'liquid', 'gas')),
     stack_size      REAL NOT NULL,
     icon_file       TEXT,
@@ -160,6 +166,7 @@ CREATE TABLE recipes (
     availability     TEXT NOT NULL DEFAULT 'placeable'
                      CHECK (availability IN ('placeable', 'machine', 'hand')),
     building_name_fr TEXT NOT NULL DEFAULT '',
+    building_name_en TEXT NOT NULL DEFAULT '',
     -- What one machine running this recipe draws, when the building declares
     -- nothing. Both zero for every recipe whose building has a nameplate, which is
     -- all but the Converter, the Particle Accelerator and the Quantum Encoder. The
@@ -346,15 +353,17 @@ def _insert_meta(connection: sqlite3.Connection, dataset: GameDataset) -> None:
 
 def _insert_items(connection: sqlite3.Connection, items: tuple[Item, ...]) -> None:
     connection.executemany(
-        "INSERT INTO items (class_name, display_name, display_name_fr, description_fr, form,"
-        " stack_size, icon_file, sink_points, is_raw_resource, is_event, energy_mj,"
-        " byproduct_of_fr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO items (class_name, display_name, display_name_fr, description_fr,"
+        " description_en, form, stack_size, icon_file, sink_points, is_raw_resource,"
+        " is_event, energy_mj, byproduct_of_fr)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 item.class_name,
                 item.display_name,
                 item.display_name_fr,
                 item.description_fr,
+                item.description_en,
                 item.form.value,
                 item.stack_size,
                 item.icon_file,
@@ -411,8 +420,8 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...])
     connection.executemany(
         "INSERT INTO recipes (class_name, display_name, display_name_fr, building_class,"
         " cycle_seconds, is_alternate, involves_fluid, product_count, is_event,"
-        " availability, building_name_fr, power_constant_mw, power_factor_mw)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " availability, building_name_fr, building_name_en, power_constant_mw,"
+        " power_factor_mw) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 recipe.class_name,
@@ -426,6 +435,7 @@ def _insert_recipes(connection: sqlite3.Connection, recipes: tuple[Recipe, ...])
                 int(recipe.is_event),
                 recipe.availability.value,
                 recipe.building_name_fr,
+                recipe.building_name_en,
                 recipe.power_constant_mw,
                 recipe.power_factor_mw,
             )
@@ -575,6 +585,7 @@ def read_items(connection: sqlite3.Connection) -> list[Item]:
             display_name=row["display_name"],
             display_name_fr=row["display_name_fr"],
             description_fr=row["description_fr"],
+            description_en=row["description_en"],
             form=ItemForm(row["form"]),
             stack_size=row["stack_size"],
             icon_file=row["icon_file"],
@@ -658,6 +669,7 @@ def _read_recipes(connection: sqlite3.Connection, *, placeable: bool) -> list[Re
             is_event=bool(row["is_event"]),
             availability=RecipeAvailability(row["availability"]),
             building_name_fr=row["building_name_fr"],
+            building_name_en=row["building_name_en"],
             power_constant_mw=row["power_constant_mw"],
             power_factor_mw=row["power_factor_mw"],
         )

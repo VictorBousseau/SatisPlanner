@@ -17,10 +17,10 @@ from satisplanner import __version__
 from satisplanner.core.models import GameData
 from satisplanner.data import db
 from satisplanner.ui.help_dialog import (
-    GESTURES,
-    MODELLING_NOTES,
     HelpDialog,
+    gestures,
     help_html,
+    modelling_notes,
     shortcut_rows,
 )
 from satisplanner.ui.main_window import MainWindow
@@ -69,7 +69,7 @@ def test_menu_mnemonics_do_not_leak_into_the_page(window: MainWindow) -> None:
 def test_the_canvas_gestures_are_all_described(window: MainWindow) -> None:
     """The part nobody can guess, and the only part written by hand."""
     page = help_html(shortcut_rows(window.documented_actions()))
-    for gesture, effect in GESTURES:
+    for gesture, effect in gestures():
         assert gesture in page
         assert effect in page
     assert "Clic milieu" in page
@@ -79,7 +79,7 @@ def test_the_canvas_gestures_are_all_described(window: MainWindow) -> None:
 def test_the_modelling_rules_are_stated_where_a_user_looks(window: MainWindow) -> None:
     """Rules nobody can deduce from the screen, and will otherwise assume wrongly."""
     page = help_html(shortcut_rows(window.documented_actions()))
-    for note in MODELLING_NOTES:
+    for note in modelling_notes():
         assert note in page
     assert "pureté d'un gisement s'applique" in page
     assert "deux nœuds" in page

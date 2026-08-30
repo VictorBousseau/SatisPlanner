@@ -26,6 +26,8 @@ from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import QMessageBox
 
 from satisplanner import __version__, paths
+from satisplanner.core import i18n
+from satisplanner.core.i18n import _
 from satisplanner.data import db, factory_file
 from satisplanner.data.icons import IconSupply
 from satisplanner.ui.catalogue import EntryKind
@@ -66,11 +68,12 @@ class SelfCheck:
 
     def run(self) -> list[Check]:
         paths.ensure_directory(self.directory)
-        self._step("Base de recettes chargée", self._catalogue)
-        self._step("Palette peuplée", self._palette)
-        self._step("Icônes", self._icons)
-        self._step("Interface en français", self._french)
-        self._step("Conception, enregistrement, réouverture", self._round_trip)
+        self._step(_("Base de recettes chargée"), self._catalogue)
+        self._step(_("Palette peuplée"), self._palette)
+        self._step(_("Icônes"), self._icons)
+        self._step("Traduction anglaise", self._translation)
+        self._step(_("Traductions du toolkit"), self._toolkit)
+        self._step(_("Conception, enregistrement, réouverture"), self._round_trip)
         self._step("Code de partage", self._share_code)
         self._step("Export PNG", self._png)
         self._step("Export PDF", self._pdf)
@@ -88,7 +91,7 @@ class SelfCheck:
 
     def _catalogue(self) -> str:
         game_data = self.window.game_data
-        assert game_data.recipes, "aucune recette : la base n'a pas été embarquée"
+        assert game_data.recipes, _("aucune recette : la base n'a pas été embarquée")
         assert game_data.items, "aucun item"
         # The second count is not decoration: it is the part of the game this
         # version keeps without being able to place, and a build that lost it
@@ -114,8 +117,8 @@ class SelfCheck:
         reports what it says.
         """
         provider = self.window.icons
-        drawn = provider.generate("Desc_Verification_C", "Vérification")
-        assert not drawn.isNull(), "le repli généré ne dessine rien"
+        drawn = provider.generate("Desc_Verification_C", _("Vérification"))
+        assert not drawn.isNull(), _("le repli généré ne dessine rien")
         status = provider.status
         if status.supply is IconSupply.PRESENT:
             return f"{status.indexed} fichier(s) indexé(s), repli généré opérationnel"
@@ -123,35 +126,80 @@ class SelfCheck:
         # would make the one line somebody reads twice as long as it needs to be.
         return status.sentence()
 
-    def _french(self) -> str:
+    def _translation(self) -> str:
+        """How much of the interface can actually speak English.
+
+        Reported for the same reason the icons are: a build that lost ``en.json``,
+        or one shipped while the catalogue was still being written, looks exactly
+        like a finished one until somebody switches language. A figure here means
+        nobody ships half a translation without knowing it.
+
+        Not a failure while the catalogue is incomplete -- the French interface is
+        whole, and that is what this check is verifying is intact. It becomes one
+        the day a build regresses from complete to partial.
+
+        A **missing** catalogue is a failure, and it is the one this check exists
+        for. A frozen build ships no ``.py`` beside itself, so the ratio cannot be
+        computed there; what can be, and is, is the number of sentences ``en.json``
+        actually holds. Saying only "not measurable" would have made a build that
+        lost the file read exactly like a healthy one -- which is the accident the
+        packaging step already guards against for the database, by the same means.
+        """
+        translated, translatable = i18n.coverage()
+        if not translatable:
+            if paths.is_frozen():
+                held = len(i18n.catalogue())
+                assert held, _("catalogue anglais absent de la build")
+                return _(
+                    "{count} phrases embarquées ; la proportion se mesure aux sources"
+                ).format(count=held)
+            return _("aucune chaîne n'est encore passée par le catalogue")
+        share = translated / translatable
+        pattern = (
+            _("{translated} / {total} chaînes traduites ({share}) — traduction complète")
+            if translated == translatable
+            else _("{translated} / {total} chaînes traduites ({share}) — traduction en cours")
+        )
+        return pattern.format(
+            translated=translated, total=translatable, share=f"{share:.0%}"
+        )
+
+    def _toolkit(self) -> str:
         """Qt's own strings, which live in a file the packaging can quietly drop.
 
         Checked on a real message box rather than on the loader's return value: what
         matters is the word on the button, not whether a catalogue was found.
+
+        The word expected follows the language in force. It used to be "Annuler" and
+        nothing else, which was right while French was the only language and became
+        a check that failed on a perfectly healthy English build the day it was not.
         """
         box = QMessageBox()
         box.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel)
         labels = {button.text().replace("&", "") for button in box.buttons()}
-        assert "Annuler" in labels, f"boutons standard non traduits : {sorted(labels)}"
-        return f"boutons standard traduits ({', '.join(sorted(labels))})"
+        wanted = "Cancel" if i18n.is_english() else "Annuler"
+        assert wanted in labels, f"boutons standard non traduits : {sorted(labels)}"
+        return _("boutons standard traduits ({labels})").format(
+            labels=", ".join(sorted(labels))
+        )
 
     def _round_trip(self) -> str:
         chain = self._build_chain()
         report = self.window.document.solve_now()
-        assert report.final_outputs, "l'usine ne produit rien"
+        assert report.final_outputs, _("l'usine ne produit rien")
 
         path = self.directory / "verification.sfp"
-        assert self.window._write(path), "l'enregistrement a échoué"
+        assert self.window._write(path), _("l'enregistrement a échoué")
         assert path.is_file()
 
         self.window.document.reset()
         assert not self.window.document.graph.nodes
-        assert self.window.open_file(path), "la réouverture a échoué"
+        assert self.window.open_file(path), _("la réouverture a échoué")
         reopened = {node.id for node in self.window.document.graph.nodes}
         assert reopened == chain, f"nœuds perdus : {chain - reopened}"
 
         outputs = self.window.document.solve_now().final_outputs
-        assert outputs == report.final_outputs, "les débits ont changé en passant par le disque"
+        assert outputs == report.final_outputs, _("les débits ont changé en passant par le disque")
         return f"{len(chain)} nœuds, {path.name} ({path.stat().st_size} octets), débits identiques"
 
     def _share_code(self) -> str:
@@ -166,12 +214,12 @@ class SelfCheck:
 
     def _png(self) -> str:
         path = self.directory / "verification.png"
-        assert self.window.export_png(path), "l'export PNG a échoué"
+        assert self.window.export_png(path), _("l'export PNG a échoué")
         return f"{path.name} ({path.stat().st_size} octets)"
 
     def _pdf(self) -> str:
         path = self.directory / "verification.pdf"
-        assert self.window.export_pdf(path, include_totals=True), "l'export PDF a échoué"
+        assert self.window.export_pdf(path, include_totals=True), _("l'export PDF a échoué")
         return f"{path.name} ({path.stat().st_size} octets)"
 
     # ------------------------------------------------------------------ helper
@@ -202,16 +250,24 @@ class SelfCheck:
 def report_text(checks: list[Check], directory: Path, elapsed: float) -> str:
     """The whole checklist as one block of text, for the log and for the box."""
     lines = [
-        f"SatisPlanner {__version__} — vérification de l'exécutable",
-        f"Données de jeu : Satisfactory {db.GAME_VERSION}",
-        f"Exécution {'depuis les sources' if not paths.is_frozen() else 'empaquetée'}"
-        f" — ressources : {paths.resource_directory()}",
+        _("SatisPlanner {version} — vérification de l'exécutable").format(
+            version=__version__
+        ),
+        _("Données de jeu : Satisfactory {version}").format(version=db.GAME_VERSION),
+        (
+            _("Exécution empaquetée — ressources : {directory}")
+            if paths.is_frozen()
+            else _("Exécution depuis les sources — ressources : {directory}")
+        ).format(directory=paths.resource_directory()),
         "",
         *[str(check) for check in checks],
         "",
-        f"{sum(check.passed for check in checks)} / {len(checks)} vérifications réussies"
-        f" en {elapsed:.2f} s",
-        f"Fichiers produits : {directory}",
+        _("{passed} / {total} vérifications réussies en {seconds} s").format(
+            passed=sum(check.passed for check in checks),
+            total=len(checks),
+            seconds=f"{elapsed:.2f}",
+        ),
+        _("Fichiers produits : {directory}").format(directory=directory),
     ]
     return "\n".join(lines)
 

@@ -58,9 +58,10 @@ from PySide6.QtWidgets import (
 )
 
 from satisplanner import __version__, logging_setup
-from satisplanner.core import formatting, interface
+from satisplanner.core import formatting, i18n, interface
 from satisplanner.core.graph import SCHEMA_VERSION as DOCUMENT_SCHEMA_VERSION
 from satisplanner.core.graph import AttachmentMode, FactoryGraph
+from satisplanner.core.i18n import Language, _
 from satisplanner.core.models import GameData
 from satisplanner.core.planner import PlanError
 from satisplanner.core.results import FactoryReport, Severity
@@ -78,7 +79,9 @@ from satisplanner.ui.generate import GenerateDialog
 from satisplanner.ui.help_dialog import HelpDialog, shortcut_rows
 from satisplanner.ui.icon_provider import IconProvider
 from satisplanner.ui.item_card import ItemCard
-from satisplanner.ui.localisation import install_french_translations
+from satisplanner.ui.localisation import (
+    install_translations,
+)
 from satisplanner.ui.modules import ModuleLibraryDialog, SaveModuleDialog
 from satisplanner.ui.palette import PaletteWidget
 from satisplanner.ui.preferences import Preferences, PreferencesDialog
@@ -107,12 +110,12 @@ class ShareCodeDialog(QDialog):
         self.resize(560, 260)
         self.edit = QPlainTextEdit(code, self)
         self.edit.setReadOnly(read_only)
-        self.edit.setPlaceholderText("Collez ici un code commencant par SFP1:")
+        self.edit.setPlaceholderText(_("Collez ici un code commençant par SFP1:"))
         self.edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
 
         buttons = QDialogButtonBox(self)
         if read_only:
-            copy = buttons.addButton("Copier le code", QDialogButtonBox.ButtonRole.ActionRole)
+            copy = buttons.addButton(_("Copier le code"), QDialogButtonBox.ButtonRole.ActionRole)
             copy.clicked.connect(self._copy)
             # Close carries the reject role, so ``rejected`` closes the box. Matching
             # on the button's own text would work only until Qt speaks French.
@@ -155,14 +158,19 @@ def ask_partial_save(parent: QWidget, name: str, description: str) -> PartialSav
     """
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
-    box.setWindowTitle("Cette usine n'a pas été ouverte en entier")
+    box.setWindowTitle(_("Cette usine n'a pas été ouverte en entier"))
     box.setText(
-        f"« {name} » contenait des éléments que ce catalogue ne connait pas.\n"
-        "Enregistrer par-dessus le fichier d'origine les supprimerait definitivement."
+        _(
+            "« {name} » contenait des éléments que ce catalogue ne connait pas.\n"
+            "Enregistrer par-dessus le fichier d'origine les supprimerait "
+            "définitivement."
+        ).format(name=name)
     )
     box.setInformativeText(description)
-    save_as = box.addButton("Enregistrer sous...", QMessageBox.ButtonRole.AcceptRole)
-    overwrite = box.addButton(f"Ecraser {name}", QMessageBox.ButtonRole.DestructiveRole)
+    save_as = box.addButton(_("Enregistrer sous..."), QMessageBox.ButtonRole.AcceptRole)
+    overwrite = box.addButton(
+        _("Écraser {name}").format(name=name), QMessageBox.ButtonRole.DestructiveRole
+    )
     box.addButton(QMessageBox.StandardButton.Cancel)
     box.setDefaultButton(save_as)
     box.exec()
@@ -180,8 +188,8 @@ class PdfOptionsDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Export PDF")
-        self.totals = QCheckBox("Inclure le tableau des totaux et les diagnostics", self)
+        self.setWindowTitle(_("Export PDF"))
+        self.totals = QCheckBox(_("Inclure le tableau des totaux et les diagnostics"), self)
         self.totals.setChecked(True)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -206,12 +214,16 @@ class MainWindow(QMainWindow):
         module_directory: Path | None = None,
     ) -> None:
         super().__init__()
-        # Before any dialog can be built: "Cancel" under a French question is this
-        # application's own text and Qt's text disagreeing.
-        install_french_translations()
-        self.game_data = game_data if game_data is not None else load_catalogue()
         # Injectable so a test never writes to the developer's own settings.
         self.preferences = Preferences(settings)
+        # The language before anything is built, because everything built after it
+        # reads it: the palette entries carry the game's word for each recipe, and
+        # a dialog's buttons come from Qt's own catalogue. On a first launch this is
+        # the system's language, so an English speaker is not left guessing how to
+        # get out of French.
+        i18n.set_language(self.preferences.language)
+        install_translations(i18n.language())
+        self.game_data = game_data if game_data is not None else load_catalogue()
         self.icons = IconProvider.from_default_roots(
             user_directory=self.preferences.effective_icon_directory
         )
@@ -424,13 +436,13 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ layout
 
     def _build_docks(self) -> None:
-        self.palette_dock = self._dock("Palette", "palette", self.palette_widget, PALETTE_WIDTH)
+        self.palette_dock = self._dock(_("Palette"), "palette", self.palette_widget, PALETTE_WIDTH)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.palette_dock)
 
-        self.table_dock = self._dock("Tableau", "tableau", self.table_panel, PANEL_WIDTH)
-        self.totals_dock = self._dock("Totaux", "totaux", self.totals_panel, PANEL_WIDTH)
+        self.table_dock = self._dock(_("Tableau"), "tableau", self.table_panel, PANEL_WIDTH)
+        self.totals_dock = self._dock(_("Totaux"), "totaux", self.totals_panel, PANEL_WIDTH)
         self.diagnostics_dock = self._dock(
-            "Diagnostics", "diagnostics", self.diagnostics_panel, PANEL_WIDTH
+            _("Diagnostics"), "diagnostics", self.diagnostics_panel, PANEL_WIDTH
         )
         for dock in (self.table_dock, self.totals_dock, self.diagnostics_dock):
             self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -454,43 +466,54 @@ class MainWindow(QMainWindow):
         self._build_generator_actions()
         self._build_attachment_mode_actions()
         self._build_module_actions()
+        self._build_language_actions()
         self._build_help_actions()
 
     def _build_file_actions(self) -> None:
-        self.new_action = _action(self, "Nouvel onglet", QKeySequence.StandardKey.New, self.new_tab)
+        self.new_action = _action(
+            self, _("Nouvel onglet"), QKeySequence.StandardKey.New, self.new_tab
+        )
         # Two bindings for one gesture: Ctrl+N is what "new document" means
         # everywhere, Ctrl+T is what "new tab" means everywhere, and with tabs they
         # are the same gesture. The help page lists both.
         self.new_action.setShortcuts(
             [QKeySequence(QKeySequence.StandardKey.New), QKeySequence("Ctrl+T")]
         )
-        self.open_action = _action(self, "Ouvrir...", QKeySequence.StandardKey.Open, self.open_file)
-        self.close_tab_action = _action(self, "Fermer l'onglet", "Ctrl+W", self.close_current_tab)
-        self.next_tab_action = _action(self, "Onglet suivant", "Ctrl+Tab", self.next_tab)
-        self.save_action = _action(self, "Enregistrer", QKeySequence.StandardKey.Save, self.save)
+        self.open_action = _action(
+            self, _("Ouvrir..."), QKeySequence.StandardKey.Open, self.open_file
+        )
+        self.close_tab_action = _action(
+            self, _("Fermer l'onglet"), "Ctrl+W", self.close_current_tab
+        )
+        self.next_tab_action = _action(self, _("Onglet suivant"), "Ctrl+Tab", self.next_tab)
+        self.save_action = _action(
+            self, _("Enregistrer"), QKeySequence.StandardKey.Save, self.save
+        )
         self.save_as_action = _action(
-            self, "Enregistrer sous...", QKeySequence.StandardKey.SaveAs, self.save_as
+            self, _("Enregistrer sous..."), QKeySequence.StandardKey.SaveAs, self.save_as
         )
         self.copy_code_action = _action(
-            self, "Copier le code de partage", "Ctrl+Shift+C", self.copy_code
+            self, _("Copier le code de partage"), "Ctrl+Shift+C", self.copy_code
         )
         self.import_code_action = _action(
-            self, "Importer depuis un code...", "Ctrl+Shift+V", self.import_code
+            self, _("Importer depuis un code..."), "Ctrl+Shift+V", self.import_code
         )
         self.export_png_action = _action(
-            self, "Exporter en PNG...", "Ctrl+Shift+E", self.export_png
+            self, _("Exporter en PNG..."), "Ctrl+Shift+E", self.export_png
         )
         self.export_pdf_action = _action(
-            self, "Exporter en PDF...", QKeySequence.StandardKey.Print, self.export_pdf
+            self, _("Exporter en PDF..."), QKeySequence.StandardKey.Print, self.export_pdf
         )
-        self.preferences_action = _action(self, "Préférences...", "Ctrl+,", self.edit_preferences)
-        self.quit_action = _action(self, "Quitter", QKeySequence.StandardKey.Quit, self.close)
+        self.preferences_action = _action(
+            self, _("Préférences..."), "Ctrl+,", self.edit_preferences
+        )
+        self.quit_action = _action(self, _("Quitter"), QKeySequence.StandardKey.Quit, self.close)
 
-        menu = self.menuBar().addMenu("&Fichier")
+        menu = self.menuBar().addMenu(_("&Fichier"))
         self.menus.append(menu)
         menu.addAction(self.new_action)
         menu.addAction(self.open_action)
-        self.recent_menu = menu.addMenu("Fichiers récents")
+        self.recent_menu = menu.addMenu(_("Fichiers récents"))
         menu.addSeparator()
         menu.addAction(self.next_tab_action)
         menu.addAction(self.close_tab_action)
@@ -508,7 +531,7 @@ class MainWindow(QMainWindow):
         menu.addAction(self.quit_action)
         self.refresh_recent_menu()
 
-        toolbar = QToolBar("Fichier", self)
+        toolbar = QToolBar(_("Fichier"), self)
         toolbar.setObjectName("toolbar_fichier")
         toolbar.setMovable(False)
         toolbar.addAction(self.new_action)
@@ -517,16 +540,16 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
 
     def _build_edit_actions(self) -> None:
-        toolbar = QToolBar("Édition", self)
+        toolbar = QToolBar(_("Édition"), self)
         toolbar.setObjectName("toolbar_edition")
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
         # From the group rather than from one stack: the action stays the same
         # object across a tab change and follows whichever history is active.
-        self.undo_action = self.undo_group.createUndoAction(self, "Annuler")
+        self.undo_action = self.undo_group.createUndoAction(self, _("Annuler"))
         self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
-        self.redo_action = self.undo_group.createRedoAction(self, "Refaire")
+        self.redo_action = self.undo_group.createRedoAction(self, _("Refaire"))
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         toolbar.addAction(self.undo_action)
         toolbar.addAction(self.redo_action)
@@ -538,36 +561,36 @@ class MainWindow(QMainWindow):
         # click, which is the only moment at which the answer is known.
         self.delete_action = _action(
             self,
-            "Supprimer",
+            _("Supprimer"),
             QKeySequence.StandardKey.Delete,
             lambda: self.scene.delete_selection(),
         )
         self.select_all_action = _action(
             self,
-            "Tout sélectionner",
+            _("Tout sélectionner"),
             QKeySequence.StandardKey.SelectAll,
             lambda: self.scene.select_all(),
         )
         self.copy_action = _action(
-            self, "Copier", QKeySequence.StandardKey.Copy, lambda: self.scene.copy_selection()
+            self, _("Copier"), QKeySequence.StandardKey.Copy, lambda: self.scene.copy_selection()
         )
         self.cut_action = _action(
-            self, "Couper", QKeySequence.StandardKey.Cut, lambda: self.scene.cut_selection()
+            self, _("Couper"), QKeySequence.StandardKey.Cut, lambda: self.scene.cut_selection()
         )
         self.paste_action = _action(
-            self, "Coller", QKeySequence.StandardKey.Paste, lambda: self.scene.paste()
+            self, _("Coller"), QKeySequence.StandardKey.Paste, lambda: self.scene.paste()
         )
         self.duplicate_action = _action(
-            self, "Dupliquer", "Ctrl+D", lambda: self.scene.duplicate_selection()
+            self, _("Dupliquer"), "Ctrl+D", lambda: self.scene.duplicate_selection()
         )
-        self.adjust_action = _action(self, "Ajuster ce nœud", "Ctrl+E", self._adjust_selection)
+        self.adjust_action = _action(self, _("Ajuster ce nœud"), "Ctrl+E", self._adjust_selection)
         self.adjust_action.setToolTip(
-            "Dimensionne le nœud sélectionné à ce que ses intrants permettent (calcul local)"
+            _("Dimensionne le nœud sélectionné à ce que ses intrants permettent (calcul local)")
         )
         toolbar.addAction(self.delete_action)
         toolbar.addAction(self.adjust_action)
 
-        menu = self.menuBar().addMenu("&Édition")
+        menu = self.menuBar().addMenu(_("&Édition"))
         self.menus.append(menu)
         menu.addAction(self.undo_action)
         menu.addAction(self.redo_action)
@@ -585,20 +608,20 @@ class MainWindow(QMainWindow):
         # Through the window for the same reason as the edit actions: the view is
         # the active tab's, and which tab that is changes.
         self.zoom_in_action = _action(
-            self, "Zoom avant", QKeySequence.StandardKey.ZoomIn, lambda: self.view.zoom_in()
+            self, _("Zoom avant"), QKeySequence.StandardKey.ZoomIn, lambda: self.view.zoom_in()
         )
         self.zoom_out_action = _action(
-            self, "Zoom arrière", QKeySequence.StandardKey.ZoomOut, lambda: self.view.zoom_out()
+            self, _("Zoom arrière"), QKeySequence.StandardKey.ZoomOut, lambda: self.view.zoom_out()
         )
         self.reset_zoom_action = _action(
-            self, "Zoom 100 %", "Ctrl+0", lambda: self.view.reset_zoom()
+            self, _("Zoom 100 %"), "Ctrl+0", lambda: self.view.reset_zoom()
         )
-        self.fit_action = _action(self, "Tout afficher", "Ctrl+Shift+F", self.fit_to_factory)
+        self.fit_action = _action(self, _("Tout afficher"), "Ctrl+Shift+F", self.fit_to_factory)
         self.search_action = _action(
-            self, "Rechercher dans la palette", "Ctrl+F", self.focus_search
+            self, _("Rechercher dans la palette"), "Ctrl+F", self.focus_search
         )
         self.deployed_action = _action(
-            self, "Machines déployées", "Ctrl+M", self.toggle_deployed_rendering
+            self, _("Machines déployées"), "Ctrl+M", self.toggle_deployed_rendering
         )
         self.deployed_action.setCheckable(True)
 
@@ -608,7 +631,7 @@ class MainWindow(QMainWindow):
             toolbar.addAction(self.reset_zoom_action)
             toolbar.addAction(self.fit_action)
 
-        menu = self.menuBar().addMenu("&Affichage")
+        menu = self.menuBar().addMenu(_("&Affichage"))
         self.menus.append(menu)
         menu.addAction(self.palette_dock.toggleViewAction())
         for dock in self.panel_docks:
@@ -627,9 +650,9 @@ class MainWindow(QMainWindow):
 
     def _build_generator_actions(self) -> None:
         self.generate_action = _action(
-            self, "Générer une usine depuis un objectif...", "Ctrl+G", self.generate_factory
+            self, _("Générer une usine depuis un objectif..."), "Ctrl+G", self.generate_factory
         )
-        menu = self.menuBar().addMenu("&Générer")
+        menu = self.menuBar().addMenu(_("&Générer"))
         self.menus.append(menu)
         menu.addAction(self.generate_action)
 
@@ -649,16 +672,159 @@ class MainWindow(QMainWindow):
             # ordinary factory, and an ordinary factory obeys its own document.
             graph, notes = dialog.generate(self.document.graph.attachment_mode)
         except PlanError as exc:
-            QMessageBox.warning(self, "Objectif irréalisable", str(exc))
+            QMessageBox.warning(self, _("Objectif irréalisable"), str(exc))
             return None
         tab = self._reusable_tab() or self.new_tab()
         self.select_tab(tab)
         tab.document.adopt(graph)
         tab.document.solve_now()
         self.refresh_title()
-        QMessageBox.information(self, "Usine générée", _paragraphs(notes))
+        QMessageBox.information(self, _("Usine générée"), _paragraphs(notes))
         self.statusBar().showMessage(notes[0], 8000)
         return tab
+
+    def _build_language_actions(self) -> None:
+        """Two exclusive entries, in a menu of their own, next to the help.
+
+        A menu **and** the preferences box, both calling :meth:`set_language`, for
+        the reason every other setting has only one home and this one has two: it is
+        the first thing somebody who cannot read the interface goes looking for, and
+        the preferences dialog they would have to open is itself in a language they
+        cannot read. A top-level menu bearing the word "Language" is findable
+        without reading anything else.
+        """
+        menu = self.menuBar().addMenu("&Langue / Language")
+        self.menus.append(menu)
+        self.language_actions: dict[Language, QAction] = {}
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        for language in Language:
+            action = QAction(language.english_name, self)
+            action.setCheckable(True)
+            action.setActionGroup(group)
+            action.triggered.connect(
+                lambda _checked=False, chosen=language: self.set_language(chosen)
+            )
+            menu.addAction(action)
+            self.language_actions[language] = action
+        self.refresh_language_actions()
+
+    def refresh_language_actions(self) -> None:
+        """Tick the language in force, and say plainly where the translation stands.
+
+        The English entry carries its own coverage until the catalogue is finished.
+        Somebody who switches and finds French sentences under English item names
+        must have been told first: an announced gap is a state of the work, an
+        unannounced one looks like a defect.
+        """
+        current = i18n.language()
+        for language, action in self.language_actions.items():
+            action.setChecked(language is current)
+        english = self.language_actions[Language.ENGLISH]
+        translated, translatable = i18n.coverage()
+        # Announced unless the catalogue is provably complete. "Nothing is wrapped
+        # yet" and "half of it is translated" both need saying; only "all of it"
+        # does not.
+        if not (translatable and translated == translatable):
+            share = f" — {translated / translatable:.0%}" if translatable else ""
+            english.setText(f"English (traduction en cours{share})")
+            english.setStatusTip(
+                _(
+                    "Les noms du jeu et les nombres sont en anglais ; les phrases de "
+                    "l'interface sont encore en français."
+                )
+            )
+        else:
+            english.setText(Language.ENGLISH.english_name)
+            english.setStatusTip("")
+
+    def set_language(self, language: Language | str) -> None:
+        """Switch the whole interface, without restarting and without losing anything.
+
+        Nothing here touches a document: the graphs, the undo stacks and the
+        selections are exactly where they were. What is rebuilt is what *displays*
+        them -- the palette entries, whose labels come from the catalogue, and the
+        reports, whose node labels the engine writes at solve time. Re-solving is
+        the honest way to get those: a report is a value computed in a language, and
+        keeping the old one would leave French labels under an English interface.
+
+        Immediate rather than "restart to apply", for the same reason the icon
+        folder is: being told to restart is being told to find out later.
+        """
+        wanted = Language(language)
+        if wanted is i18n.language():
+            return
+        i18n.set_language(wanted)
+        self.preferences.language = wanted
+        install_translations(wanted)
+
+        # The palette holds one entry per recipe, labelled with the game's word for
+        # it. Rebuilt rather than relabelled: the entries are also what the canvas
+        # decodes a drop with, and two lists would be two truths.
+        self.entries = build_entries(self.game_data)
+        self.palette_widget.set_entries(self.entries)
+        for tab in self.open_tabs():
+            tab.scene.set_entries(self.entries)
+            tab.scene.rebuild()
+            tab.document.solve_now()
+        self.retranslate()
+        self._refresh_catalogue_summary()
+        logger.info("langue de l'interface : %s", wanted.value)
+
+    def retranslate(self) -> None:
+        """Put back every label that was written once, when the window was built.
+
+        A palette entry and a diagnostic are *recomputed* on a switch, so they follow
+        the language for free. A menu title, an action and a dock title are not: they
+        were set from a string at construction and nothing ever reads that string
+        again. Without this the catalogue can be complete and the menu bar still say
+        « Fichier », which is the difference between a translated catalogue and a
+        translated application.
+
+        The menus are **rebuilt** rather than relabelled, because the build methods
+        are where the words live: relabelling would mean writing all sixty of them a
+        second time, in a list that starts matching and stops. The cost is that every
+        action is a new object, so everything derived from one is restored just
+        below -- the ticks, the recent files, the mode of the factory in front.
+        """
+        direct = Qt.FindChildOption.FindDirectChildrenOnly
+        for toolbar in self.findChildren(QToolBar, options=direct):
+            self.removeToolBar(toolbar)
+            toolbar.deleteLater()
+        self.menuBar().clear()
+        for menu in self.menus:
+            menu.deleteLater()
+        self.menus.clear()
+        for action in self.findChildren(QAction, options=direct):
+            self.removeAction(action)
+            action.setParent(None)
+            action.deleteLater()
+
+        self._build_actions()
+        self._label_docks()
+        self.palette_widget.retranslate()
+        self.table_panel.retranslate()
+        self.diagnostics_panel.retranslate()
+
+        # Everything a rebuilt action had to be told, and could not carry over.
+        self.deployed_action.setChecked(self.preferences.deployed_rendering)
+        self.refresh_attachment_mode()
+        self.refresh_language_actions()
+        self.refresh_recent_menu()
+
+    def _label_docks(self) -> None:
+        """The four dock titles, which are set here and nowhere else.
+
+        The only labels written twice in this window: a dock is created once and
+        outlives every rebuild, so its title cannot come from the build methods.
+        """
+        for dock, title in (
+            (self.palette_dock, _("Palette")),
+            (self.table_dock, _("Tableau")),
+            (self.totals_dock, _("Totaux")),
+            (self.diagnostics_dock, _("Diagnostics")),
+        ):
+            dock.setWindowTitle(title)
 
     def _build_attachment_mode_actions(self) -> None:
         """Two exclusive entries rather than one toggle.
@@ -668,7 +834,7 @@ class MainWindow(QMainWindow):
         which mode this factory is *in*, and a checked entry says that even when
         nobody remembers what the other one was called.
         """
-        menu = self.menuBar().addMenu("&Raccords")
+        menu = self.menuBar().addMenu(_("&Raccords"))
         self.menus.append(menu)
         self.attachment_mode_actions: dict[AttachmentMode, QAction] = {}
         group = QActionGroup(self)
@@ -676,15 +842,19 @@ class MainWindow(QMainWindow):
         for mode, label, hint in (
             (
                 AttachmentMode.SIMPLE,
-                "Mode simple (raccords déduits)",
-                "Un port porte autant de lignes qu'on veut ; les raccords sont "
-                "comptés dans la liste de courses sans être dessinés.",
+                _("Mode simple (raccords déduits)"),
+                _(
+                    "Un port porte autant de lignes qu'on veut ; les raccords sont "
+                    "comptés dans la liste de courses sans être dessinés."
+                ),
             ),
             (
                 AttachmentMode.FAITHFUL,
-                "Mode fidèle (raccords explicites)",
-                "Un port porte une ligne, comme dans le jeu : au-delà il faut un "
-                "répartiteur ou un groupeur, et on le pose.",
+                _("Mode fidèle (raccords explicites)"),
+                _(
+                    "Un port porte une ligne, comme dans le jeu : au-delà il faut un "
+                    "répartiteur ou un groupeur, et on le pose."
+                ),
             ),
         ):
             action = QAction(label, self)
@@ -713,36 +883,36 @@ class MainWindow(QMainWindow):
         """Switch the current factory between the two modes, reporting what moved."""
         change = edits.set_attachment_mode(self.document, mode)
         if change.refusal is not None:
-            QMessageBox.warning(self, "Bascule refusée", change.refusal)
+            QMessageBox.warning(self, _("Bascule refusée"), change.refusal)
             self.refresh_attachment_mode()
             return False
         self.refresh_attachment_mode()
         if change.notes:
-            QMessageBox.information(self, "Raccords", _paragraphs(list(change.notes)))
+            QMessageBox.information(self, _("Raccords"), _paragraphs(list(change.notes)))
             self.statusBar().showMessage(change.notes[0], 8000)
         return True
 
     def _build_module_actions(self) -> None:
         self.save_module_action = _action(
-            self, "Enregistrer la sélection comme module...", "Ctrl+Shift+M", self.save_as_module
+            self, _("Enregistrer la sélection comme module..."), "Ctrl+Shift+M", self.save_as_module
         )
         self.library_action = _action(
-            self, "Bibliothèque de modules...", "Ctrl+B", self.show_module_library
+            self, _("Bibliothèque de modules..."), "Ctrl+B", self.show_module_library
         )
-        menu = self.menuBar().addMenu("&Modules")
+        menu = self.menuBar().addMenu(_("&Modules"))
         self.menus.append(menu)
         menu.addAction(self.save_module_action)
         menu.addAction(self.library_action)
 
     def _build_help_actions(self) -> None:
         self.help_action = _action(
-            self, "Gestes et raccourcis", QKeySequence.StandardKey.HelpContents, self.show_help
+            self, _("Gestes et raccourcis"), QKeySequence.StandardKey.HelpContents, self.show_help
         )
-        menu = self.menuBar().addMenu("&Aide")
+        menu = self.menuBar().addMenu(_("&Aide"))
         self.menus.append(menu)
         menu.addAction(self.help_action)
         menu.addSeparator()
-        menu.addAction(_action(self, "A propos", None, self._show_about))
+        menu.addAction(_action(self, _("À propos"), None, self._show_about))
 
     def _connect(self) -> None:
         """What is wired once and for good: the shared widgets to the window.
@@ -802,14 +972,16 @@ class MainWindow(QMainWindow):
         attempted.
         """
         if path is None:
-            chosen, _ = QFileDialog.getOpenFileName(self, "Ouvrir une usine", "", FILE_FILTER)
+            chosen, _filter = QFileDialog.getOpenFileName(
+                self, _("Ouvrir une usine"), "", FILE_FILTER
+            )
             if not chosen:
                 return False
             path = Path(chosen)
         try:
             loaded = factory_file.load(path)
         except FactoryFileError as exc:
-            QMessageBox.warning(self, "Ouverture impossible", str(exc))
+            QMessageBox.warning(self, _("Ouverture impossible"), str(exc))
             return False
         tab = self._reusable_tab() or self.new_tab()
         self.select_tab(tab)
@@ -836,8 +1008,8 @@ class MainWindow(QMainWindow):
 
     def save_as(self) -> bool:
         suggestion = str(self.document.path or f"{self.document.display_name}{FILE_SUFFIX}")
-        chosen, _ = QFileDialog.getSaveFileName(
-            self, "Enregistrer l'usine", suggestion, FILE_FILTER
+        chosen, _filter = QFileDialog.getSaveFileName(
+            self, _("Enregistrer l'usine"), suggestion, FILE_FILTER
         )
         if not chosen:
             return False
@@ -848,10 +1020,14 @@ class MainWindow(QMainWindow):
         try:
             self.document.save_as(path, exporters.thumbnail_bytes(self.scene))
         except OSError as exc:
-            QMessageBox.warning(self, "Enregistrement impossible", f"{path.name} : {exc.strerror}")
+            QMessageBox.warning(
+                self, _("Enregistrement impossible"), f"{path.name} : {exc.strerror}"
+            )
             return False
         self.remember_recent(path)
-        self.statusBar().showMessage(f"Usine enregistrée dans {path.name}.", 4000)
+        self.statusBar().showMessage(
+            _("Usine enregistrée dans {file}.").format(file=path.name), 4000
+        )
         return True
 
     def confirm_discard(self) -> bool:
@@ -860,8 +1036,10 @@ class MainWindow(QMainWindow):
             return True
         answer = QMessageBox.question(
             self,
-            "Modifications non enregistrées",
-            f"« {self.document.display_name} » a été modifiée. Enregistrer avant de continuer ?",
+            _("Modifications non enregistrées"),
+            _("« {name} » a été modifiée. Enregistrer avant de continuer ?").format(
+                name=self.document.display_name
+            ),
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel,
@@ -892,36 +1070,38 @@ class MainWindow(QMainWindow):
     def copy_code(self) -> str:
         code = self.document.share_code()
         QGuiApplication.clipboard().setText(code)
-        dialog = ShareCodeDialog("Code de partage", code, read_only=True, parent=self)
+        dialog = ShareCodeDialog(_("Code de partage"), code, read_only=True, parent=self)
         dialog.exec()
-        self.statusBar().showMessage("Code copié dans le presse-papiers.", 4000)
+        self.statusBar().showMessage(_("Code copié dans le presse-papiers."), 4000)
         return code
 
     def import_code(self, code: str | None = None) -> bool:
         """A shared factory arrives in its own tab, like an opened file."""
         if code is None:
-            dialog = ShareCodeDialog("Importer depuis un code", parent=self)
+            dialog = ShareCodeDialog(_("Importer depuis un code"), parent=self)
             if dialog.exec() != QDialog.DialogCode.Accepted:
                 return False
             code = dialog.code()
         try:
             loaded = factory_file.decode_share_code(code)
         except FactoryFileError as exc:
-            QMessageBox.warning(self, "Code refusé", str(exc))
+            QMessageBox.warning(self, _("Code refusé"), str(exc))
             return False
         tab = self._reusable_tab() or self.new_tab()
         self.select_tab(tab)
         warnings = list(loaded.warnings)
         tab.document.adopt(loaded.graph, warnings=warnings)
         self.fit_to_factory()
-        self._report_warnings(warnings, "le code importé")
+        self._report_warnings(warnings, _("le code importé"))
         return True
 
     def _report_warnings(self, warnings: Sequence[str], subject: str) -> None:
         if not warnings:
             return
         QMessageBox.information(
-            self, "Usine ouverte avec des réserves", f"{subject} :\n\n" + "\n\n".join(warnings)
+            self,
+            _("Usine ouverte avec des réserves"),
+            f"{subject} :\n\n" + "\n\n".join(warnings),
         )
 
     # --------------------------------------------------------------- modules
@@ -942,8 +1122,8 @@ class MainWindow(QMainWindow):
         if not node_ids:
             QMessageBox.information(
                 self,
-                "Aucune sélection",
-                "Sélectionnez le morceau d'usine à enregistrer comme module.",
+                _("Aucune sélection"),
+                _("Sélectionnez le morceau d'usine à enregistrer comme module."),
             )
             return False
         piece = clipboard.selection_graph(self.document.graph, node_ids)
@@ -974,12 +1154,14 @@ class MainWindow(QMainWindow):
         try:
             saved = module_file.save_module(module, self.module_directory, replacing=replacing)
         except ModuleError as exc:
-            QMessageBox.warning(self, "Module non enregistré", str(exc))
+            QMessageBox.warning(self, _("Module non enregistré"), str(exc))
             return False
         self.editing_module[self.current_tab] = saved
         if self.library is not None:
             self.library.reload()
-        self.statusBar().showMessage(f"Module « {saved.name} » enregistré.", 4000)
+        self.statusBar().showMessage(
+            _("Module « {name} » enregistré.").format(name=saved.name), 4000
+        )
         return True
 
     def _selection_bounds(self) -> QRectF:
@@ -996,7 +1178,7 @@ class MainWindow(QMainWindow):
             return ""
         item_class, rate = max(face.outputs.items(), key=lambda pair: pair[1])
         item = self.game_data.items.get(item_class)
-        name = item.display_name_fr if item else item_class
+        name = item.name if item else item_class
         # The item first and the rate after, rather than "40 plaque de fer/min":
         # the game's labels are singular, and inventing a plural rule for French
         # to make one suggested name read better is not a trade worth making.
@@ -1021,11 +1203,15 @@ class MainWindow(QMainWindow):
         if graph is None:
             return False
         centre = self.view.mapToScene(self.view.viewport().rect().center())
-        inserted = self.scene.insert_graph(graph, centre, f"insertion du module « {module.name} »")
+        inserted = self.scene.insert_graph(
+            graph, centre, _("insertion du module « {name} »").format(name=module.name)
+        )
         if inserted:
             self.statusBar().showMessage(
-                f"Module « {module.name} » inséré. C'est une copie : il ne suivra pas "
-                "les modifications du module.",
+                _(
+                    "Module « {name} » inséré. C'est une copie : il ne suivra pas "
+                    "les modifications du module."
+                ).format(name=module.name),
                 6000,
             )
         return inserted
@@ -1042,7 +1228,10 @@ class MainWindow(QMainWindow):
         self.refresh_title()
         self.fit_to_factory()
         self.statusBar().showMessage(
-            f"Module « {module.name} » ouvert. Ctrl+Maj+M le réenregistre.", 6000
+            _("Module « {name} » ouvert. Ctrl+Maj+M le réenregistre.").format(
+                name=module.name
+            ),
+            6000,
         )
         return tab
 
@@ -1052,7 +1241,10 @@ class MainWindow(QMainWindow):
         if tab is not None:
             self.editing_module.pop(tab, None)
             self.statusBar().showMessage(
-                f"Nouvelle usine depuis « {module.name} ». C'est une copie.", 6000
+                _("Nouvelle usine depuis « {name} ». C'est une copie.").format(
+                    name=module.name
+                ),
+                6000,
             )
         return tab
 
@@ -1060,23 +1252,28 @@ class MainWindow(QMainWindow):
         try:
             return module.graph()
         except ModuleError as exc:
-            QMessageBox.warning(self, "Module illisible", str(exc))
+            QMessageBox.warning(self, _("Module illisible"), str(exc))
             return None
 
     # --------------------------------------------------------------- exports
 
     def export_png(self, path: Path | None = None) -> bool:
         if path is None:
-            chosen, _ = QFileDialog.getSaveFileName(
-                self, "Exporter le canvas", f"{self.document.display_name}.png", "Image PNG (*.png)"
+            chosen, _filter = QFileDialog.getSaveFileName(
+                self,
+                _("Exporter le canvas"),
+                f"{self.document.display_name}.png",
+                _("Image PNG (*.png)"),
             )
             if not chosen:
                 return False
             path = Path(chosen)
         if not exporters.export_png(self.scene, path):
-            QMessageBox.information(self, "Rien a exporter", "L'usine est vide.")
+            QMessageBox.information(self, _("Rien à exporter"), _("L'usine est vide."))
             return False
-        self.statusBar().showMessage(f"Canvas exporté dans {path.name}.", 4000)
+        self.statusBar().showMessage(
+            _("Canvas exporté dans {file}.").format(file=path.name), 4000
+        )
         return True
 
     def export_pdf(self, path: Path | None = None, *, include_totals: bool = True) -> bool:
@@ -1085,8 +1282,11 @@ class MainWindow(QMainWindow):
             if dialog.exec() != QDialog.DialogCode.Accepted:
                 return False
             include_totals = dialog.include_totals()
-            chosen, _ = QFileDialog.getSaveFileName(
-                self, "Exporter en PDF", f"{self.document.display_name}.pdf", "Document PDF (*.pdf)"
+            chosen, _filter = QFileDialog.getSaveFileName(
+                self,
+                _("Exporter en PDF"),
+                f"{self.document.display_name}.pdf",
+                _("Document PDF (*.pdf)"),
             )
             if not chosen:
                 return False
@@ -1099,7 +1299,9 @@ class MainWindow(QMainWindow):
             include_totals=include_totals,
         )
         if written:
-            self.statusBar().showMessage(f"Usine exportée dans {path.name}.", 4000)
+            self.statusBar().showMessage(
+                _("Usine exportée dans {file}.").format(file=path.name), 4000
+            )
         return written
 
     # ----------------------------------------------------------- preferences
@@ -1145,8 +1347,11 @@ class MainWindow(QMainWindow):
             return False
         if self.preferences.effective_icon_directory != before:
             self.reload_icons()
+        # After the rest: switching language rebuilds the palette entries the
+        # preferences have just been pushed into.
+        self.set_language(dialog.chosen_language())
         self.apply_preferences()
-        self.statusBar().showMessage("Préférences enregistrées.", 4000)
+        self.statusBar().showMessage(_("Préférences enregistrées."), 4000)
         return True
 
     def reload_icons(self) -> None:
@@ -1163,7 +1368,7 @@ class MainWindow(QMainWindow):
         for tab in self.open_tabs():
             tab.scene.set_icons(self.icons)
         self._refresh_catalogue_summary()
-        logger.info("%d fichier(s) d'icône indexe(s)", len(self.icons.index))
+        logger.info("%d fichier(s) d'icône indexé(s)", len(self.icons.index))
 
     def _store_transports(self, belt: str, pipe: str) -> None:
         self.preferences.default_belt = belt
@@ -1209,7 +1414,7 @@ class MainWindow(QMainWindow):
         self.recent_menu.clear()
         entries = self.recent_files()
         if not entries:
-            empty = self.recent_menu.addAction("Aucun fichier récent")
+            empty = self.recent_menu.addAction(_("Aucun fichier récent"))
             empty.setEnabled(False)
             return
         for path in entries:
@@ -1217,7 +1422,7 @@ class MainWindow(QMainWindow):
             action.setToolTip(str(path))
             action.triggered.connect(lambda _checked=False, target=path: self.open_file(target))
         self.recent_menu.addSeparator()
-        self.recent_menu.addAction("Oublier la liste", self.forget_recent)
+        self.recent_menu.addAction(_("Oublier la liste"), self.forget_recent)
 
     def forget_recent(self) -> None:
         self.preferences.forget_recent()
@@ -1250,7 +1455,9 @@ class MainWindow(QMainWindow):
         """The card for whatever a palette entry is about, when it is about an item."""
         subject = entry.subject_item(self.game_data)
         if subject is None:
-            self.statusBar().showMessage(f"Aucune fiche pour « {entry.label} ».", 4000)
+            self.statusBar().showMessage(
+                _("Aucune fiche pour « {entry} ».").format(entry=entry.label), 4000
+            )
             return
         self.show_item_card(subject)
 
@@ -1259,7 +1466,9 @@ class MainWindow(QMainWindow):
         for entry in self.entries:
             if entry.kind is EntryKind.RECIPE and entry.class_name == recipe_class:
                 self._add_at_view_centre(entry)
-                self.statusBar().showMessage(f"{entry.label} pose au centre de la vue.", 4000)
+                self.statusBar().showMessage(
+                    _("{entry} pose au centre de la vue.").format(entry=entry.label), 4000
+                )
                 return True
         logger.debug("recette absente de la palette : %s", recipe_class)
         return False
@@ -1301,7 +1510,7 @@ class MainWindow(QMainWindow):
         marker = " •" if document.is_modified else ""
         # Spelled out rather than iconic: this is the state where a reflex Ctrl+S
         # costs somebody their nodes, so it says what it means.
-        partial = " — OUVERTURE PARTIELLE" if document.is_partial else ""
+        partial = _(" — OUVERTURE PARTIELLE") if document.is_partial else ""
         self.setWindowTitle(
             f"{document.display_name}{marker}{partial} — SatisPlanner {__version__} "
             f"— Satisfactory {db.GAME_VERSION}"
@@ -1317,22 +1526,25 @@ class MainWindow(QMainWindow):
         """One line saying whether the factory works, and what is wrong if not."""
         if not report.nodes:
             self.statusBar().showMessage(
-                "Glissez une recette ou un gisement depuis la palette pour commencer."
+                _("Glissez une recette ou un gisement depuis la palette pour commencer.")
             )
             return
         errors = len(report.by_severity(Severity.ERROR))
         warnings = len(report.by_severity(Severity.WARNING))
-        parts = [f"{len(report.nodes)} nœud(s)", f"{len(report.edges)} ligne(s)"]
+        parts = [
+            _("{count} nœud(s)").format(count=len(report.nodes)),
+            _("{count} ligne(s)").format(count=len(report.edges)),
+        ]
         if not report.converged:
-            parts.append("Résolution NON Convergée")
+            parts.append(_("Résolution NON Convergée"))
         if not report.is_sustainable:
-            parts.append("débits non tenables : un tampon se vide")
+            parts.append(_("débits non tenables : un tampon se vide"))
         if errors:
-            parts.append(f"{errors} erreur(s)")
+            parts.append(_("{count} erreur(s)").format(count=errors))
         if warnings:
-            parts.append(f"{warnings} avertissement(s)")
+            parts.append(_("{count} avertissement(s)").format(count=warnings))
         if not errors and not warnings and report.converged:
-            parts.append("usine nominale")
+            parts.append(_("usine nominale"))
         self.statusBar().showMessage(" — ".join(parts))
 
     def _show_catalogue_summary(self) -> None:
@@ -1346,9 +1558,13 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.catalogue_label)
 
     def catalogue_summary(self) -> str:
-        return (
-            f"{len(self.game_data.recipes)} recettes, {len(self.game_data.items)} items — "
-            f"{len(self.icons.index)} icône(s) indexée(s), le reste est dessiné"
+        return _(
+            "{recipes} recettes, {items} items — {icons} icône(s) indexée(s), "
+            "le reste est dessiné"
+        ).format(
+            recipes=len(self.game_data.recipes),
+            items=len(self.game_data.items),
+            icons=len(self.icons.index),
         )
 
     def _refresh_catalogue_summary(self) -> None:
@@ -1356,24 +1572,38 @@ class MainWindow(QMainWindow):
 
     def _show_about(self) -> None:
         log_path = logging_setup.current_log_path()
-        journal = f"Journal : {log_path}<br><br>" if log_path is not None else ""
+        journal = (
+            _("Journal : {path}<br><br>").format(path=log_path)
+            if log_path is not None
+            else ""
+        )
         QMessageBox.about(
             self,
-            "A propos de SatisPlanner",
+            _("À propos de SatisPlanner"),
             f"<b>SatisPlanner {__version__}</b><br>"
-            f"Données de jeu : Satisfactory {db.GAME_VERSION} "
-            f"(schéma de base {db.SCHEMA_VERSION}, schéma de fichier "
-            f"{DOCUMENT_SCHEMA_VERSION})<br>"
+            + _(
+                "Données de jeu : Satisfactory {game} (schéma de base {database}, "
+                "schéma de fichier {document})<br>"
+            ).format(
+                game=db.GAME_VERSION,
+                database=db.SCHEMA_VERSION,
+                document=DOCUMENT_SCHEMA_VERSION,
+            )
             # Said here because nothing else on screen distinguishes "I have no
             # icons" from "the generated fallback is working as designed", and
             # somebody installing on a second machine reads the second as the first.
-            f"Icônes : {self.icons.status.sentence()}<br><br>"
-            "Planificateur d'usines théoriques. L'outil raisonne en <b>débits</b>, pas en "
-            "géométrie 3D : ni distances, ni élévations, ni hauteur de refoulement des "
-            f"pompes.<br><br>{journal}"
-            "Satisfactory, ses données et ses icônes sont la propriété de "
-            "Coffee Stain Studios. Aucun logo ni élément de marque du jeu n'est "
-            "reproduit dans cette application.",
+            + _("Icônes : {status}<br><br>").format(status=self.icons.status.sentence())
+            + _(
+                "Planificateur d'usines théoriques. L'outil raisonne en <b>débits</b>, "
+                "pas en géométrie 3D : ni distances, ni élévations, ni hauteur de "
+                "refoulement des pompes.<br><br>"
+            )
+            + journal
+            + _(
+                "Satisfactory, ses données et ses icônes sont la propriété de "
+                "Coffee Stain Studios. Aucun logo ni élément de marque du jeu n'est "
+                "reproduit dans cette application."
+            ),
         )
 
 

@@ -101,10 +101,10 @@ class IconProvider:
     # ------------------------------------------------------------------ public
 
     def for_item(self, item: Item) -> QIcon:
-        return self.icon_for(item.class_name, item.icon_file, item.display_name_fr)
+        return self.icon_for(item.class_name, item.icon_file, item.name)
 
     def for_building(self, building: Building) -> QIcon:
-        return self.icon_for(building.class_name, building.icon_file, building.display_name_fr)
+        return self.icon_for(building.class_name, building.icon_file, building.name)
 
     def icon_for(self, class_name: str, icon_file: str | None, label: str) -> QIcon:
         """The icon for one class, resolved once and cached by class name."""

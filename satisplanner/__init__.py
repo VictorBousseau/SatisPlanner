@@ -26,5 +26,10 @@ game database. Data reaches it by injection.
 # The geothermal generator does: schema 9, and 5.0. The nuclear plant rides along
 # without moving anything -- it is an ordinary generator node, and what changed is
 # what the engine does with one rather than what the document says about it.
+# English does not, and 5.1 is the whole point: a factory saved by a French session
+# and one saved by an English session are the same bytes, which is checked rather
+# than hoped for. What moved is the base -- schema 12, two columns for the English
+# halves of a blurb and a building name -- and the base is shipped with the build,
+# so nobody has an old one. A 5.0 file opens in 5.1 and the other way round.
 # (This is not the game's version, which is 1.2 and lives in ``data.db.GAME_VERSION``.)
-__version__ = "5.0.0"
+__version__ = "5.1.0"

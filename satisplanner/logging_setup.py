@@ -31,6 +31,7 @@ from types import TracebackType
 from typing import Final, TextIO
 
 from satisplanner import paths
+from satisplanner.core.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ class CrashReport:
         """
         parts = [self.message, self.summary]
         if self.log_path is not None:
-            parts.append(f"Journal : {self.log_path}")
+            parts.append(_("Journal : {path}").format(path=self.log_path))
         return "\n\n".join(parts)
 
     @property
@@ -149,7 +150,7 @@ class CrashReport:
         """Everything worth pasting into a bug report, in one go."""
         parts = [self.summary, "", self.details]
         if self.log_path is not None:
-            parts.extend(["", f"Journal : {self.log_path}"])
+            parts.extend(["", _("Journal : {path}").format(path=self.log_path)])
         return "\n".join(parts)
 
 
@@ -167,8 +168,8 @@ def build_report(exception: BaseException) -> CrashReport:
     name = type(exception).__name__
     text = str(exception).strip()
     return CrashReport(
-        title="Erreur inattendue",
-        message=(
+        title=_("Erreur inattendue"),
+        message=_(
             "SatisPlanner a rencontré une erreur inattendue.\n\n"
             "Aucune des usines ouvertes n'a été modifiée par cette erreur ; si l'une "
             "d'elles contient du travail non enregistré, enregistrez-la sous un autre "

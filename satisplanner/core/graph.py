@@ -22,6 +22,7 @@ from typing import Annotated, Any, Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from satisplanner.core import constants
+from satisplanner.core.i18n import _
 from satisplanner.core.models import (
     AttachmentRole,
     GameData,
@@ -671,28 +672,37 @@ def check_edge(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
     except UnknownClassError as exc:
         raise GraphError(str(exc)) from exc
     if not matches:
-        expected = "une tuyauterie" if item.form.is_fluid else "un convoyeur"
-        msg = (
-            f"{item.display_name_fr} est {_form_label(item.form)} : il faut {expected}, "
-            f"pas {edge.transport_class}"
+        pattern = (
+            _("{item} est {form} : il faut une tuyauterie, pas {transport}")
+            if item.form.is_fluid
+            else _("{item} est {form} : il faut un convoyeur, pas {transport}")
+        )
+        msg = pattern.format(
+            item=item.name,
+            form=_form_label(item.form),
+            transport=edge.transport_class,
         )
         raise GraphError(msg)
 
     if source.kind not in PRODUCER_KINDS:
-        msg = f"le nœud {source.id} ne produit rien"
+        msg = _("le nœud {node} ne produit rien").format(node=source.id)
         raise GraphError(msg)
     if target.kind not in CONSUMER_KINDS:
-        msg = f"le nœud {target.id} ne consomme rien"
+        msg = _("le nœud {node} ne consomme rien").format(node=target.id)
         raise GraphError(msg)
 
     produced = node_output_items(source, game_data)
     if produced and edge.item_class not in produced:
-        msg = f"le nœud {source.id} ne produit pas {item.display_name_fr}"
+        msg = _("le nœud {node} ne produit pas {item}").format(
+            node=source.id, item=item.name
+        )
         raise GraphError(msg)
 
     accepted = node_input_items(target, game_data)
     if accepted is not None and edge.item_class not in accepted:
-        msg = f"le nœud {target.id} ne consomme pas {item.display_name_fr}"
+        msg = _("le nœud {node} ne consomme pas {item}").format(
+            node=target.id, item=item.name
+        )
         raise GraphError(msg)
 
     _check_port_budget(graph, edge, game_data)
@@ -706,16 +716,20 @@ def _check_port_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> 
     if isinstance(target, MachineNode):
         items = {other.item_class for other in graph.incoming(target.id)} | {edge.item_class}
         if len(items) > MAX_MACHINE_INPUTS:
-            msg = f"le nœud {target.id} dépassé {MAX_MACHINE_INPUTS} entrées distinctes"
+            msg = _("le nœud {node} dépassé {limit} entrées distinctes").format(
+                node=target.id, limit=MAX_MACHINE_INPUTS
+            )
             raise GraphError(msg)
 
     source = graph.node(edge.source)
     if isinstance(source, MachineNode):
         items = {other.item_class for other in graph.outgoing(source.id)} | {edge.item_class}
         if len(items) > MAX_MACHINE_OUTPUTS:
-            msg = f"le nœud {source.id} dépassé {MAX_MACHINE_OUTPUTS} sorties distinctes"
+            msg = _("le nœud {node} dépassé {limit} sorties distinctes").format(
+                node=source.id, limit=MAX_MACHINE_OUTPUTS
+            )
             raise GraphError(msg)
-    _ = game_data  # kept for symmetry with check_edge's signature
+    _unused = game_data  # kept for symmetry with check_edge's signature
 
 
 def _check_single_item(graph: FactoryGraph, edge: Edge, game_data: GameData) -> None:
@@ -731,8 +745,10 @@ def _check_single_item(graph: FactoryGraph, edge: Edge, game_data: GameData) -> 
             continue
         carried = pass_through_item(node, graph)
         if carried is not None and carried != edge.item_class:
-            name = game_data.item(carried).display_name_fr
-            msg = f"le nœud {node_id} transporte déjà {name} : une ligne ne porte qu'un item"
+            name = game_data.item(carried).name
+            msg = _(
+                "le nœud {node} transporte déjà {item} : une ligne ne porte qu'un item"
+            ).format(node=node_id, item=name)
             raise GraphError(msg)
 
 
@@ -797,18 +813,26 @@ def _check_line_budget(graph: FactoryGraph, edge: Edge, game_data: GameData) -> 
         )
         if used < budget:
             continue
-        item = game_data.item(edge.item_class).display_name_fr
-        side = "sortie" if is_output else "entrée"
-        remedy = "un répartiteur" if is_output else "un groupeur"
-        msg = (
-            f"le nœud {node_id} n'a que {budget} port(s) de {side} pour {item} "
-            f"et ils sont pris : insérez {remedy}"
+        item = game_data.item(edge.item_class).name
+        pattern = (
+            _("le nœud {node} n'a que {budget} port(s) de sortie pour {item} et ils "
+              "sont pris : insérez un répartiteur")
+            if is_output
+            else _("le nœud {node} n'a que {budget} port(s) d'entrée pour {item} et ils "
+                   "sont pris : insérez un groupeur")
         )
+        msg = pattern.format(node=node_id, budget=budget, item=item)
         raise GraphError(msg)
 
 
 def _form_label(form: ItemForm) -> str:
-    return {ItemForm.SOLID: "solide", ItemForm.LIQUID: "liquide", ItemForm.GAS: "gazeux"}[form]
+    match form:
+        case ItemForm.SOLID:
+            return _("solide")
+        case ItemForm.LIQUID:
+            return _("liquide")
+        case ItemForm.GAS:
+            return _("gazeux")
 
 
 # --------------------------------------------------------------------------- #
@@ -907,7 +931,7 @@ def condensation_order(graph: FactoryGraph) -> list[tuple[str, ...]]:
     for source_component, targets in successors.items():
         for target in targets:
             incoming_count[target] += 1
-        _ = source_component
+        _unused = source_component
 
     ready = sorted(
         (index for index, count in incoming_count.items() if count == 0),

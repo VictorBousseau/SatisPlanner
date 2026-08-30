@@ -36,7 +36,8 @@ from PySide6.QtWidgets import (
 )
 
 from satisplanner import paths
-from satisplanner.core.families import FAMILY_LABELS, ItemFamily
+from satisplanner.core.families import ItemFamily, family_label
+from satisplanner.core.i18n import Language, _
 from satisplanner.core.models import GameData, ItemForm
 from satisplanner.ui import theme
 from satisplanner.ui.catalogue import transport_choices
@@ -46,12 +47,14 @@ from satisplanner.ui.item_colours import (
     ItemPalette,
     text_colour_on,
 )
+from satisplanner.ui.localisation import system_language
 
 logger = logging.getLogger(__name__)
 
 ORGANISATION: Final = "SatisPlanner"
 APPLICATION: Final = "SatisPlanner"
 
+KEY_LANGUAGE: Final = "language"
 KEY_BELT: Final = "default_belt"
 KEY_PIPE: Final = "default_pipe"
 KEY_ICON_DIRECTORY: Final = "icon_directory"
@@ -110,6 +113,25 @@ class Preferences:
         return str(stored).strip().lower() in {"true", "1", "yes"}
 
     # ---------------------------------------------------------------- settings
+
+    @property
+    def language(self) -> Language:
+        """The interface language, the system's own on a first launch.
+
+        The system is consulted **once**, when nothing has been stored: an English
+        speaker who opens this for the first time must not have to guess how to get
+        out of French. After that the stored choice wins, because someone who picked
+        a language meant it -- including someone French who picked English.
+        """
+        stored = self._string(KEY_LANGUAGE)
+        try:
+            return Language(stored)
+        except ValueError:
+            return system_language()
+
+    @language.setter
+    def language(self, language: Language | str) -> None:
+        self.settings.setValue(KEY_LANGUAGE, Language(language).value)
 
     @property
     def default_belt(self) -> str:
@@ -269,7 +291,7 @@ class FamilyColourRow(QWidget):
         self.swatch = QPushButton(self)
         self.swatch.setFixedWidth(120)
         self.swatch.clicked.connect(self._choose)
-        self.reset = QPushButton("Défaut", self)
+        self.reset = QPushButton(_("Défaut"), self)
         self.reset.setFixedWidth(70)
         self.reset.clicked.connect(self._reset)
 
@@ -294,7 +316,7 @@ class FamilyColourRow(QWidget):
 
     def _choose(self) -> None:
         chosen = QColorDialog.getColor(
-            QColor(self.colours.family_colour(self.family)), self, FAMILY_LABELS[self.family]
+            QColor(self.colours.family_colour(self.family)), self, family_label(self.family)
         )
         if chosen.isValid():
             self.colours.set_family(self.family, chosen.name())
@@ -317,8 +339,15 @@ class PreferencesDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.preferences = preferences
-        self.setWindowTitle("Préférences")
+        self.setWindowTitle(_("Préférences"))
         self.setMinimumWidth(520)
+
+        # The one setting that is also a top-level menu. Here for the person who
+        # goes to the preferences to change everything at once, there for the person
+        # who cannot read the preferences yet.
+        self.language = QComboBox(self)
+        for language in Language:
+            self.language.addItem(language.english_name, language.value)
 
         self.belt = QComboBox(self)
         for class_name, label in transport_choices(game_data, ItemForm.SOLID):
@@ -329,7 +358,7 @@ class PreferencesDialog(QDialog):
 
         self.icon_directory = QLineEdit(self)
         self.icon_directory.setPlaceholderText(str(paths.default_user_icon_directory()))
-        browse = QPushButton("Parcourir...", self)
+        browse = QPushButton(_("Parcourir..."), self)
         browse.clicked.connect(self._browse)
         icon_row = QHBoxLayout()
         icon_row.setContentsMargins(0, 0, 0, 0)
@@ -339,9 +368,9 @@ class PreferencesDialog(QDialog):
         self.max_recent = QSpinBox(self)
         self.max_recent.setRange(0, MAX_RECENT_LIMIT)
 
-        self.alternates = QCheckBox("Afficher les recettes alternatives", self)
-        self.events = QCheckBox("Afficher les objets d'événement (FICSMAS)", self)
-        self.deployed = QCheckBox("Dessiner les machines une par une sur les nœuds", self)
+        self.alternates = QCheckBox(_("Afficher les recettes alternatives"), self)
+        self.events = QCheckBox(_("Afficher les objets d'événement (FICSMAS)"), self)
+        self.deployed = QCheckBox(_("Dessiner les machines une par une sur les nœuds"), self)
         self.deployed_ceiling = QSpinBox(self)
         self.deployed_ceiling.setRange(*DEPLOYED_CEILING_RANGE)
 
@@ -351,11 +380,11 @@ class PreferencesDialog(QDialog):
         self.colour_rows = {
             family: FamilyColourRow(family, self.colours, self) for family in ItemFamily
         }
-        self.export_palette = QPushButton("Exporter...", self)
+        self.export_palette = QPushButton(_("Exporter..."), self)
         self.export_palette.clicked.connect(self._export_palette)
-        self.import_palette = QPushButton("Importer...", self)
+        self.import_palette = QPushButton(_("Importer..."), self)
         self.import_palette.clicked.connect(self._import_palette)
-        self.reset_palette = QPushButton("Tout remettre par défaut", self)
+        self.reset_palette = QPushButton(_("Tout remettre par défaut"), self)
         self.reset_palette.clicked.connect(self._reset_palette)
         palette_buttons = QHBoxLayout()
         palette_buttons.setContentsMargins(0, 0, 0, 0)
@@ -371,22 +400,26 @@ class PreferencesDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         form = QFormLayout()
-        form.addRow("Convoyeur par défaut", self.belt)
-        form.addRow("Tuyauterie par défaut", self.pipe)
-        form.addRow("Dossier d'icônes", icon_row)
-        form.addRow("Fichiers récents conserves", self.max_recent)
+        form.addRow(_("Langue / Language"), self.language)
+        form.addRow(_("Convoyeur par défaut"), self.belt)
+        form.addRow(_("Tuyauterie par défaut"), self.pipe)
+        form.addRow(_("Dossier d'icônes"), icon_row)
+        form.addRow(_("Fichiers récents conservés"), self.max_recent)
         form.addRow(self.alternates)
         form.addRow(self.events)
         form.addRow(self.deployed)
-        form.addRow("Vignettes avant « ... xN »", self.deployed_ceiling)
+        form.addRow(_("Vignettes avant « ... xN »"), self.deployed_ceiling)
         for family, row in self.colour_rows.items():
-            form.addRow(FAMILY_LABELS[family], row)
-        form.addRow("Palette", palette_buttons)
+            form.addRow(family_label(family), row)
+        form.addRow(_("Palette"), palette_buttons)
 
         hint = QLabel(
-            f"{indexed_icons} fichier(s) d'icône indexé(s). Les classes sans fichier sont "
-            "dessinées par l'application ; un dossier d'icônes est facultatif.\n"
-            "Le changement de dossier est pris en compte immédiatement.",
+            _(
+                "{count} fichier(s) d'icône indexé(s). Les classes sans fichier "
+                "sont dessinées par l'application ; un dossier d'icônes est "
+                "facultatif.\nLe changement de dossier est pris en compte "
+                "immédiatement."
+            ).format(count=indexed_icons),
             self,
         )
         hint.setWordWrap(True)
@@ -402,6 +435,9 @@ class PreferencesDialog(QDialog):
     # ------------------------------------------------------------------ values
 
     def _load(self) -> None:
+        index = self.language.findData(self.preferences.language.value)
+        if index >= 0:
+            self.language.setCurrentIndex(index)
         _select(self.belt, self.preferences.default_belt)
         _select(self.pipe, self.preferences.default_pipe)
         chosen = self.preferences.icon_directory
@@ -414,7 +450,7 @@ class PreferencesDialog(QDialog):
 
     def _browse(self) -> None:
         chosen = QFileDialog.getExistingDirectory(
-            self, "Dossier d'icônes", self.icon_directory.text()
+            self, _("Dossier d'icônes"), self.icon_directory.text()
         )
         if chosen:
             self.icon_directory.setText(chosen)
@@ -438,7 +474,7 @@ class PreferencesDialog(QDialog):
         try:
             path.write_text(self.colours.to_json(), encoding="utf-8")
         except OSError as exc:
-            QMessageBox.warning(self, "Export impossible", f"{path.name} : {exc.strerror}")
+            QMessageBox.warning(self, _("Export impossible"), f"{path.name} : {exc.strerror}")
             return False
         return True
 
@@ -446,7 +482,7 @@ class PreferencesDialog(QDialog):
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as exc:
-            QMessageBox.warning(self, "Import impossible", f"{path.name} : {exc.strerror}")
+            QMessageBox.warning(self, _("Import impossible"), f"{path.name} : {exc.strerror}")
             return False
         imported = ItemPalette.from_json(text)
         # Replaced rather than merged. Importing a palette is asking to see somebody
@@ -460,21 +496,31 @@ class PreferencesDialog(QDialog):
         return True
 
     def _export_palette(self) -> None:
-        chosen, _ = QFileDialog.getSaveFileName(
-            self, "Exporter la palette", f"palette{PALETTE_FILE_SUFFIX}", PALETTE_FILE_FILTER
+        chosen, _filter = QFileDialog.getSaveFileName(
+            self, _("Exporter la palette"), f"palette{PALETTE_FILE_SUFFIX}", PALETTE_FILE_FILTER
         )
         if chosen:
             self.export_palette_to(Path(chosen).with_suffix(PALETTE_FILE_SUFFIX))
 
     def _import_palette(self) -> None:
-        chosen, _ = QFileDialog.getOpenFileName(
-            self, "Importer une palette", "", PALETTE_FILE_FILTER
+        chosen, _filter = QFileDialog.getOpenFileName(
+            self, _("Importer une palette"), "", PALETTE_FILE_FILTER
         )
         if chosen:
             self.import_palette_from(Path(chosen))
 
+    def chosen_language(self) -> Language:
+        """The language the box is set to. Read by the window, which applies it."""
+        return Language(str(self.language.currentData()))
+
     def accept(self) -> None:
-        """Write everything the box holds, then close."""
+        """Write everything the box holds, then close.
+
+        The language is **not** written here: the window applies it, because
+        applying it is more than storing it -- the palette is rebuilt and every open
+        factory re-solved. Storing it twice would leave a preference saying one
+        thing and an interface showing another.
+        """
         self.preferences.default_belt = str(self.belt.currentData())
         self.preferences.default_pipe = str(self.pipe.currentData())
         self.preferences.icon_directory = self.chosen_icon_directory()

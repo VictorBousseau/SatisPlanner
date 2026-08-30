@@ -90,7 +90,7 @@ def _show_nodes(report: FactoryReport, game_data: GameData) -> None:
         if node.machine_count is not None:
             machines = f"{node.useful_machine_count:g} / {node.machine_count:g}"
             if node.integer_machine_count != node.machine_count:
-                machines += f" (a batir {node.integer_machine_count})"
+                machines += f" (à bâtir {node.integer_machine_count})"
         log(
             "%-22s %-26s %6.1f%%  %-16s %s",
             node.node_id,
@@ -106,7 +106,7 @@ def _show_edges(report: FactoryReport, game_data: GameData) -> None:
     for edge in report.edges:
         flag = ""
         if edge.is_saturated:
-            flag = f"  SATURÉE, {edge.blocked_rate:g} refoules"
+            flag = f"  SATURÉE, {edge.blocked_rate:g} refoulés"
         elif edge.is_at_capacity:
             flag = "  pleine"
         log(
@@ -125,11 +125,11 @@ def _show_edges(report: FactoryReport, game_data: GameData) -> None:
 
 def _show_totals(report: FactoryReport, game_data: GameData) -> None:
     log("%s\nBILAN\n%s", RULE, RULE)
-    log("1. Solides bruts consommes : %s", rates(report.raw_solids, game_data))
-    log("2. Fluides bruts consommes : %s", rates(report.raw_fluids, game_data))
+    log("1. Solides bruts consommés : %s", rates(report.raw_solids, game_data))
+    log("2. Fluides bruts consommés : %s", rates(report.raw_fluids, game_data))
     for balance in report.byproducts:
         log(
-            "   sous-produit %s : produit %g, recycle %g, stocke %g, exporte %g, rejete %g",
+            "   sous-produit %s : produit %g, recyclé %g, stocké %g, exporté %g, rejeté %g",
             item_name(balance.item_class, game_data),
             balance.produced,
             balance.recycled,

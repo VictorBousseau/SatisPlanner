@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Final
 
 from satisplanner import paths
+from satisplanner.core.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +110,16 @@ class IconStatus:
         """One line of French, suitable for a log, a dialog or the self-check."""
         match self.supply:
             case IconSupply.PRESENT:
-                return f"{self.indexed} fichier(s) d'icône indexé(s)"
+                return _("{count} fichier(s) d'icône indexé(s)").format(
+                    count=self.indexed
+                )
             case IconSupply.PUBLISHABLE_BUILD:
-                return (
+                return _(
                     "aucune icône du jeu embarquée (variante publiable) : "
                     "tout est dessiné, ce qui est le fonctionnement nominal"
                 )
             case IconSupply.NOT_EXTRACTED:
-                return (
+                return _(
                     "aucune icône : le dossier n'est pas versionné, donc un clone ne "
                     "l'emporte pas. Tout est dessiné, ce qui fonctionne ; pour avoir "
                     "les icônes du jeu, voir la procédure FModel du README"

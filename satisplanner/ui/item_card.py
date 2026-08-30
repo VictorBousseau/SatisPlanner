@@ -37,9 +37,10 @@ from PySide6.QtWidgets import (
 )
 
 from satisplanner.core import breakdown, formatting
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData, Item, ItemForm, Recipe, RecipeAvailability
 from satisplanner.ui import theme
-from satisplanner.ui.catalogue import fold
+from satisplanner.ui.catalogue import says_alternate
 from satisplanner.ui.icon_provider import IconProvider
 
 logger = logging.getLogger(__name__)
@@ -50,21 +51,26 @@ PLACE_SCHEME: Final = "place"
 
 ICON_SIDE: Final = 48
 
-FORM_LABELS: Final[dict[ItemForm, str]] = {
-    ItemForm.SOLID: "Solide",
-    ItemForm.LIQUID: "Liquide",
-    ItemForm.GAS: "Gazeux",
-}
+def form_label(form: ItemForm) -> str:
+    """Solid, liquid or gas, in the language in force."""
+    match form:
+        case ItemForm.SOLID:
+            return _("Solide")
+        case ItemForm.LIQUID:
+            return _("Liquide")
+        case ItemForm.GAS:
+            return _("Gazeux")
 
 # Why a recipe the game has cannot be put on the canvas. Two reasons, and the card
 # must tell them apart: one will go away as the catalogue widens, the other never
 # will, and a reader deciding whether to wait needs to know which is which.
-UNAVAILABLE_REASONS: Final[dict[RecipeAvailability, str]] = {
-    RecipeAvailability.MACHINE_OUT_OF_SCOPE: ("machine que cette version ne modélise pas encore"),
-    RecipeAvailability.HAND_CRAFTED: (
-        "fabrication à la main : cette station ne sera jamais un nœud d'usine"
-    ),
-}
+def unavailable_reason(availability: RecipeAvailability) -> str | None:
+    """Why a recipe the game has cannot be placed, or ``None`` when it can."""
+    if availability is RecipeAvailability.MACHINE_OUT_OF_SCOPE:
+        return _("machine que cette version ne modélise pas encore")
+    if availability is RecipeAvailability.HAND_CRAFTED:
+        return _("fabrication à la main : cette station ne sera jamais un nœud d'usine")
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -97,7 +103,7 @@ def card_html(game_data: GameData, item_class: str) -> str:
     if item is None:
         return _page(
             f"<h1>{escape(item_class)}</h1>"
-            "<p class='warn'>Cet objet est absent du catalogue embarqué.</p>"
+            f"<p class='warn'>{_('Cet objet est absent du catalogue embarqué.')}</p>"
         )
     blocks = [
         _identity(item),
@@ -115,23 +121,27 @@ def _page(body: str) -> str:
 
 def _identity(item: Item) -> str:
     """Icon, name, the game's own blurb, and the three facts that fit on one line."""
-    facts = [FORM_LABELS[item.form]]
+    facts = [form_label(item.form)]
     if item.stack_size > 0 and not item.form.is_fluid:
-        facts.append(f"pile de {formatting.number(item.stack_size)}")
+        facts.append(
+            _("pile de {size}").format(size=formatting.number(item.stack_size))
+        )
     if item.sink_points > 0:
-        facts.append(f"{item.sink_points} points au collecteur AWESOME")
+        facts.append(
+            _("{points} points au collecteur AWESOME").format(points=item.sink_points)
+        )
 
     # The blurb is shown only when the data carries one, and is never written here.
     description = ""
-    if item.description_fr:
-        lines = "<br>".join(escape(line) for line in item.description_fr.splitlines() if line)
+    if item.description:
+        lines = "<br>".join(escape(line) for line in item.description.splitlines() if line)
         description = f"<p class='desc'>{lines}</p>"
 
     return (
         f"<table><tr>"
         f"<td width='{ICON_SIDE + 12}'><img src='{ITEM_SCHEME}:{escape(item.class_name)}' "
         f"width='{ICON_SIDE}' height='{ICON_SIDE}'></td>"
-        f"<td><h1>{escape(item.display_name_fr)}</h1>"
+        f"<td><h1>{escape(item.name)}</h1>"
         f"<p class='muted'>{escape(' — '.join(facts))}</p></td>"
         f"</tr></table>{description}"
     )
@@ -140,10 +150,13 @@ def _identity(item: Item) -> str:
 def _recipes(game_data: GameData, item: Item) -> str:
     made = breakdown.producers(game_data, item.class_name)
     if made:
-        return "<h2>Fabrication</h2>" + "".join(
+        return f"<h2>{_('Fabrication')}</h2>" + "".join(
             _one_recipe(game_data, recipe, item.class_name) for recipe in made
         )
-    return f"<h2>Fabrication</h2><p class='muted'>{_nothing_makes_it(game_data, item)}</p>"
+    return (
+        f"<h2>{_('Fabrication')}</h2>"
+        f"<p class='muted'>{_nothing_makes_it(game_data, item)}</p>"
+    )
 
 
 def _nothing_makes_it(game_data: GameData, item: Item) -> str:
@@ -154,28 +167,37 @@ def _nothing_makes_it(game_data: GameData, item: Item) -> str:
     follows lists the recipes the game does have when there are any.
     """
     if item.is_raw_resource:
-        return "Ressource brute : elle s'extrait, elle ne se fabrique pas."
+        return _("Ressource brute : elle s'extrait, elle ne se fabrique pas.")
     if breakdown.unavailable_producers(game_data, item.class_name):
-        return "Aucune recette posable dans cette version. Ce que le jeu propose est ci-dessous."
+        return _(
+            "Aucune recette posable dans cette version. "
+            "Ce que le jeu propose est ci-dessous."
+        )
     sources = breakdown.generator_sources(game_data, item.class_name)
     if sources:
         # No recipe makes it because it is not made: it falls out of a generator.
         # Read from the catalogue rather than written on the item, so it answers
         # with the rate as well as with the building.
+        burning = _("{building} brûlant {fuel} ({rate})")
         written = ", ".join(
-            f"{escape(_building_name(game_data, generator.class_name))} brûlant "
-            f"{escape(_name_of(game_data, fuel))} "
-            f"({formatting.rate(generator.byproducts(fuel)[item.class_name], item)})"
+            burning.format(
+                building=escape(_building_name(game_data, generator.class_name)),
+                fuel=escape(_name_of(game_data, fuel)),
+                rate=formatting.rate(generator.byproducts(fuel)[item.class_name], item),
+            )
             for generator, fuel in sources
         )
-        return f"Aucune recette : cet objet est un <b>sous-produit</b>. Il sort d'une {written}."
+        return _(
+            "Aucune recette : cet objet est un <b>sous-produit</b>. "
+            "Il sort d'une {sources}."
+        ).format(sources=written)
     if item.byproduct_of_fr:
-        return (
-            f"Aucune recette dans le jeu : cet objet tombe de la "
-            f"{escape(item.byproduct_of_fr)}, un bâtiment que cette version ne modélise "
-            f"pas encore. Il entre donc dans l'usine par un apport extérieur."
-        )
-    return (
+        return _(
+            "Aucune recette dans le jeu : cet objet tombe de la {building}, un "
+            "bâtiment que cette version ne modélise pas encore. Il entre donc dans "
+            "l'usine par un apport extérieur."
+        ).format(building=escape(item.byproduct_of_fr))
+    return _(
         "Aucune recette dans le jeu : cet objet se ramasse dans le monde. "
         "Il entre dans l'usine par un apport extérieur."
     )
@@ -183,7 +205,7 @@ def _nothing_makes_it(game_data: GameData, item: Item) -> str:
 
 def _building_name(game_data: GameData, class_name: str) -> str:
     building = game_data.buildings.get(class_name)
-    return building.display_name_fr if building else class_name
+    return building.name if building else class_name
 
 
 def _out_of_scope(game_data: GameData, item: Item) -> str:
@@ -191,17 +213,17 @@ def _out_of_scope(game_data: GameData, item: Item) -> str:
     outside = breakdown.unavailable_producers(game_data, item.class_name)
     if not outside:
         return ""
-    return "<h2>Recettes hors du périmètre de cette version</h2>" + "".join(
+    return f"<h2>{_('Recettes hors du périmètre de cette version')}</h2>" + "".join(
         _one_recipe(game_data, recipe, item.class_name, placeable=False) for recipe in outside
     )
 
 
 def _machine_label(game_data: GameData, recipe: Recipe) -> str:
-    """The machine's French name, wherever the catalogue happens to keep it."""
-    if recipe.building_name_fr:
-        return recipe.building_name_fr
+    """The machine's name, wherever the catalogue happens to keep it."""
+    if recipe.building_name:
+        return recipe.building_name
     building = game_data.buildings.get(recipe.building_class)
-    return building.display_name_fr if building else recipe.building_class
+    return building.name if building else recipe.building_class
 
 
 def _one_recipe(
@@ -221,7 +243,7 @@ def _one_recipe(
     for slot in recipe.ingredients:
         rows.append(_slot_row(game_data, slot.item_class, slot.amount_per_cycle, cycles_per_minute))
     for slot in recipe.products:
-        label = "Produit" if slot.item_class == headline else "Sous-produit"
+        label = _("Produit : ") if slot.item_class == headline else _("Sous-produit : ")
         rows.append(
             _slot_row(
                 game_data,
@@ -239,30 +261,32 @@ def _one_recipe(
         # next to the mean, because a reader sizing a power plant wants to know
         # that an Encoder touches two gigawatts on the way.
         low, high = recipe.power_range_mw
-        power = (
-            f" — {formatting.number(recipe.power_mw)} MW en moyenne "
-            f"({formatting.number(low)} à {formatting.number(high)})"
+        power = _(" — {power} MW en moyenne ({low} à {high})").format(
+            power=formatting.number(recipe.power_mw),
+            low=formatting.number(low),
+            high=formatting.number(high),
         )
     elif building is not None and building.power_mw > 0:
-        power = f" — {formatting.number(building.power_mw)} MW"
+        power = _(" — {power} MW").format(power=formatting.number(building.power_mw))
     # Most French labels already read "... (alternative)"; the marker is only added
     # where the game left it out, exactly as the palette does.
     marker = ""
-    if recipe.is_alternate and "alternative" not in fold(recipe.display_name_fr):
-        marker = " <span class='muted'>(alternative)</span>"
+    if recipe.is_alternate and not says_alternate(recipe.name):
+        marker = f" <span class='muted'>{_('(alternative)')}</span>"
     if placeable:
         tail = (
             f" &nbsp; <a class='place' href='{PLACE_SCHEME}:{escape(recipe.class_name)}'>"
-            f"[poser sur le canvas]</a>"
+            f"{_('[poser sur le canvas]')}</a>"
         )
     else:
-        reason = UNAVAILABLE_REASONS[recipe.availability]
-        tail = f"<br>{escape(reason)}"
+        tail = f"<br>{escape(unavailable_reason(recipe.availability) or '')}"
     heading = "h3 class='outside'" if not placeable else "h3"
+    cycle = _("{machine} — cycle de {seconds} s")
     return (
-        f"<{heading}>{escape(recipe.display_name_fr)}{marker}</h3>"
-        f"<p class='muted'>{escape(machine)} — cycle de "
-        f"{formatting.number(recipe.cycle_seconds)} s{escape(power)}{tail}</p>"
+        f"<{heading}>{escape(recipe.name)}{marker}</h3>"
+        f"<p class='muted'>"
+        f"{escape(cycle.format(machine=machine, seconds=formatting.number(recipe.cycle_seconds)))}"
+        f"{escape(power)}{tail}</p>"
         f"<table>{''.join(rows)}</table>"
     )
 
@@ -274,13 +298,17 @@ def _slot_row(
     cycles_per_minute: float,
     prefix: str = "",
 ) -> str:
-    """One ingredient or product line: name, amount per cycle, rate per minute."""
+    """One ingredient or product line: name, amount per cycle, rate per minute.
+
+    The prefix arrives with its own punctuation -- "Produit : ", *Product: * -- and
+    is not built here from a word and a colon: the space before a colon is French
+    typography and English wants none, so the pair travels together.
+    """
     item = game_data.items.get(item_class)
-    name = item.display_name_fr if item else item_class
-    label = f"{prefix} : " if prefix else ""
+    name = item.name if item else item_class
     unit = "m³" if item is not None and item.form.is_fluid else ""
     return (
-        f"<tr><td>{escape(label)}"
+        f"<tr><td>{escape(prefix)}"
         f"<a href='{ITEM_SCHEME}:{escape(item_class)}'>{escape(name)}</a></td>"
         f"<td class='value'>{formatting.number(amount)} {unit} / cycle</td>"
         f"<td class='rate'>{formatting.rate(amount * cycles_per_minute, item)}</td></tr>"
@@ -292,16 +320,19 @@ def _used_in(game_data: GameData, item: Item) -> str:
     outside = breakdown.unavailable_consumers(game_data, item.class_name)
     if not used and not outside:
         return (
-            "<h2>Recettes qui le consomment</h2>"
-            "<p class='muted'>Aucune recette du jeu ne consomme cet objet.</p>"
+            f"<h2>{_('Recettes qui le consomment')}</h2>"
+            f"<p class='muted'>{_('Aucune recette du jeu ne consomme cet objet.')}</p>"
         )
     rows = [_consumer_row(game_data, recipe, item) for recipe in used]
     if outside:
         rows.append(
-            "<tr><td colspan='4' class='muted'><br>Hors du périmètre de cette version :</td></tr>"
+            f"<tr><td colspan='4' class='muted'><br>"
+            f"{_('Hors du périmètre de cette version :')}</td></tr>"
         )
         rows += [_consumer_row(game_data, recipe, item, placeable=False) for recipe in outside]
-    return f"<h2>Recettes qui le consomment</h2><table>{''.join(rows)}</table>"
+    return (
+        f"<h2>{_('Recettes qui le consomment')}</h2><table>{''.join(rows)}</table>"
+    )
 
 
 def _consumer_row(
@@ -318,9 +349,9 @@ def _consumer_row(
     # product this version cannot make, which is a dead end dressed as a path.
     target = recipe.products[0].item_class if recipe.products else item.class_name
     name = (
-        f"<a href='{ITEM_SCHEME}:{escape(target)}'>{escape(recipe.display_name_fr)}</a>"
+        f"<a href='{ITEM_SCHEME}:{escape(target)}'>{escape(recipe.name)}</a>"
         if placeable
-        else f"<span class='muted'>{escape(recipe.display_name_fr)}</span>"
+        else f"<span class='muted'>{escape(recipe.name)}</span>"
     )
     return (
         f"<tr><td>{name}</td>"
@@ -333,10 +364,13 @@ def _consumer_row(
 def _raw_cost(game_data: GameData, item: Item) -> str:
     cost = breakdown.raw_cost(game_data, item.class_name)
     if not cost.is_complete:
+        looping = _(
+            "Calcul abandonné : les recettes standard de cet objet bouclent sur "
+            "elles-mêmes."
+        )
         return (
-            "<h2>Coût en ressources brutes</h2>"
-            "<p class='warn'>Calcul abandonné : les recettes standard de cet objet "
-            "bouclent sur elles-mêmes.</p>"
+            f"<h2>{_('Coût en ressources brutes')}</h2>"
+            f"<p class='warn'>{looping}</p>"
             f"<p class='muted'>{escape(cost.cycle_description)}</p>"
         )
     if list(cost.amounts) == [item.class_name]:
@@ -344,37 +378,42 @@ def _raw_cost(game_data: GameData, item: Item) -> str:
         # all of them raw resources. Uranium waste is not a raw resource, and the
         # section just above says so: two answers on one page, one of them wrong.
         if item.is_raw_resource:
-            note = "C'est déjà une ressource brute."
+            note = _("C'est déjà une ressource brute.")
         elif breakdown.generator_sources(game_data, item.class_name):
-            note = (
+            note = _(
                 "Le calcul s'arrête ici : cet objet n'est pas fabriqué mais rejeté, "
                 "et son coût est celui du carburant qui le produit."
             )
         else:
-            note = (
+            note = _(
                 "Le calcul s'arrête ici : rien dans le catalogue ne fabrique cet objet, "
                 "il entre dans l'usine tel quel."
             )
-        return f"<h2>Coût en ressources brutes</h2><p class='muted'>{note}</p>"
+        return (
+            f"<h2>{_('Coût en ressources brutes')}</h2><p class='muted'>{note}</p>"
+        )
     rows = "".join(
         f"<tr><td><a href='{ITEM_SCHEME}:{escape(name)}'>"
         f"{escape(_name_of(game_data, name))}</a></td>"
         f"<td class='value'>{formatting.number(amount)}</td></tr>"
         for name, amount in cost.amounts.items()
     )
+    caveat = _(
+        "<b>Indicatif.</b> Le calcul ne suit que les recettes standard et ne crédite "
+        "pas les sous-produits : une recette alternative ou un sous-produit revendu "
+        "changent le résultat. Pour un chiffre juste, posez l'usine."
+    )
     return (
-        f"<h2>Coût en ressources brutes</h2>"
-        f"<p class='muted'>Pour un(e) {escape(item.display_name_fr)} :</p>"
+        f"<h2>{_('Coût en ressources brutes')}</h2>"
+        f"<p class='muted'>{_('Pour un(e) {item} :').format(item=escape(item.name))}</p>"
         f"<table>{rows}</table>"
-        f"<p class='muted'><b>Indicatif.</b> Le calcul ne suit que les recettes standard "
-        f"et ne crédité pas les sous-produits : une recette alternative ou un sous-produit "
-        f"revendu changent le résultat. Pour un chiffre juste, posez l'usine.</p>"
+        f"<p class='muted'>{caveat}</p>"
     )
 
 
 def _name_of(game_data: GameData, item_class: str) -> str:
     item = game_data.items.get(item_class)
-    return item.display_name_fr if item else item_class
+    return item.name if item else item_class
 
 
 # --------------------------------------------------------------------------- #
@@ -397,7 +436,7 @@ class ItemCard(QDialog):
         self._history: list[str] = []
         self._position = -1
 
-        self.setWindowTitle("Fiche d'objet")
+        self.setWindowTitle(_("Fiche d'objet"))
         self.resize(620, 720)
         # Not modal: the point is to keep it open next to the canvas.
         self.setModal(False)
@@ -407,8 +446,8 @@ class ItemCard(QDialog):
         self.browser.setOpenExternalLinks(False)
         self.browser.anchorClicked.connect(self._follow)
 
-        self.back_button = QPushButton("◀ Precedent", self)
-        self.forward_button = QPushButton("Suivant ▶", self)
+        self.back_button = QPushButton(_("◀ Précédent"), self)
+        self.forward_button = QPushButton(_("Suivant ▶"), self)
         self.back_button.clicked.connect(self.go_back)
         self.forward_button.clicked.connect(self.go_forward)
 
@@ -484,7 +523,8 @@ class ItemCard(QDialog):
         if item_class is None:
             return
         item = self.game_data.items.get(item_class)
-        self.setWindowTitle(f"Fiche — {item.display_name_fr}" if item else f"Fiche — {item_class}")
+        card = _("Fiche — {item}")
+        self.setWindowTitle(card.format(item=item.name if item else item_class))
         self._register_icon(item)
         self.browser.setHtml(card_html(self.game_data, item_class))
         self._refresh_navigation()

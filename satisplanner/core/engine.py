@@ -80,6 +80,7 @@ from satisplanner.core.graph import (
     storage_item,
     unit_count,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import AttachmentRole, GameData, SplitterMode
 from satisplanner.core.results import (
     FLOW_EPSILON,
@@ -956,24 +957,24 @@ class _Solver:
                 return None
 
     def _default_label(self, node: Node) -> str:
-        """A readable French name, taken from the game labels."""
+        """A readable name, taken from the game's own labels in the language in force."""
         match node:
             case MachineNode():
-                return self.game_data.recipe(node.recipe_class).display_name_fr
+                return self.game_data.recipe(node.recipe_class).name
             case ResourceNode() | ResourceWellNode() | ExternalSourceNode() | OutputNode():
-                return self.game_data.item(node.item_class).display_name_fr
+                return self.game_data.item(node.item_class).name
             case WaterExtractorNode():
-                return self.game_data.building(node.extractor_class).display_name_fr
+                return self.game_data.building(node.extractor_class).name
             case GeneratorNode() | GeothermalNode():
-                return self.game_data.building(node.generator_class).display_name_fr
+                return self.game_data.building(node.generator_class).name
             case StorageNode():
-                return self.game_data.building(node.storage_class).display_name_fr
+                return self.game_data.building(node.storage_class).name
             case SplitterNode() | MergerNode():
                 building = self._building_of(node)
                 if building is None:
                     # Nothing on its lines yet, so no building to name it after.
-                    return "Répartiteur" if isinstance(node, SplitterNode) else "Groupeur"
-                return self.game_data.building(building).display_name_fr
+                    return _("Répartiteur") if isinstance(node, SplitterNode) else _("Groupeur")
+                return self.game_data.building(building).name
 
     def _buffer_solution(self, state: _NodeState) -> BufferSolution:
         node = state.node
@@ -1298,7 +1299,7 @@ def _water_fill(
     clipping one offer changes how the others are scaled.
     """
     bound = False
-    for _ in range(MAX_ALLOCATION_ROUNDS):
+    for _round in range(MAX_ALLOCATION_ROUNDS):
         active = []
         for edge in edges:
             if (

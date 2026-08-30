@@ -52,6 +52,7 @@ from satisplanner.core.graph import (
     StorageNode,
     WaterExtractorNode,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData
 from satisplanner.data.db import GAME_VERSION
 
@@ -222,8 +223,10 @@ def _six_to_seven(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     if any(node.get("kind") in ("splitter", "merger") for node in payload.get("nodes", [])):
         payload = {**payload, "attachment_mode": AttachmentMode.FAITHFUL.value}
         return payload, [
-            "document ouvert en mode fidèle : il contient des raccords explicites, "
-            "donc la règle « un port porte une ligne » s'y applique."
+            _(
+                "document ouvert en mode fidèle : il contient des raccords explicites, "
+                "donc la règle « un port porte une ligne » s'y applique."
+            )
         ]
     return payload, []
 
@@ -279,11 +282,11 @@ def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any
     silently drop whatever it added.
     """
     if schema_version > SCHEMA_VERSION:
-        msg = (
-            f"ce fichier a été écrit par une version plus récente de SatisPlanner "
-            f"(schéma {schema_version}, cette version lit jusqu'au {SCHEMA_VERSION}). "
-            f"Mettez l'application à jour pour l'ouvrir."
-        )
+        msg = _(
+            "ce fichier a été écrit par une version plus récente de SatisPlanner "
+            "(schéma {written}, cette version lit jusqu'au {supported}). Mettez "
+            "l'application à jour pour l'ouvrir."
+        ).format(written=schema_version, supported=SCHEMA_VERSION)
         raise FactoryFileError(msg)
 
     notes: list[str] = []
@@ -291,13 +294,17 @@ def migrate(payload: dict[str, Any], schema_version: int) -> tuple[dict[str, Any
     while current < SCHEMA_VERSION:
         step = MIGRATIONS.get(current)
         if step is None:  # pragma: no cover - unreachable while MIGRATIONS is empty
-            msg = (
-                f"aucune migration connue depuis le schéma {current} : "
-                f"le fichier ne peut pas être converti."
-            )
+            msg = _(
+                "aucune migration connue depuis le schéma {schema} : le fichier ne "
+                "peut pas être converti."
+            ).format(schema=current)
             raise FactoryFileError(msg)
         payload, written = step(payload)
-        notes.append(f"document converti du schéma {current} au schéma {current + 1}")
+        notes.append(
+            _("document converti du schéma {before} au schéma {after}").format(
+                before=current, after=current + 1
+            )
+        )
         notes.extend(written)
         current += 1
     return payload, notes
@@ -336,13 +343,15 @@ def save(path: Path, graph: FactoryGraph, thumbnail: bytes | None = None) -> Man
 def load(path: Path) -> LoadedFactory:
     """Read a ``.sfp``. Raises :class:`FactoryFileError` with a French reason."""
     if not path.is_file():
-        msg = f"fichier introuvable : {path}"
+        msg = _("fichier introuvable : {path}").format(path=path)
         raise FactoryFileError(msg)
     try:
         with zipfile.ZipFile(path) as archive:
             members = set(archive.namelist())
             if GRAPH_MEMBER not in members:
-                msg = f"{path.name} n'est pas une usine SatisPlanner : {GRAPH_MEMBER} manquant."
+                msg = _("{file} n'est pas une usine SatisPlanner : {member} manquant.").format(
+                    file=path.name, member=GRAPH_MEMBER
+                )
                 raise FactoryFileError(msg)
             raw_graph = archive.read(GRAPH_MEMBER).decode("utf-8")
             raw_manifest = (
@@ -352,10 +361,14 @@ def load(path: Path) -> LoadedFactory:
             )
             thumbnail = archive.read(THUMBNAIL_MEMBER) if THUMBNAIL_MEMBER in members else None
     except (zipfile.BadZipFile, OSError) as exc:
-        msg = f"{path.name} est illisible ou endommagé : {exc}"
+        msg = _("{file} est illisible ou endommagé : {reason}").format(
+            file=path.name, reason=exc
+        )
         raise FactoryFileError(msg) from exc
     except UnicodeDecodeError as exc:
-        msg = f"{path.name} contient du texte qui n'est pas de l'UTF-8."
+        msg = _("{file} contient du texte qui n'est pas de l'UTF-8.").format(
+            file=path.name
+        )
         raise FactoryFileError(msg) from exc
 
     loaded = _document_from(raw_graph, raw_manifest)
@@ -369,27 +382,33 @@ def _document_from(raw_graph: str, raw_manifest: str) -> LoadedFactory:
         payload = json.loads(raw_graph)
         manifest = Manifest.from_dict(json.loads(raw_manifest))
     except json.JSONDecodeError as exc:
-        msg = f"le contenu n'est pas du JSON valide : {exc.msg} (ligne {exc.lineno})"
+        msg = _("le contenu n'est pas du JSON valide : {reason} (ligne {line})").format(
+            reason=exc.msg, line=exc.lineno
+        )
         raise FactoryFileError(msg) from exc
     if not isinstance(payload, dict):
-        msg = "le contenu ne décrit pas une usine : un objet JSON était attendu."
+        msg = _("le contenu ne décrit pas une usine : un objet JSON était attendu.")
         raise FactoryFileError(msg)
 
     payload, warnings = migrate(payload, manifest.schema_version)
     try:
         graph = FactoryGraph.model_validate(payload)
     except GraphError as exc:
-        msg = f"l'usine décrite est incohérente : {exc}"
+        msg = _("l'usine décrite est incohérente : {reason}").format(reason=exc)
         raise FactoryFileError(msg) from exc
     except ValueError as exc:
-        msg = f"l'usine décrite ne respecte pas le format attendu : {_first_line(exc)}"
+        msg = _("l'usine décrite ne respecte pas le format attendu : {reason}").format(
+            reason=_first_line(exc)
+        )
         raise FactoryFileError(msg) from exc
 
     if manifest.game_version not in ("?", GAME_VERSION):
         warnings.append(
-            f"ce fichier a été enregistré avec les données du jeu {manifest.game_version}, "
-            f"alors que cette version embarque celles de la {GAME_VERSION} : "
-            f"les recettes ont pu changer, verifiez les débits."
+            _(
+                "ce fichier a été enregistré avec les données du jeu {written}, alors "
+                "que cette version embarque celles de la {current} : les recettes ont "
+                "pu changer, vérifiez les débits."
+            ).format(written=manifest.game_version, current=GAME_VERSION)
         )
     return LoadedFactory(graph=graph, manifest=manifest, warnings=warnings)
 
@@ -493,16 +512,18 @@ def prune_unknown(graph: FactoryGraph, game_data: GameData) -> tuple[list[str], 
 def describe_unknown(missing: Sequence[str], removed: Sequence[str] = ()) -> str:
     """The French sentence shown when a file refers to classes we do not have."""
     listed = ", ".join(missing[:8])
-    more = f" et {len(missing) - 8} autre(s)" if len(missing) > 8 else ""
-    sentence = (
-        f"{len(missing)} classe(s) de cette usine sont absentes du catalogue embarqué : "
-        f"{listed}{more}."
+    more = (
+        _(" et {count} autre(s)").format(count=len(missing) - 8) if len(missing) > 8 else ""
     )
+    sentence = _(
+        "{count} classe(s) de cette usine sont absentes du catalogue embarqué : "
+        "{classes}{more}."
+    ).format(count=len(missing), classes=listed, more=more)
     if removed:
-        sentence += (
-            f" Les {len(removed)} nœud(s) concerné(s) ont été retiré(s) "
-            f"({', '.join(removed[:8])}) ; le reste de l'usine est intact."
-        )
+        sentence += " " + _(
+            "Les {count} nœud(s) concerné(s) ont été retiré(s) ({nodes}) ; le reste "
+            "de l'usine est intact."
+        ).format(count=len(removed), nodes=", ".join(removed[:8]))
     return sentence
 
 
@@ -531,38 +552,40 @@ def decode_share_code(code: str) -> LoadedFactory:
     """Read a share code back. Every failure mode is a French sentence."""
     cleaned = "".join(code.split())
     if not cleaned:
-        msg = "aucun code n'a été fourni."
+        msg = _("aucun code n'a été fourni.")
         raise FactoryFileError(msg)
     if not cleaned.startswith(SHARE_PREFIX):
         msg = (
-            f"ce texte n'est pas un code SatisPlanner : il devrait commencer par "
-            f"« {SHARE_PREFIX} »."
+            _(
+                "ce texte n'est pas un code SatisPlanner : il devrait commencer par "
+                "« {prefix} »."
+            ).format(prefix=SHARE_PREFIX)
         )
         raise FactoryFileError(msg)
     if len(cleaned) > MAX_SHARE_CODE_LENGTH:
-        msg = "ce code est trop long pour être une usine : il a probablement été mal collé."
+        msg = _("ce code est trop long pour être une usine : il a probablement été mal collé.")
         raise FactoryFileError(msg)
 
     body = cleaned[len(SHARE_PREFIX) :]
     try:
         compressed = base64.urlsafe_b64decode(_padded(body))
     except (binascii.Error, ValueError) as exc:
-        msg = "ce code est incomplet ou abîmé : la partie codée n'a pas pu être relue."
+        msg = _("ce code est incomplet ou abîmé : la partie codée n'a pas pu être relue.")
         raise FactoryFileError(msg) from exc
 
     try:
         raw = _decompress(compressed)
     except zlib.error as exc:
-        msg = "ce code est tronqué ou corrompu : les données compressées sont incomplètes."
+        msg = _("ce code est tronqué ou corrompu : les données compressées sont incomplètes.")
         raise FactoryFileError(msg) from exc
 
     try:
         envelope = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        msg = "ce code se decompresse mais ne contient pas une usine lisible."
+        msg = _("ce code se décompresse mais ne contient pas une usine lisible.")
         raise FactoryFileError(msg) from exc
     if not isinstance(envelope, dict) or "graph" not in envelope:
-        msg = "ce code ne contient pas d'usine."
+        msg = _("ce code ne contient pas d'usine.")
         raise FactoryFileError(msg)
 
     return _document_from(json.dumps(envelope["graph"]), json.dumps(envelope.get("manifest", {})))

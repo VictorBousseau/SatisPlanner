@@ -15,6 +15,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field
 
 from satisplanner.core import constants
+from satisplanner.core.i18n import is_english
 
 
 class UnknownClassError(LookupError):
@@ -117,13 +118,38 @@ class _Row(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class Item(_Row):
-    class_name: str
+class _Named(_Row):
+    """A row the game names in both languages, and the one rule about those names.
+
+    ``display_name`` is what ``en-US.json`` says and ``display_name_fr`` what
+    ``fr.json`` says. Nothing in this application ever translates either: a
+    Manufacturer is a *Façonneuse* because the game's own locale says so, and the day
+    the game renames one, the catalogue follows without a line of code changing.
+
+    :attr:`name` is what every caller should read. The raw fields stay public because
+    the data layer writes them and a test may want to compare the two.
+    """
+
     display_name: str
     display_name_fr: str
-    # The game's own blurb, French when the locale has one. Empty when the data has
-    # none: an item card shows nothing rather than something written here.
+
+    @property
+    def name(self) -> str:
+        """The game's own word, in the language the interface is set to."""
+        return self.display_name if is_english() else self.display_name_fr
+
+
+class Item(_Named):
+    class_name: str
+    # The game's own blurb in both languages. Empty when the data has none: an item
+    # card shows nothing rather than something written here.
     description_fr: str = ""
+    description_en: str = ""
+
+    @property
+    def description(self) -> str:
+        """The blurb in the language in force, and nothing when the game gives none."""
+        return self.description_en if is_english() else self.description_fr
     form: ItemForm
     stack_size: float
     icon_file: str | None
@@ -151,10 +177,8 @@ class RecipeSlot(_Row):
     rate_per_minute: float
 
 
-class Recipe(_Row):
+class Recipe(_Named):
     class_name: str
-    display_name: str
-    display_name_fr: str
     building_class: str
     cycle_seconds: float
     is_alternate: bool
@@ -174,10 +198,16 @@ class Recipe(_Row):
     # draw that belongs to the machine-and-recipe pair is the general one.
     power_constant_mw: float = 0.0
     power_factor_mw: float = 0.0
-    # French name of the machine, carried **only** when that machine is absent from
-    # the catalogue. A placeable recipe leaves it empty and the name is read from
+    # Name of the machine, carried **only** when that machine is absent from the
+    # catalogue. A placeable recipe leaves both empty and the name is read from
     # ``buildings``, so the two can never drift apart for the rows that have both.
     building_name_fr: str = ""
+    building_name_en: str = ""
+
+    @property
+    def building_name(self) -> str:
+        """The machine's name in the language in force, when the row carries one."""
+        return self.building_name_en if is_english() else self.building_name_fr
 
     @property
     def is_placeable(self) -> bool:
@@ -227,10 +257,8 @@ class Recipe(_Row):
         return {slot.item_class: slot.rate_per_minute for slot in self.products}
 
 
-class Building(_Row):
+class Building(_Named):
     class_name: str
-    display_name: str
-    display_name_fr: str
     kind: BuildingKind
     power_mw: float
     icon_file: str | None

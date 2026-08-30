@@ -33,12 +33,13 @@ from satisplanner.core.graph import (
     ResourceNode,
     ResourceWellNode,
 )
+from satisplanner.core.i18n import _
 from satisplanner.ui import edits
 from satisplanner.ui.canvas_items import PURITY_BY_FIELD, Field
 from satisplanner.ui.catalogue import (
-    PURITY_LABELS,
     extractor_choices,
     fuel_choices,
+    purity_labels,
     transport_choices,
 )
 from satisplanner.ui.document import FactoryDocument
@@ -60,7 +61,7 @@ def choices_for(document: FactoryDocument, target: str, field: Field) -> list[tu
         return transport_choices(document.game_data, form)
     node = document.graph.node(target)
     if field is Field.PURITY and isinstance(node, ResourceNode | GeothermalNode):
-        return [(purity.value, label) for purity, label in PURITY_LABELS.items()]
+        return [(purity.value, label) for purity, label in purity_labels()]
     if field is Field.EXTRACTOR and isinstance(node, ResourceNode):
         return extractor_choices(document.game_data, node.item_class)
     if field is Field.FUEL and isinstance(node, GeneratorNode):
@@ -242,8 +243,10 @@ class InlineEditor:
 
 def _hint(field: Field) -> str:
     if field is Field.CLOCK:
-        return (
-            f"Cadence en pourcentage, de {formatting.percent(constants.MIN_CLOCK_SPEED)} "
-            f"a {formatting.percent(constants.MAX_CLOCK_SPEED)}. Entrée valide, Echap annule."
+        return _(
+            "Cadence en pourcentage, de {low} a {high}. Entrée valide, Échap annule."
+        ).format(
+            low=formatting.percent(constants.MIN_CLOCK_SPEED),
+            high=formatting.percent(constants.MAX_CLOCK_SPEED),
         )
-    return "Entrée valide, Echap annule."
+    return _("Entrée valide, Échap annule.")

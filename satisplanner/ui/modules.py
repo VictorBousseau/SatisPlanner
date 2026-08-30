@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from satisplanner.core import formatting
+from satisplanner.core.i18n import _
 from satisplanner.core.models import GameData
 from satisplanner.data.module_file import (
     MAX_NAME_LENGTH,
@@ -52,14 +53,20 @@ logger = logging.getLogger(__name__)
 
 _ROLE_MODULE: Final = int(Qt.ItemDataRole.UserRole)
 
-LABEL_CAVEAT: Final = (
-    "Débits du module <b>seul</b>. Inséré dans une usine qui l'affame, il en fera "
-    "moins : c'est une étiquette, pas une promesse."
-)
-COPY_CAVEAT: Final = (
-    "Un module inséré est une <b>copie</b> : le modifier ensuite ne change pas le "
-    "module, et modifier le module ne change pas les usines où il est déjà."
-)
+def label_caveat() -> str:
+    """What the rates on a module's card do and do not promise."""
+    return _(
+        "Débits du module <b>seul</b>. Inséré dans une usine qui l'affame, il en fera "
+        "moins : c'est une étiquette, pas une promesse."
+    )
+
+
+def copy_caveat() -> str:
+    """That an inserted module stops being tied to the module it came from."""
+    return _(
+        "Un module inséré est une <b>copie</b> : le modifier ensuite ne change pas le "
+        "module, et modifier le module ne change pas les usines où il est déjà."
+    )
 
 
 class SaveModuleDialog(QDialog):
@@ -76,7 +83,7 @@ class SaveModuleDialog(QDialog):
         self.name.selectAll()
         self.description = QPlainTextEdit(self)
         self.description.setPlaceholderText(
-            "À quoi il sert, ce qu'il faut lui brancher, ce qu'il en sort."
+            _("À quoi il sert, ce qu'il faut lui brancher, ce qu'il en sort.")
         )
 
         buttons = QDialogButtonBox(
@@ -90,7 +97,7 @@ class SaveModuleDialog(QDialog):
         layout.addWidget(self.name)
         layout.addWidget(QLabel("Description", self))
         layout.addWidget(self.description, 1)
-        layout.addWidget(_muted(COPY_CAVEAT, self))
+        layout.addWidget(_muted(copy_caveat(), self))
         layout.addWidget(buttons)
 
     def _accept_if_named(self) -> None:
@@ -122,7 +129,7 @@ class ModuleLibraryDialog(QDialog):
         self.game_data = game_data
         # Injectable so a test never writes into the developer's own library.
         self.directory = directory
-        self.setWindowTitle("Bibliothèque de modules")
+        self.setWindowTitle(_("Bibliothèque de modules"))
         self.resize(860, 560)
         self._modules: list[FactoryModule] = []
         self._problems: list[str] = []
@@ -144,7 +151,7 @@ class ModuleLibraryDialog(QDialog):
         self.details.setTextFormat(Qt.TextFormat.RichText)
         self.details.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
-        self.insert_button = QPushButton("Insérer dans l'usine", self)
+        self.insert_button = QPushButton(_("Insérer dans l'usine"), self)
         self.insert_button.clicked.connect(self._insert)
         self.open_button = QPushButton("Ouvrir dans un onglet", self)
         self.open_button.clicked.connect(lambda: self._emit(self.openRequested))
@@ -152,7 +159,7 @@ class ModuleLibraryDialog(QDialog):
         self.new_button.clicked.connect(lambda: self._emit(self.newFromRequested))
         self.rename_button = QPushButton("Renommer...", self)
         self.rename_button.clicked.connect(self._rename)
-        self.describe_button = QPushButton("Décrire...", self)
+        self.describe_button = QPushButton(_("Décrire..."), self)
         self.describe_button.clicked.connect(self._describe)
         self.delete_button = QPushButton("Supprimer", self)
         self.delete_button.clicked.connect(self._delete)
@@ -190,7 +197,7 @@ class ModuleLibraryDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(columns, 1)
         layout.addWidget(self.problems)
-        layout.addWidget(_muted(COPY_CAVEAT, self))
+        layout.addWidget(_muted(copy_caveat(), self))
         layout.addWidget(close)
 
         self.reload()
@@ -256,8 +263,12 @@ class ModuleLibraryDialog(QDialog):
         if module is None:
             self.thumbnail.clear()
             self.details.setText(
-                f"<p style='color:{theme.TEXT_MUTED}'>Aucun module. Sélectionnez un morceau "
-                "d'usine et « Enregistrer la sélection comme module ».</p>"
+                f"<p style='color:{theme.TEXT_MUTED}'>"
+                + _(
+                    "Aucun module. Sélectionnez un morceau d'usine et « Enregistrer "
+                    "la sélection comme module »."
+                )
+                + "</p>"
             )
             return
         self.details.setText(self.details_html(module))
@@ -270,17 +281,22 @@ class ModuleLibraryDialog(QDialog):
             parts.append(module.description)
         if module.saved_at:
             parts.append(
-                f"<span style='color:{theme.TEXT_MUTED}'>Enregistré le "
-                f"{_readable_date(module.saved_at)}</span>"
+                f"<span style='color:{theme.TEXT_MUTED}'>"
+                + _("Enregistré le {date}").format(date=_readable_date(module.saved_at))
+                + "</span>"
             )
-        parts.append(f"<b>Entrées</b> : {self._rates(module.inputs)}")
-        parts.append(f"<b>Sorties</b> : {self._rates(module.outputs)}")
-        parts.append(f"<span style='color:{theme.TEXT_MUTED}'>{LABEL_CAVEAT}</span>")
+        parts.append(
+            _("<b>Entrées</b> : {rates}").format(rates=self._rates(module.inputs))
+        )
+        parts.append(
+            _("<b>Sorties</b> : {rates}").format(rates=self._rates(module.outputs))
+        )
+        parts.append(f"<span style='color:{theme.TEXT_MUTED}'>{label_caveat()}</span>")
         return "".join(f"<p>{part}</p>" for part in parts)
 
     def _rates(self, rates: dict[str, float]) -> str:
         if not rates:
-            return "aucune"
+            return _("aucune")
         return ", ".join(
             f"{self._item_name(item_class)} "
             f"{formatting.rate(rate, self.game_data.items.get(item_class))}"
@@ -289,7 +305,7 @@ class ModuleLibraryDialog(QDialog):
 
     def _item_name(self, class_name: str) -> str:
         item = self.game_data.items.get(class_name)
-        return item.display_name_fr if item else class_name
+        return item.name if item else class_name
 
     def _show_thumbnail(self, module: FactoryModule) -> None:
         if not module.thumbnail:
@@ -313,7 +329,9 @@ class ModuleLibraryDialog(QDialog):
             self.problems.hide()
             return
         self.problems.setText(
-            f"{len(self._problems)} fichier(s) illisible(s), ignoré(s) : "
+            _("{count} fichier(s) illisible(s), ignoré(s) : ").format(
+                count=len(self._problems)
+            )
             + " ".join(self._problems)
         )
         self.problems.show()
@@ -344,7 +362,7 @@ class ModuleLibraryDialog(QDialog):
         if module is None:
             return
         text, accepted = QInputDialog.getMultiLineText(
-            self, "Décrire le module", module.name, module.description
+            self, _("Décrire le module"), module.name, module.description
         )
         if not accepted:
             return
@@ -356,9 +374,12 @@ class ModuleLibraryDialog(QDialog):
             return
         answer = QMessageBox.question(
             self,
-            "Supprimer le module",
-            f"Supprimer « {module.name} » de la bibliothèque ?\n\n"
-            "Les usines où il a déjà été inséré ne changent pas : elles en ont une copie.",
+            _("Supprimer le module"),
+            _(
+                "Supprimer « {name} » de la bibliothèque ?\n\n"
+                "Les usines où il a déjà été inséré ne changent pas : elles en ont "
+                "une copie."
+            ).format(name=module.name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -372,7 +393,7 @@ class ModuleLibraryDialog(QDialog):
         try:
             action()
         except ModuleError as exc:
-            QMessageBox.warning(self, "Bibliothèque", str(exc))
+            QMessageBox.warning(self, _("Bibliothèque"), str(exc))
         self.reload()
 
 

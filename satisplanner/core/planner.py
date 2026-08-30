@@ -50,6 +50,7 @@ from satisplanner.core.graph import (
     WaterExtractorNode,
     port_line_budget,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import Extractor, GameData, ItemForm, Purity, Recipe
 
 logger = logging.getLogger(__name__)
@@ -146,7 +147,7 @@ def recipe_for(game_data: GameData, item_class: str, choices: dict[str, str]) ->
         raise PlanError(msg)
     if breakdown.output_per_cycle(recipe, item_class) <= 0:
         msg = (
-            f"la recette « {recipe.display_name_fr} » ne produit pas "
+            f"la recette « {recipe.name} » ne produit pas "
             f"{_name(game_data, item_class)}"
         )
         raise PlanError(msg)
@@ -171,17 +172,17 @@ def plan(
     descends**, which is the same single pass down the same tree.
     """
     if rate_per_minute <= RATE_EPSILON:
-        msg = "un objectif se donne en objets par minute, et il doit être positif."
+        msg = _("un objectif se donne en objets par minute, et il doit être positif.")
         raise PlanError(msg)
     if item_class not in game_data.items:
-        msg = f"objet inconnu : {item_class}"
+        msg = _("objet inconnu : {item}").format(item=item_class)
         raise PlanError(msg)
     picked = dict(choices or {})
     if recipe_for(game_data, item_class, picked) is None:
-        msg = (
-            f"{_name(game_data, item_class)} ne se fabrique pas : "
-            f"aucune recette ne le produit, il n'y a donc rien à construire."
-        )
+        msg = _(
+            "{item} ne se fabrique pas : aucune recette ne le produit, il n'y a donc "
+            "rien à construire."
+        ).format(item=_name(game_data, item_class))
         raise PlanError(msg)
 
     order = _dependency_order(game_data, item_class, picked)
@@ -266,10 +267,10 @@ def _dependency_order(
             return
         if name in open_chain:
             ring = " → ".join(_name(game_data, step) for step in (*open_chain, name))
-            msg = (
-                f"ces recettes se fabriquent l'une l'autre : {ring}. "
-                f"Choisissez une recette différente pour l'une d'elles."
-            )
+            msg = _(
+                "ces recettes se fabriquent l'une l'autre : {ring}. Choisissez une "
+                "recette différente pour l'une d'elles."
+            ).format(ring=ring)
             raise PlanError(msg)
         recipe = recipe_for(game_data, name, choices)
         if recipe is not None:
@@ -394,9 +395,8 @@ def _node_for(game_data: GameData, step: Step, position: tuple[float, float]) ->
         )
     extractor = _extractor_for(game_data, step.item_class)
     if extractor is None:
-        msg = (
-            f"aucun extracteur ne travaille {_name(game_data, step.item_class)} "
-            f"dans ce catalogue."
+        msg = _("aucun extracteur ne travaille {item} dans ce catalogue.").format(
+            item=_name(game_data, step.item_class)
         )
         raise PlanError(msg)
     each = extractor.rate(DEFAULT_PURITY)
@@ -580,7 +580,7 @@ def _connect(
             port_line_budget(graph.node(source), is_output=True) or wanted,
             port_line_budget(graph.node(target), is_output=False) or wanted,
         )
-    for _ in range(max(1, min(wanted, room))):
+    for _slot in range(max(1, min(wanted, room))):
         graph.edges.append(
             Edge(
                 id=f"e{len(graph.edges) + 1}",
@@ -612,7 +612,7 @@ def node_id_for(game_data: GameData, step: Step) -> str:
 
 def _name(game_data: GameData, item_class: str) -> str:
     item = game_data.items.get(item_class)
-    return item.display_name_fr if item else item_class
+    return item.name if item else item_class
 
 
 def _slug(game_data: GameData, item_class: str) -> str:
@@ -637,32 +637,48 @@ def report(game_data: GameData, made: Plan, *, rounded: bool) -> list[str]:
     verified must not be able to pass for one that was.
     """
     lines: list[str] = [
-        f"{formatting.rate(made.rate_per_minute, game_data.item(made.target))} "
-        f"{formatting.of(_name(game_data, made.target))} : "
-        f"{sum(1 for step in made.steps if not step.is_source)} atelier(s), "
-        f"{len(made.raw)} gisement(s), {len(made.imports)} apport(s) extérieur(s)."
+        _(
+            "{rate} {of_item} : {workshops} atelier(s), {deposits} gisement(s), "
+            "{imports} apport(s) extérieur(s)."
+        ).format(
+            rate=formatting.rate(made.rate_per_minute, game_data.item(made.target)),
+            of_item=formatting.of(_name(game_data, made.target)),
+            workshops=sum(1 for step in made.steps if not step.is_source),
+            deposits=len(made.raw),
+            imports=len(made.imports),
+        )
     ]
     if made.to_settle:
         named = ", ".join(_name(game_data, item) for item in made.to_settle)
         lines.append(
-            f"À RÉGLER : {named}. Les gisements sont posés en pureté normale avec le "
-            f"premier extracteur venu, parce que ce qui se trouve sur votre carte "
-            f"n'est écrit nulle part dans les données du jeu. Corrigez la pureté et "
-            f"l'extracteur, puis le nombre suivra."
+            _(
+                "À RÉGLER : {items}. Les gisements sont posés en pureté normale avec "
+                "le premier extracteur venu, parce que ce qui se trouve sur votre "
+                "carte n'est écrit nulle part dans les données du jeu. Corrigez la "
+                "pureté et l'extracteur, puis le nombre suivra."
+            ).format(items=named)
         )
     if made.imports:
         named = ", ".join(_name(game_data, item) for item in made.imports)
         lines.append(
-            f"Apporté de l'extérieur, faute de recette dans le catalogue : {named}."
+            _("Apporté de l'extérieur, faute de recette dans le catalogue : {items}.").format(
+                items=named
+            )
         )
     if made.byproducts:
+        of_item = _("{rate} de {item}")
         named = ", ".join(
-            f"{formatting.rate(rate, game_data.item(item))} de {_name(game_data, item)}"
+            of_item.format(
+                rate=formatting.rate(rate, game_data.item(item)),
+                item=_name(game_data, item),
+            )
             for item, rate in made.byproducts.items()
         )
         lines.append(
-            f"Sous-produit(s) évacué(s) vers une sortie : {named}. Sans issue, ils "
-            f"arrêteraient net la machine qui les fabrique."
+            _(
+                "Sous-produit(s) évacué(s) vers une sortie : {items}. Sans issue, ils "
+                "arrêteraient net la machine qui les fabrique."
+            ).format(items=named)
         )
     if rounded:
         spare = [step for step in made.steps if step.surplus_per_minute > RATE_EPSILON]
@@ -673,11 +689,15 @@ def report(game_data: GameData, made: Plan, *, rounded: bool) -> list[str]:
                 for step in spare
             )
             lines.append(
-                f"Arrondi au bâtiment entier : {len(spare)} surplus, chacun envoyé dans "
-                f"un conteneur — {named}."
+                _(
+                    "Arrondi au bâtiment entier : {count} surplus, chacun envoyé dans "
+                    "un conteneur — {items}."
+                ).format(count=len(spare), items=named)
             )
         else:
-            lines.append("Arrondi au bâtiment entier : aucun surplus, tout tombe juste.")
+            lines.append(
+                _("Arrondi au bâtiment entier : aucun surplus, tout tombe juste.")
+            )
     else:
         fractional = [
             step
@@ -691,8 +711,10 @@ def report(game_data: GameData, made: Plan, *, rounded: bool) -> list[str]:
                 for step in fractional
             )
             lines.append(
-                f"Ratios exacts : {len(fractional)} atelier(s) en nombre décimal, à "
-                f"construire en entier — {named}."
+                _(
+                    "Ratios exacts : {count} atelier(s) en nombre décimal, à construire "
+                    "en entier — {items}."
+                ).format(count=len(fractional), items=named)
             )
     return lines
 

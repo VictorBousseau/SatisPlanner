@@ -22,6 +22,7 @@ from typing import Final
 from PySide6.QtGui import QUndoCommand
 
 from satisplanner.core.graph import Edge, FactoryGraph, GraphError, Node, check_edge
+from satisplanner.core.i18n import _
 from satisplanner.ui.document import FactoryDocument
 
 # Merge identifier for consecutive moves, so nudging a node with the arrow keys ten
@@ -87,7 +88,7 @@ class AddNodeCommand(_DocumentCommand):
     """Drop a node on the canvas."""
 
     def __init__(self, document: FactoryDocument, node: Node, label: str) -> None:
-        super().__init__(document, f"ajout de {label}")
+        super().__init__(document, _("ajout de {label}").format(label=label))
         self.node = node
 
     def redo(self) -> None:
@@ -115,7 +116,7 @@ class ConnectCommand(_DocumentCommand):
         transport_class: str,
         label: str,
     ) -> None:
-        super().__init__(document, f"raccordement de {label}")
+        super().__init__(document, _("raccordement de {label}").format(label=label))
         self.edge = Edge(
             id=document.next_edge_id(),
             source=source,
@@ -151,8 +152,8 @@ class PasteCommand(_DocumentCommand):
         text: str | None = None,
     ) -> None:
         count = len(pasted.nodes)
-        plural = "s" if count > 1 else ""
-        super().__init__(document, text or f"collage de {count} nœud{plural}")
+        pasting = _("collage de {count} nœuds") if count > 1 else _("collage de {count} nœud")
+        super().__init__(document, text or pasting.format(count=count))
         self.nodes, self.edges = _renumbered(document, pasted, offset)
 
     @property
@@ -277,8 +278,12 @@ class MoveNodesCommand(_DocumentCommand):
         before: dict[str, tuple[float, float]],
         after: dict[str, tuple[float, float]],
     ) -> None:
-        plural = "s" if len(after) > 1 else ""
-        super().__init__(document, f"déplacement de {len(after)} nœud{plural}")
+        moving = (
+            _("déplacement de {count} nœuds")
+            if len(after) > 1
+            else _("déplacement de {count} nœud")
+        )
+        super().__init__(document, moving.format(count=len(after)))
         self.before = before
         self.after = after
 
@@ -343,7 +348,9 @@ class SetTransportCommand(_DocumentCommand):
     def __init__(
         self, document: FactoryDocument, edge_id: str, transport_class: str, label: str
     ) -> None:
-        super().__init__(document, f"passage de la ligne en {label}")
+        super().__init__(
+            document, _("passage de la ligne en {tier}").format(tier=label)
+        )
         self.edge_id = edge_id
         self.transport_class = transport_class
         self.previous = document.graph.edge(edge_id).transport_class
@@ -382,12 +389,12 @@ def can_connect(
         transport_class=transport_class,
     )
     if source == target:
-        return "une ligne ne peut pas boucler sur le même nœud"
+        return _("une ligne ne peut pas boucler sur le même nœud")
     if any(
         edge.source == source and edge.target == target and edge.item_class == item_class
         for edge in document.graph.edges
     ):
-        return "cette ligne existe déjà"
+        return _("cette ligne existe déjà")
     try:
         check_edge(document.graph, candidate, document.game_data)
     except GraphError as exc:

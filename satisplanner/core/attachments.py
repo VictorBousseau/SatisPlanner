@@ -38,6 +38,7 @@ from satisplanner.core.graph import (
     SplitterNode,
     port_line_budget,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import SplitterMode
 
 BRANCHES: Final = constants.ATTACHMENT_BRANCHES
@@ -161,7 +162,7 @@ class PortChange:
 
     @property
     def role(self) -> str:
-        return "répartiteur" if self.is_output else "groupeur"
+        return _("répartiteur") if self.is_output else _("groupeur")
 
 
 @dataclass(frozen=True)
@@ -201,28 +202,39 @@ class Materialisation:
         if not self.changes:
             return []
         notes = [
-            f"{self.inserted} raccord(s) matérialisé(s) : {self.splitters} répartiteur(s) "
-            f"et {self.mergers} groupeur(s). Ils étaient jusqu'ici déduits des lignes ; "
-            f"ils sont maintenant des nœuds, comptés dans la liste de courses."
+            _(
+                "{count} raccord(s) matérialisé(s) : {splitters} répartiteur(s) et "
+                "{mergers} groupeur(s). Ils étaient jusqu'ici déduits des lignes ; ils "
+                "sont maintenant des nœuds, comptés dans la liste de courses."
+            ).format(
+                count=self.inserted, splitters=self.splitters, mergers=self.mergers
+            )
         ]
         uneven = self.uneven
         if not uneven:
             notes.append(
-                "Tous les partages se font en arbre équilibré : les débits sont "
-                "identiques à ceux d'avant conversion."
+                _(
+                    "Tous les partages se font en arbre équilibré : les débits sont "
+                    "identiques à ceux d'avant conversion."
+                )
             )
             return notes
         notes.append(
-            "Un partage en arbre réel ne donne des parts égales que lorsque le nombre "
-            "de lignes se ramène à des moitiés et des tiers. Les ports suivants n'en "
-            "font pas partie et leurs débits changent :"
+            _(
+                "Un partage en arbre réel ne donne des parts égales que lorsque le "
+                "nombre de lignes se ramène à des moitiés et des tiers. Les ports "
+                "suivants n'en font pas partie et leurs débits changent :"
+            )
         )
         notes.extend(f"    {sentence}" for sentence in (_describe(change) for change in uneven))
         if any(not change.is_output for change in uneven):
             notes.append(
-                "Un groupage ne décide des débits que si la ligne qui en sort est "
-                "saturée, ce qui est rare et déjà signalé à part ; un partage en décide "
-                "dès que la source est la contrainte, ce qui est le cas courant."
+                _(
+                    "Un groupage ne décide des débits que si la ligne qui en sort est "
+                    "saturée, ce qui est rare et déjà signalé à part ; un partage en "
+                    "décide dès que la source est la contrainte, ce qui est le cas "
+                    "courant."
+                )
             )
         return notes
 
@@ -230,10 +242,19 @@ class Materialisation:
 def _describe(change: PortChange) -> str:
     before = formatting.percent(1.0 / change.lines)
     after = ", ".join(formatting.percent(share) for share in change.shares)
-    side = "sortie" if change.is_output else "entrée"
-    return (
-        f"{change.node_id}, {side} de {change.lines} lignes sur {change.ports} port(s) : "
-        f"{before} chacune auparavant, {after} désormais."
+    pattern = (
+        _("{node}, sortie de {lines} lignes sur {ports} port(s) : {before} chacune "
+          "auparavant, {after} désormais.")
+        if change.is_output
+        else _("{node}, entrée de {lines} lignes sur {ports} port(s) : {before} chacune "
+               "auparavant, {after} désormais.")
+    )
+    return pattern.format(
+        node=change.node_id,
+        lines=change.lines,
+        ports=change.ports,
+        before=before,
+        after=after,
     )
 
 
@@ -356,7 +377,7 @@ def _plant(
         is_output=is_output,
         lanes=_lanes(graph, node, edges, is_output=is_output),
     )
-    root, _ = plan.grow(tree, depth=0)
+    root, _depth = plan.grow(tree, depth=0)
     for edge in edges:
         graph.remove_edge(edge.id)
     _join(graph, node.id, root, item_class, trunk, is_output=is_output)
@@ -495,7 +516,7 @@ def _clear(
     """
     x, y = ideal
     places = list(occupied)
-    for _ in range(200):
+    for _attempt in range(200):
         if not any(abs(x - other[0]) < CLEAR_X and abs(y - other[1]) < CLEAR_Y for other in places):
             return (x, y)
         y += NUDGE_Y
@@ -555,20 +576,27 @@ class Dissolution:
         if not self.removed:
             return []
         notes = [
-            f"{len(self.removed)} raccord(s) dissous. Ils ne sont plus des nœuds ; "
-            f"ils sont de nouveau déduits des lignes et comptés à ce titre dans la "
-            f"liste de courses."
+            _(
+                "{count} raccord(s) dissous. Ils ne sont plus des nœuds ; ils sont de "
+                "nouveau déduits des lignes et comptés à ce titre dans la liste de "
+                "courses."
+            ).format(count=len(self.removed))
         ]
         uneven = self.uneven
         if not uneven:
             notes.append(
-                "Tous les partages étaient en arbre équilibré : les débits sont "
-                "identiques à ceux d'avant la bascule."
+                _(
+                    "Tous les partages étaient en arbre équilibré : les débits sont "
+                    "identiques à ceux d'avant la bascule."
+                )
             )
             return notes
         notes.append(
-            "Un port sans raccord partage également, ce qu'un arbre réel ne fait pas "
-            "toujours. Les ports suivants redeviennent égaux et leurs débits changent :"
+            _(
+                "Un port sans raccord partage également, ce qu'un arbre réel ne fait "
+                "pas toujours. Les ports suivants redeviennent égaux et leurs débits "
+                "changent :"
+            )
         )
         notes.extend(f"    {_describe_back(change)}" for change in uneven)
         return notes
@@ -577,10 +605,15 @@ class Dissolution:
 def _describe_back(change: PortChange) -> str:
     before = ", ".join(formatting.percent(share) for share in change.shares)
     after = formatting.percent(1.0 / change.lines)
-    side = "sortie" if change.is_output else "entrée"
-    return (
-        f"{change.node_id}, {side} de {change.lines} lignes : "
-        f"{before} auparavant, {after} chacune désormais."
+    pattern = (
+        _("{node}, sortie de {lines} lignes : {before} auparavant, {after} chacune "
+          "désormais.")
+        if change.is_output
+        else _("{node}, entrée de {lines} lignes : {before} auparavant, {after} chacune "
+               "désormais.")
+    )
+    return pattern.format(
+        node=change.node_id, lines=change.lines, before=before, after=after
     )
 
 
@@ -695,7 +728,7 @@ def _tier_digit(transport_class: str) -> int | None:
         head, sign, tail = transport_class.partition(marker)
         digits = "".join(character for character in tail if character.isdigit())
         if sign and digits:
-            _ = head
+            _unused = head
             return int(digits)
     return None
 
@@ -819,11 +852,11 @@ def switch_mode(graph: FactoryGraph, mode: AttachmentMode) -> list[str]:
     if mode is AttachmentMode.SIMPLE:
         blocking = non_standard_splitters(graph)
         if blocking:
-            msg = (
+            msg = _(
                 "le mode simple ne connaît ni filtre ni surplus, et ces répartiteurs "
-                f"en portent : {', '.join(blocking)}. Repassez-les en standard pour "
-                "pouvoir basculer, ou restez en mode fidèle."
-            )
+                "en portent : {splitters}. Repassez-les en standard pour pouvoir "
+                "basculer, ou restez en mode fidèle."
+            ).format(splitters=", ".join(blocking))
             raise ModeRefusedError(msg)
         notes = dissolve(graph).notes()
     else:

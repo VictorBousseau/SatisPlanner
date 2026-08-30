@@ -37,13 +37,14 @@ from satisplanner.core.graph import (
     StorageNode,
     WaterExtractorNode,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import Purity, SplitterMode, UnknownClassError
 from satisplanner.ui.catalogue import (
-    PURITY_LABELS,
-    SPLITTER_MODE_LABELS,
     branch_label,
     extractor_choices,
     fuel_choices,
+    purity_label,
+    splitter_mode_label,
 )
 from satisplanner.ui.commands import (
     SetAttachmentModeCommand,
@@ -76,16 +77,16 @@ def quantity_of(node: Node) -> Quantity | None:
     """Which field the quantity of this node is, if it has one."""
     match node:
         case MachineNode():
-            return Quantity("machine_count", "machine(s)")
+            return Quantity("machine_count", _("machine(s)"))
         case ResourceNode() | WaterExtractorNode():
             # Strictly positive in the model: zero extractors is a deleted node.
-            return Quantity("count", "extracteur(s)", minimum=1e-9)
+            return Quantity("count", _("extracteur(s)"), minimum=1e-9)
         case GeneratorNode() | GeothermalNode():
-            return Quantity("count", "générateur(s)", minimum=1e-9)
+            return Quantity("count", _("générateur(s)"), minimum=1e-9)
         case ExternalSourceNode():
             return Quantity("rate_per_minute", "/min")
         case StorageNode():
-            return Quantity("initial_content", "en stock")
+            return Quantity("initial_content", _("en stock"))
         case ResourceWellNode():
             # A well is sized by three numbers, one per purity, and none of them is
             # "the" quantity. They are set through :func:`set_satellites`, and the
@@ -109,17 +110,17 @@ def set_satellites(
     """
     node = document.graph.node(node_id)
     if not isinstance(node, ResourceWellNode):
-        return "Ce nœud n'est pas un puits de ressource."
+        return _("Ce nœud n'est pas un puits de ressource.")
     try:
         wanted = Purity(purity)
     except ValueError:
-        return f"Pureté inconnue : {purity}"
+        return _("Pureté inconnue : {purity}").format(purity=purity)
     if math.isnan(count):
-        return "Ce n'est pas un nombre."
+        return _("Ce n'est pas un nombre.")
     if count < 0:
-        return "Valeur hors domaine : 0 au minimum."
+        return _("Valeur hors domaine : 0 au minimum.")
     if count != int(count):
-        return "Un satellite ne se pose pas en fraction : un nombre entier."
+        return _("Un satellite ne se pose pas en fraction : un nombre entier.")
     whole = int(count)
     if node.satellites.get(wanted, 0) == whole:
         return None
@@ -130,7 +131,9 @@ def set_satellites(
             node_id,
             "satellites",
             tally,
-            f"{node_id} : {whole} satellite(s) {wanted.value}",
+            _("{node} : {count} satellite(s) {purity}").format(
+                node=node_id, count=whole, purity=wanted.value
+            ),
         )
     )
     return None
@@ -146,12 +149,12 @@ def set_quantity(document: FactoryDocument, node_id: str, value: float) -> str |
     node = document.graph.node(node_id)
     quantity = quantity_of(node)
     if quantity is None:
-        return "Ce nœud n'a pas de quantité."
+        return _("Ce nœud n'a pas de quantité.")
     if math.isnan(value):  # what was typed was not a number at all
-        return "Ce n'est pas un nombre."
+        return _("Ce n'est pas un nombre.")
     if value < quantity.minimum:
         floor = formatting.number(quantity.minimum)
-        return f"Valeur hors domaine : {floor} au minimum."
+        return _("Valeur hors domaine : {floor} au minimum.").format(floor=floor)
     if abs(getattr(node, quantity.field) - value) < EPSILON:
         return None
     document.undo_stack.push(
@@ -160,7 +163,9 @@ def set_quantity(document: FactoryDocument, node_id: str, value: float) -> str |
             node_id,
             quantity.field,
             value,
-            f"{node_id} : {formatting.number(value)} {quantity.label}",
+            _("{node} : {value} {unit}").format(
+                node=node_id, value=formatting.number(value), unit=quantity.label
+            ),
         )
     )
     return None
@@ -180,11 +185,15 @@ def set_transport(document: FactoryDocument, edge_id: str, transport_class: str)
     except UnknownClassError as exc:
         return str(exc)
     if not matches:
-        needed = "une tuyauterie" if item.form.is_fluid else "un convoyeur"
-        return f"{item.display_name_fr} demande {needed}."
+        pattern = (
+            _("{item} demande une tuyauterie.")
+            if item.form.is_fluid
+            else _("{item} demande un convoyeur.")
+        )
+        return pattern.format(item=item.name)
     if edge.transport_class == transport_class:
         return None
-    label = game_data.buildings[transport_class].display_name_fr
+    label = game_data.buildings[transport_class].name
     document.undo_stack.push(SetTransportCommand(document, edge_id, transport_class, label))
     return None
 
@@ -197,11 +206,11 @@ def set_clock_speed(document: FactoryDocument, node_id: str, clock_speed: float)
     """
     node = document.graph.node(node_id)
     if not isinstance(node, MachineNode | ResourceNode | WaterExtractorNode):
-        return "Ce nœud n'a pas de cadence."
+        return _("Ce nœud n'a pas de cadence.")
     if not constants.MIN_CLOCK_SPEED <= clock_speed <= constants.MAX_CLOCK_SPEED:
-        return (
-            f"Cadence hors domaine : {formatting.percent(constants.MIN_CLOCK_SPEED)} a "
-            f"{formatting.percent(constants.MAX_CLOCK_SPEED)}."
+        return _("Cadence hors domaine : {low} a {high}.").format(
+            low=formatting.percent(constants.MIN_CLOCK_SPEED),
+            high=formatting.percent(constants.MAX_CLOCK_SPEED),
         )
     if abs(node.clock_speed - clock_speed) < EPSILON:
         return None
@@ -211,7 +220,7 @@ def set_clock_speed(document: FactoryDocument, node_id: str, clock_speed: float)
             node_id,
             "clock_speed",
             clock_speed,
-            f"cadence à {formatting.percent(clock_speed)}",
+            _("cadence à {clock}").format(clock=formatting.percent(clock_speed)),
         )
     )
     return None
@@ -231,17 +240,17 @@ def set_purity(document: FactoryDocument, node_id: str, purity: Purity | str) ->
     """
     node = document.graph.node(node_id)
     if not isinstance(node, ResourceNode | GeothermalNode):
-        return "Seul un gisement ou un geyser a une pureté."
+        return _("Seul un gisement ou un geyser a une pureté.")
     try:
         wanted = Purity(purity)
     except ValueError:
-        return f"Pureté inconnue : {purity}"
+        return _("Pureté inconnue : {purity}").format(purity=purity)
     if node.purity is wanted:
         return None
     subject = "geyser" if isinstance(node, GeothermalNode) else "gisement"
     document.undo_stack.push(
         SetNodeFieldCommand(
-            document, node_id, "purity", wanted, f"{subject} {PURITY_LABELS[wanted].lower()}"
+            document, node_id, "purity", wanted, f"{subject} {purity_label(wanted).lower()}"
         )
     )
     return None
@@ -257,11 +266,11 @@ def set_extractor(document: FactoryDocument, node_id: str, extractor_class: str)
     """
     node = document.graph.node(node_id)
     if not isinstance(node, ResourceNode):
-        return "Seul un gisement a un extracteur interchangeable."
+        return _("Seul un gisement a un extracteur interchangeable.")
     allowed = dict(extractor_choices(document.game_data, node.item_class))
     if extractor_class not in allowed:
-        item = document.game_data.item(node.item_class).display_name_fr
-        return f"Cet extracteur ne peut pas travailler {item}."
+        item = document.game_data.item(node.item_class).name
+        return _("Cet extracteur ne peut pas travailler {item}.").format(item=item)
     if node.extractor_class == extractor_class:
         return None
     document.undo_stack.push(
@@ -286,17 +295,21 @@ def set_fuel(document: FactoryDocument, node_id: str, fuel_class: str) -> str | 
     """
     node = document.graph.node(node_id)
     if not isinstance(node, GeneratorNode):
-        return "Seul un générateur a un carburant."
+        return _("Seul un générateur a un carburant.")
     allowed = dict(fuel_choices(document.game_data, node.generator_class))
     if fuel_class not in allowed:
         building = document.game_data.buildings.get(node.generator_class)
-        name = building.display_name_fr if building else node.generator_class
-        return f"{name} ne brûle pas ce carburant."
+        name = building.name if building else node.generator_class
+        return _("{building} ne brûle pas ce carburant.").format(building=name)
     if node.fuel_class == fuel_class:
         return None
     document.undo_stack.push(
         SetNodeFieldCommand(
-            document, node_id, "fuel_class", fuel_class, f"carburant : {allowed[fuel_class]}"
+            document,
+            node_id,
+            "fuel_class",
+            fuel_class,
+            _("carburant : {fuel}").format(fuel=allowed[fuel_class]),
         )
     )
     return None
@@ -315,21 +328,31 @@ def set_splitter_mode(
     """
     node = document.graph.node(node_id)
     if not isinstance(node, SplitterNode):
-        return "Seul un répartiteur a un mode."
+        return _("Seul un répartiteur a un mode.")
     try:
         wanted = SplitterMode(mode)
     except ValueError:
-        return f"Mode inconnu : {mode}"
+        return _("Mode inconnu : {mode}").format(mode=mode)
     if node.mode is wanted:
         return None
-    label = SPLITTER_MODE_LABELS[wanted]
-    document.undo_stack.beginMacro(f"{node_id} : répartiteur {label.lower()}")
+    label = splitter_mode_label(wanted)
+    document.undo_stack.beginMacro(
+        _("{node} : répartiteur {mode}").format(node=node_id, mode=label.lower())
+    )
     document.undo_stack.push(
-        SetNodeFieldCommand(document, node_id, "mode", wanted, f"répartiteur {label.lower()}")
+        SetNodeFieldCommand(
+            document,
+            node_id,
+            "mode",
+            wanted,
+            _("répartiteur {mode}").format(mode=label.lower()),
+        )
     )
     if wanted is SplitterMode.STANDARD and node.filters:
         document.undo_stack.push(
-            SetNodeFieldCommand(document, node_id, "filters", {}, "réglages de branches effacés")
+            SetNodeFieldCommand(
+                document, node_id, "filters", {}, _("réglages de branches effacés")
+            )
         )
     document.undo_stack.endMacro()
     return None
@@ -345,13 +368,13 @@ def set_branch_filter(
     """
     node = document.graph.node(node_id)
     if not isinstance(node, SplitterNode):
-        return "Seul un répartiteur a des branches réglables."
+        return _("Seul un répartiteur a des branches réglables.")
     if node.mode is SplitterMode.STANDARD:
-        return "Un répartiteur standard ne se règle pas : passez-le en intelligent."
+        return _("Un répartiteur standard ne se règle pas : passez-le en intelligent.")
     if not any(edge.target == target_id for edge in document.graph.outgoing(node_id)):
-        return "Ce nœud n'est pas une branche de ce répartiteur."
+        return _("Ce nœud n'est pas une branche de ce répartiteur.")
     if setting not in (ANY_BRANCH, OVERFLOW_BRANCH) and setting not in document.game_data.items:
-        return f"Objet inconnu : {setting}"
+        return _("Objet inconnu : {item}").format(item=setting)
     if node.filters.get(target_id, ANY_BRANCH) == setting:
         return None
     fresh = {key: value for key, value in node.filters.items() if key != target_id}
@@ -363,16 +386,18 @@ def set_branch_filter(
             node_id,
             "filters",
             dict(sorted(fresh.items())),
-            f"branche vers {target_id} : {branch_label(setting, document.game_data)}",
+            _("branche vers {branch} : {setting}").format(
+                branch=target_id,
+                setting=branch_label(setting, document.game_data),
+            ),
         )
     )
     return None
 
 
-ATTACHMENT_MODE_LABELS: dict[AttachmentMode, str] = {
-    AttachmentMode.SIMPLE: "simple",
-    AttachmentMode.FAITHFUL: "fidèle",
-}
+def attachment_mode_label(mode: AttachmentMode) -> str:
+    """The two ways an attachment can be drawn, named for the user."""
+    return _("simple") if mode is AttachmentMode.SIMPLE else _("fidèle")
 
 
 @dataclass(frozen=True)
@@ -401,7 +426,7 @@ def set_attachment_mode(
     try:
         wanted = AttachmentMode(mode)
     except ValueError:
-        return ModeChange(refusal=f"Mode inconnu : {mode}")
+        return ModeChange(refusal=_("Mode inconnu : {mode}").format(mode=mode))
     if wanted is document.graph.attachment_mode:
         return ModeChange(notes=())
 
@@ -411,8 +436,11 @@ def set_attachment_mode(
     except attachments.ModeRefusedError as refused:
         return ModeChange(refusal=str(refused))
 
-    label = ATTACHMENT_MODE_LABELS[wanted]
     document.undo_stack.push(
-        SetAttachmentModeCommand(document, after, f"passage en mode {label}")
+        SetAttachmentModeCommand(
+            document,
+            after,
+            _("passage en mode {mode}").format(mode=attachment_mode_label(wanted)),
+        )
     )
     return ModeChange(notes=tuple(notes))

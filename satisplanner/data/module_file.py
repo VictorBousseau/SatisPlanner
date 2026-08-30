@@ -31,6 +31,7 @@ from typing import Any, Final
 
 from satisplanner import paths
 from satisplanner.core.graph import FactoryGraph
+from satisplanner.core.i18n import _
 from satisplanner.data.factory_file import FactoryFileError, decode_share_code
 
 logger = logging.getLogger(__name__)
@@ -146,7 +147,9 @@ def save_module(
             json.dumps(stamped.as_dict(), ensure_ascii=False, indent=1), encoding="utf-8"
         )
     except OSError as exc:
-        msg = f"module « {module.name} » non enregistré : {exc.strerror}"
+        msg = _("module « {name} » non enregistré : {reason}").format(
+            name=module.name, reason=exc.strerror
+        )
         raise ModuleError(msg) from exc
     logger.info("module enregistré : %s", path)
     return FactoryModule(
@@ -192,7 +195,9 @@ def delete_module(module: FactoryModule) -> None:
     try:
         module.path.unlink(missing_ok=True)
     except OSError as exc:
-        msg = f"module « {module.name} » non supprimé : {exc.strerror}"
+        msg = _("module « {name} » non supprimé : {reason}").format(
+            name=module.name, reason=exc.strerror
+        )
         raise ModuleError(msg) from exc
     logger.info("module supprimé : %s", module.path)
 
@@ -208,7 +213,7 @@ def load_module(path: Path) -> FactoryModule:
         msg = f"{path.name} : ce n'est pas un module SatisPlanner lisible."
         raise ModuleError(msg) from exc
     if not isinstance(raw, dict) or not isinstance(raw.get("code"), str):
-        msg = f"{path.name} : ce fichier ne contient aucun module."
+        msg = _("{file} : ce fichier ne contient aucun module.").format(file=path.name)
         raise ModuleError(msg)
     version = raw.get("module_version", MODULE_VERSION)
     if not isinstance(version, int) or version > MODULE_VERSION:

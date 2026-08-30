@@ -2,8 +2,12 @@
 
 The palette is a flat searchable list rather than a tree: a player looking for
 "plaque" wants the recipe, wherever it lives. Every entry therefore carries its own
-French label, the machine it belongs to for filtering, and enough class names to
-build the node it stands for.
+label, the machine it belongs to for filtering, and enough class names to build the
+node it stands for.
+
+The labels are built when the palette is, not at import: a language can change while
+the application is running, and a table of French words frozen into a module constant
+is precisely the bug the switch exists to avoid.
 
 Deliberately free of Qt: this is the bridge between the catalogue and the widgets,
 and keeping it a plain data structure is what lets it be tested without a window.
@@ -30,6 +34,7 @@ from satisplanner.core.graph import (
     StorageNode,
     WaterExtractorNode,
 )
+from satisplanner.core.i18n import _
 from satisplanner.core.models import (
     AttachmentRole,
     Building,
@@ -46,34 +51,52 @@ from satisplanner.core.models import (
 # a starting point, edited on the node itself, and no game value is implied.
 DEFAULT_EXTERNAL_RATE: Final = 60.0
 
-# The one place the three purities are spelled in French, so a node, a table cell and
-# a menu cannot end up calling the same thing three different names.
-PURITY_LABELS: Final[dict[Purity, str]] = {
-    Purity.IMPURE: "Impur",
-    Purity.NORMAL: "Normal",
-    Purity.PURE: "Pur",
-}
+# The one place the three purities are named, so a node, a table cell and a menu
+# cannot end up calling the same thing three different names.
+#
+# A function rather than the dictionary this used to be: a constant is built once, at
+# import, and the language can change afterwards -- a table of labels frozen in
+# French is exactly the bug the switch was written to avoid. The argument of ``_``
+# also stays a literal this way, which is what makes the catalogue countable.
+def purity_label(purity: Purity) -> str:
+    """How a deposit's purity reads, in the language in force."""
+    match purity:
+        case Purity.IMPURE:
+            return _("Impur")
+        case Purity.NORMAL:
+            return _("Normal")
+        case Purity.PURE:
+            return _("Pur")
 
-# The same one place for the three splitters, in the order the game unlocks them.
-SPLITTER_MODE_LABELS: Final[dict[SplitterMode, str]] = {
-    SplitterMode.STANDARD: "Standard",
-    SplitterMode.SMART: "Intelligent",
-    SplitterMode.PROGRAMMABLE: "Programmable",
-}
 
-# And for what may be written on a branch, besides the name of an item.
-BRANCH_LABELS: Final[dict[str, str]] = {
-    ANY_BRANCH: "n'importe lequel",
-    OVERFLOW_BRANCH: "surplus",
-}
+def purity_labels() -> list[tuple[Purity, str]]:
+    """The three purities in the game's own order, for a menu or a combo box."""
+    return [(purity, purity_label(purity)) for purity in Purity]
+
+
+def splitter_mode_label(mode: SplitterMode) -> str:
+    """The three splitters, in the order the game unlocks them."""
+    match mode:
+        case SplitterMode.STANDARD:
+            return _("Standard")
+        case SplitterMode.SMART:
+            return _("Intelligent")
+        case SplitterMode.PROGRAMMABLE:
+            return _("Programmable")
+
+
+def splitter_mode_labels() -> list[tuple[SplitterMode, str]]:
+    return [(mode, splitter_mode_label(mode)) for mode in SplitterMode]
 
 
 def branch_label(setting: str, game_data: GameData) -> str:
     """How a branch's setting reads on a node, in a menu and in a message."""
-    if setting in BRANCH_LABELS:
-        return BRANCH_LABELS[setting]
+    if setting == ANY_BRANCH:
+        return _("n'importe lequel")
+    if setting == OVERFLOW_BRANCH:
+        return _("surplus")
     item = game_data.items.get(setting)
-    return item.display_name_fr if item else setting
+    return item.name if item else setting
 
 
 class EntryKind(StrEnum):
@@ -93,21 +116,21 @@ class EntryKind(StrEnum):
     SINK = "sink"
 
 
-# Section headings, in the order the palette shows them.
-SECTION_LABELS: Final[dict[EntryKind, str]] = {
-    EntryKind.RECIPE: "Recettes",
-    EntryKind.EXTRACTOR: "Extraction",
-    EntryKind.RESOURCE_WELL: "Extraction",
-    EntryKind.WATER_EXTRACTOR: "Extraction",
-    EntryKind.GENERATOR: "Électricité",
-    EntryKind.GEOTHERMAL: "Électricité",
-    EntryKind.STORAGE: "Stockage",
-    EntryKind.SPLITTER: "Raccords",
-    EntryKind.MERGER: "Raccords",
-    EntryKind.EXTERNAL: "Entrées et sorties",
-    EntryKind.OUTPUT: "Entrées et sorties",
-    EntryKind.SINK: "Entrées et sorties",
-}
+def section_label(kind: EntryKind) -> str:
+    """Section headings, in the order the palette shows them."""
+    match kind:
+        case EntryKind.RECIPE:
+            return _("Recettes")
+        case EntryKind.EXTRACTOR | EntryKind.RESOURCE_WELL | EntryKind.WATER_EXTRACTOR:
+            return _("Extraction")
+        case EntryKind.GENERATOR | EntryKind.GEOTHERMAL:
+            return _("Électricité")
+        case EntryKind.STORAGE:
+            return _("Stockage")
+        case EntryKind.SPLITTER | EntryKind.MERGER:
+            return _("Raccords")
+        case EntryKind.EXTERNAL | EntryKind.OUTPUT | EntryKind.SINK:
+            return _("Entrées et sorties")
 
 
 def fold(text: str) -> str:
@@ -116,13 +139,26 @@ def fold(text: str) -> str:
     return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 
+def says_alternate(label: str) -> bool:
+    """Whether the game's own label already announces an alternate recipe.
+
+    It usually does, and the marker this application adds is only for the few the
+    game left out. The word it uses is not the same in the two languages --
+    "Alternative : Plaque de fer enrobée" against "Alternate: Coated Iron Plate" --
+    so both are looked for. Testing only the French one made every alternate in an
+    English session read "Alternate: Coated Iron Plate (alternate)".
+    """
+    folded = fold(label)
+    return "alternative" in folded or "alternate" in folded
+
+
 @dataclass(frozen=True)
 class PaletteEntry:
     """One draggable line of the palette."""
 
     kind: EntryKind
-    label: str  # French, shown as is
-    detail: str  # French, shown under the label
+    label: str  # in the language the palette was built in, shown as is
+    detail: str  # same, shown under the label
     class_name: str  # recipe, storage or item class, depending on the kind
     icon_class: str
     icon_file: str | None
@@ -285,11 +321,11 @@ def _attachments(game_data: GameData) -> list[PaletteEntry]:
     """
     entries = []
     for kind, role, label in (
-        (EntryKind.SPLITTER, AttachmentRole.SPLIT, "Répartiteur"),
-        (EntryKind.MERGER, AttachmentRole.MERGE, "Groupeur"),
+        (EntryKind.SPLITTER, AttachmentRole.SPLIT, _("Répartiteur")),
+        (EntryKind.MERGER, AttachmentRole.MERGE, _("Groupeur")),
     ):
         names = [
-            game_data.buildings[attachment.class_name].display_name_fr
+            game_data.buildings[attachment.class_name].name
             for attachment in sorted(game_data.attachments.values(), key=lambda a: a.class_name)
             if role in attachment.roles
             and attachment.class_name in game_data.buildings
@@ -301,16 +337,26 @@ def _attachments(game_data: GameData) -> list[PaletteEntry]:
         plain = game_data.attachment_for(ItemForm.SOLID, role, mode_for(role))
         icon = plain.class_name if plain else ""
         building = game_data.buildings.get(icon)
-        verb = "sortir" if kind is EntryKind.SPLITTER else "entrer"
+        # Four whole sentences: the verb changes with the role and the buildings are
+        # only named when the catalogue has any, and a verb spliced into a sentence
+        # is a sentence no translator can see.
+        if kind is EntryKind.SPLITTER:
+            detail = (
+                _("{buildings} — pour faire sortir plus d'une ligne d'un port")
+                if names
+                else _("pour faire sortir plus d'une ligne d'un port")
+            )
+        else:
+            detail = (
+                _("{buildings} — pour faire entrer plus d'une ligne d'un port")
+                if names
+                else _("pour faire entrer plus d'une ligne d'un port")
+            )
         entries.append(
             PaletteEntry(
                 kind=kind,
                 label=label,
-                detail=(
-                    f"{', '.join(names)} — pour faire {verb} plus d'une ligne d'un port"
-                    if names
-                    else f"pour faire {verb} plus d'une ligne d'un port"
-                ),
+                detail=detail.format(buildings=", ".join(names)),
                 class_name=icon,
                 icon_class=icon,
                 icon_file=building.icon_file if building else None,
@@ -321,15 +367,15 @@ def _attachments(game_data: GameData) -> list[PaletteEntry]:
 
 def _recipes(game_data: GameData) -> list[PaletteEntry]:
     entries = []
-    for recipe in sorted(game_data.recipes.values(), key=lambda r: fold(r.display_name_fr)):
+    for recipe in sorted(game_data.recipes.values(), key=lambda r: fold(r.name)):
         machine = game_data.buildings.get(recipe.building_class)
         headline = recipe.products[0].item_class if recipe.products else recipe.class_name
         item = game_data.items.get(headline)
         entries.append(
             PaletteEntry(
                 kind=EntryKind.RECIPE,
-                label=recipe.display_name_fr,
-                detail=machine.display_name_fr if machine else recipe.building_class,
+                label=recipe.name,
+                detail=machine.name if machine else recipe.building_class,
                 class_name=recipe.class_name,
                 icon_class=headline,
                 icon_file=item.icon_file if item else None,
@@ -350,7 +396,7 @@ def _extraction(game_data: GameData) -> list[PaletteEntry]:
     entries = []
     for extractor in sorted(game_data.extractors.values(), key=lambda e: e.class_name):
         building = game_data.buildings.get(extractor.class_name)
-        name = building.display_name_fr if building else extractor.class_name
+        name = building.name if building else extractor.class_name
         if extractor.item_class is not None and not extractor.has_purity:
             # Fixed output and a resource of its own: the water extractor.
             entries.append(
@@ -373,7 +419,7 @@ def _extraction(game_data: GameData) -> list[PaletteEntry]:
             entries.append(
                 PaletteEntry(
                     kind=EntryKind.EXTRACTOR,
-                    label=item.display_name_fr,
+                    label=item.name,
                     detail=name,
                     class_name=item.class_name,
                     icon_class=item.class_name,
@@ -403,7 +449,7 @@ def _well_entries(
         entries.append(
             PaletteEntry(
                 kind=EntryKind.RESOURCE_WELL,
-                label=item.display_name_fr,
+                label=item.name,
                 detail=name,
                 class_name=item.class_name,
                 icon_class=item.class_name,
@@ -421,7 +467,7 @@ def _resources_for(game_data: GameData, form: ItemForm, only: str | None) -> lis
         return [item] if item is not None else []
     return sorted(
         (item for item in game_data.items.values() if item.is_raw_resource and item.form is form),
-        key=lambda item: fold(item.display_name_fr),
+        key=lambda item: fold(item.name),
     )
 
 
@@ -435,7 +481,7 @@ def _generators(game_data: GameData) -> list[PaletteEntry]:
     entries = []
     for generator in sorted(game_data.generators.values(), key=lambda g: g.class_name):
         building = game_data.buildings.get(generator.class_name)
-        name = building.display_name_fr if building else generator.class_name
+        name = building.name if building else generator.class_name
         if generator.has_purity:
             # The geothermal one burns nothing, so it has no fuel to advertise and
             # no fuel to start on. What it has is a geyser, and a purity.
@@ -443,9 +489,12 @@ def _generators(game_data: GameData) -> list[PaletteEntry]:
                 PaletteEntry(
                     kind=EntryKind.GEOTHERMAL,
                     label=name,
-                    detail=(
-                        f"{generator.power_mw:g} MW en moyenne sur un geyser normal"
-                        f" — {generator.power_min_mw:g} à {generator.power_max_mw:g}"
+                    detail=_(
+                        "{power} MW en moyenne sur un geyser normal — {low} à {high}"
+                    ).format(
+                        power=f"{generator.power_mw:g}",
+                        low=f"{generator.power_min_mw:g}",
+                        high=f"{generator.power_max_mw:g}",
                     ),
                     class_name=generator.class_name,
                     icon_class=generator.class_name,
@@ -457,9 +506,9 @@ def _generators(game_data: GameData) -> list[PaletteEntry]:
         if fuel_class is None:
             continue
         fuel = game_data.items.get(fuel_class)
-        detail = f"{generator.power_mw:g} MW produits"
+        detail = _("{power} MW produits").format(power=f"{generator.power_mw:g}")
         if fuel is not None:
-            detail += f" — {fuel.display_name_fr}"
+            detail += f" — {fuel.name}"
         entries.append(
             PaletteEntry(
                 kind=EntryKind.GENERATOR,
@@ -479,14 +528,14 @@ def _storage(game_data: GameData) -> list[PaletteEntry]:
     for storage in sorted(game_data.storages.values(), key=lambda s: s.class_name):
         building = game_data.buildings.get(storage.class_name)
         detail = (
-            f"{storage.slots} emplacements"
+            _("{slots} emplacements").format(slots=storage.slots)
             if storage.slots is not None
             else f"{storage.capacity_m3:g} m³"
         )
         entries.append(
             PaletteEntry(
                 kind=EntryKind.STORAGE,
-                label=building.display_name_fr if building else storage.class_name,
+                label=building.name if building else storage.class_name,
                 detail=detail,
                 class_name=storage.class_name,
                 icon_class=storage.class_name,
@@ -500,18 +549,18 @@ def _endpoints(game_data: GameData) -> list[PaletteEntry]:
     """Imports, exports and deliberate discards, one per item that can be handled."""
     entries = []
     handled = _handled_items(game_data)
-    for item in sorted(game_data.items.values(), key=lambda i: fold(i.display_name_fr)):
+    for item in sorted(game_data.items.values(), key=lambda i: fold(i.name)):
         if item.class_name not in handled:
             continue
-        for kind, prefix in (
-            (EntryKind.EXTERNAL, "Entrée"),
-            (EntryKind.OUTPUT, "Sortie"),
-            (EntryKind.SINK, "Rejet assumé"),
+        for kind, pattern in (
+            (EntryKind.EXTERNAL, _("Entrée : {item}")),
+            (EntryKind.OUTPUT, _("Sortie : {item}")),
+            (EntryKind.SINK, _("Rejet assumé : {item}")),
         ):
             entries.append(
                 PaletteEntry(
                     kind=kind,
-                    label=f"{prefix} : {item.display_name_fr}",
+                    label=pattern.format(item=item.name),
                     detail=_endpoint_detail(kind),
                     class_name=item.class_name,
                     icon_class=item.class_name,
@@ -525,11 +574,11 @@ def _endpoints(game_data: GameData) -> list[PaletteEntry]:
 def _endpoint_detail(kind: EntryKind) -> str:
     match kind:
         case EntryKind.EXTERNAL:
-            return "apport venu d'ailleurs, débit à saisir"
+            return _("apport venu d'ailleurs, débit à saisir")
         case EntryKind.SINK:
-            return "torchère ou puits AWESOME, absorbe sans limite"
+            return _("torchère ou puits AWESOME, absorbe sans limite")
         case _:
-            return "ce qui sort de l'usine"
+            return _("ce qui sort de l'usine")
 
 
 def _handled_items(game_data: GameData) -> set[str]:
@@ -548,7 +597,7 @@ def machine_choices(game_data: GameData) -> list[tuple[str, str]]:
     """``(class name, French label)`` of every production machine, for the filter."""
     return sorted(
         (
-            (building.class_name, building.display_name_fr)
+            (building.class_name, building.name)
             for building in game_data.buildings.values()
             if building.kind is BuildingKind.MANUFACTURER
         ),
@@ -577,7 +626,7 @@ def extractor_choices(game_data: GameData, item_class: str) -> list[tuple[str, s
         (
             (
                 extractor.class_name,
-                game_data.buildings[extractor.class_name].display_name_fr
+                game_data.buildings[extractor.class_name].name
                 if extractor.class_name in game_data.buildings
                 else extractor.class_name,
             )
@@ -600,7 +649,7 @@ def fuel_choices(game_data: GameData, generator_class: str) -> list[tuple[str, s
     return [
         (
             fuel.item_class,
-            game_data.items[fuel.item_class].display_name_fr
+            game_data.items[fuel.item_class].name
             if fuel.item_class in game_data.items
             else fuel.item_class,
         )
@@ -613,7 +662,7 @@ def transport_choices(game_data: GameData, form: ItemForm) -> list[tuple[str, st
     return [
         (
             transport.class_name,
-            game_data.buildings[transport.class_name].display_name_fr
+            game_data.buildings[transport.class_name].name
             if transport.class_name in game_data.buildings
             else transport.class_name,
         )
