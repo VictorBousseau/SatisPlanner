@@ -62,11 +62,33 @@ def test_an_item_without_a_file_is_drawn_rather_than_missing(
 
 
 def test_two_classes_get_different_generated_icons(qtbot: QtBot) -> None:
-    del qtbot
+    """Two classes must not come out as the same square, in colour or in initials.
+
+    Sampled at the **top centre** and not at (4, 4), which is where this test used
+    to look and where it had no business looking: the fallback is a *rounded*
+    square, the corner radius is 22 % of the side, and (4, 4) sits inside the arc
+    that is cut away. On a screen at ratio 1 it passed by six hundredths of a pixel;
+    on a screen at 1.25 the same device coordinate lands deeper into the corner and
+    both icons read transparent, so the test failed on two perfectly good icons.
+
+    The centre is no better and fails the other way: it is where the initials are
+    drawn, so both icons read the same glyph colour there. Between the two, the top
+    edge is inside the square at every ratio and above the text at every ratio.
+
+    The whole images are compared as well, because that is the property this test is
+    named after; the colour check stays because the hue is what distinguishes them
+    at a glance, and two icons differing only by their initials would be a
+    regression this would otherwise miss.
+    """
     provider = IconProvider(IconIndex())
     first = provider.generate("Desc_OreIron_C", "Minerai de fer").toImage()
     second = provider.generate("Desc_OreCopper_C", "Minerai de cuivre").toImage()
-    assert first.pixelColor(4, 4) != second.pixelColor(4, 4)
+    del qtbot
+
+    assert first != second
+    sample = (first.width() // 2, first.height() // 8)
+    assert first.pixelColor(*sample).alpha() == 255, "le point échantillonné doit être peint"
+    assert first.pixelColor(*sample) != second.pixelColor(*sample)
 
 
 def test_the_same_class_is_generated_identically_twice(qtbot: QtBot) -> None:
