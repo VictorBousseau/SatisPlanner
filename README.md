@@ -13,107 +13,43 @@ configure, and **Satisfactory does not have to be installed** on the machine run
 It is **neither a mod nor a save-file reader**. No interaction with the running game, no network
 access at runtime.
 
-## What this tool does not do
+**Windows, no installer, MIT licence, free.** Unzip and run.
 
-Better said before you open the window.
+There are good online calculators for this game, and they answer a different question: you name a
+target and they give you the ratios. SatisPlanner reads the other way round — you start from the
+resource nodes you actually have, lay the factory out yourself on a canvas, and the diagnostics
+carry their own fix. It also runs offline, with the recipe database inside the executable.
 
-- **It reasons about throughput, not geometry.** No notion of distance, elevation or pump head.
-  A pipe whose theoretical flow fits is declared valid even if the game would need a pump. A
-  factory validated here holds on paper, not necessarily on the ground.
-- **Steady state only.** Buffers are infinite sinks and sources, never tanks simulated over time.
-  The application tells you whether the rates hold and how long a stock takes to drain, but it
-  does not play the film.
-- **No Somersloop, no production amplification.** Overclocking *is* modelled: 1 % to 250 %,
-  throughput in proportion and power by a power law.
-- **Power is a counter, not a constraint.** Draw and production are shown side by side and a
-  shortfall is raised as an error — but it throttles nothing. In game, running out of power does
-  not slow the factory down: it trips the whole grid until someone resets it. Showing everything
-  at zero would teach nothing, and a partial throttle would be an invention.
-- **Two modes, and the factory picks.** In **simple** — what a new factory gets — a port carries
-  as many lines as you like, max-min sharing happens there, and fittings are deduced for the
-  shopping list without being drawn: this is the mode for thinking about rates. In **faithful**,
-  the game's rule applies — one port, one line — and a splitter or a merger is a node you place
-  and see: this is the mode for building. The setting lives in the document and travels with it,
-  because it changes the figures.
-- **Every machine in the game is in the catalogue**: the 291 recipes Satisfactory makes in a
-  machine can all be placed, Blender, Converter, Particle Accelerator and Quantum Encoder
-  included. What stays out is the **26 hand-crafted recipes** at the Equipment Workshop —
-  parachute, chainsaw, rifle — and they are not out in silence: the database keeps them and an
-  item card shows them greyed out, saying a workshop will never be a factory node.
-- **The machine count is an input**, not a result — unless you ask for the opposite. "I want 2
-  Heavy Modular Frames a minute" is the **goal mode**, and it builds the factory; but it
-  **optimises** nothing. It follows the standard recipe, or the one you pin, and never looks for
-  the best combination of alternates: that would need a linear program, hence a dependency.
-- **It does not know your map.** A generated factory puts its resource nodes at normal purity
-  with the first extractor available, and says so. Nothing in the game files knows where your
-  nodes are or what they are worth.
+![A factory on the canvas, with the totals panel open](docs/images/01-factory-overview.png)
 
-## Install
+## Download
 
-### To use it
+**[Latest release](https://github.com/VictorBousseau/SatisPlanner/releases/latest)** — unzip
+anywhere and run `SatisPlanner.exe`. No installer, no dependency, nothing to configure. Windows
+may show a SmartScreen warning on first launch: the executable is not signed.
 
-Get the built folder, unzip it wherever you like, run `SatisPlanner.exe`. No installer, no
-dependency, nothing to configure. Windows may show a SmartScreen warning on first launch — the
-executable is not signed.
+The interface is in English or in French, and follows your system on a first launch.
 
-### To develop
+Three things to know before you open the window, because they are design decisions and
+not gaps — the whole list is under [what this tool does not do](#what-this-tool-does-not-do):
 
-Windows, Python 3.12. The `py` launcher is used because a bare `python` can resolve to the
-Microsoft Store shim.
-
-```bash
-py -3.12 -m venv .venv
-.venv/Scripts/python.exe -m pip install --upgrade pip
-.venv/Scripts/python.exe -m pip install -e ".[dev]"
-```
-
-Run it:
-
-```bash
-.venv/Scripts/python.exe main.py
-```
-
-Checks:
-
-```bash
-.venv/Scripts/python.exe -m pytest
-.venv/Scripts/python.exe -m ruff check .
-.venv/Scripts/python.exe -m mypy
-```
-
-### The icons do not come with the clone, and that is deliberate
-
-**After `git clone`, `satisplanner/resources/icons/` does not exist.** That is not a fault: the
-folder is in `.gitignore` because the icons belong to Coffee Stain Studios and are not
-redistributable. The application starts and works normally — every class without a file is drawn
-by the generative fallback, which is a nominal mode of operation, not a degradation — but the
-thumbnails will be coloured squares with initials.
-
-To get the game's icons on a machine you have to extract them from **your own copy of the game**,
-with the FModel procedure below, then drop the export into either folder the application indexes:
-
-| Folder | What it is for |
-|--------|----------------|
-| `satisplanner/resources/icons/` | this is the one that goes into the full build |
-| `%LOCALAPPDATA%\SatisPlanner\icons\` | or whichever folder the preferences name |
-
-The internal tree does not matter: the index is **recursive and by file name**. Keep whatever
-structure FModel produced.
-
-Counter, from the repository root:
-
-```bash
-.venv\Scripts\python.exe -c 'from satisplanner.data import db; from satisplanner.data.icons import IconIndex, default_icon_roots; g = db.load_game_data_from_file(db.default_database_path()); x = IconIndex(default_icon_roots()); print(len(x), sum(x.resolve(o.icon_file) is None for o in g.items.values()), sum(x.resolve(o.icon_file) is None for o in g.buildings.values()))'
-```
-
-Three numbers: files indexed, items on the fallback, buildings on the fallback. On a bare clone,
-`0 195 32`. **Help ▸ About** says the same thing in one sentence and the log writes it at every
-start — which is what tells "I have no icons" apart from "the fallback is working as designed",
-two situations that look alike on screen and call for opposite reactions.
+- **it reasons about throughput, not geometry** — no distance, no elevation, no pump head;
+- **steady state only** — it says whether the rates hold and how long a stock lasts, but it does
+  not simulate time passing;
+- **no Somersloop.** Overclocking is modelled, from 1 % to 250 %.
 
 ## Using it
 
 Palette on the left, open factories in the middle, three panels on the right.
+
+Four things are why this exists, and they are the four to try first:
+
+- the **item card**, so you stop opening a wiki in another window;
+- **generate a factory** from a target, which writes the whole thing in a fresh tab;
+- **diagnostics that carry their fix**, one click from the node that raised them;
+- **share codes**: one line of text reopens the exact factory on someone else's machine.
+
+Everything, in the order you meet it:
 
 - **Tabs**: several factories open at once. `Ctrl+N` or `Ctrl+T` for a new tab, `Ctrl+W` to close
   the top one, `Ctrl+Tab` to cycle. **Each tab keeps its own zoom, framing and selection**:
@@ -207,6 +143,28 @@ Palette on the left, open factories in the middle, three panels on the right.
 **Help ▸ Gestures and shortcuts** (`F1`) lists every canvas gesture and every shortcut. The
 shortcut table is built from the window's real actions: it cannot drift out of step with the code.
 
+Exports: PNG of the canvas, PDF with the canvas on page one and, optionally, the totals and the
+diagnostics on page two.
+
+![A saturated line reported, with the button that upgrades it](docs/images/02-diagnostic-with-fix.png)
+
+*A finding names both rates and the tier to install, and the button applies it.*
+
+![The item card for Iron Plate](docs/images/03-item-card.png)
+
+*Every recipe that makes it, everything that consumes it, and the cost in ore. Each ingredient is
+a link to its own card.*
+
+![Generating a factory from a target rate](docs/images/04-generate-a-factory.png)
+
+*The report says what the generator could not know: the purity of the resource nodes on your map
+is written nowhere in the game data.*
+
+![Faithful mode, with explicit splitters](docs/images/05-faithful-mode-fittings.png)
+
+*In faithful mode a port carries one line, as in game, and the fittings you place are counted in
+the shopping list.*
+
 ## Language
 
 **The interface is fully bilingual, French and English.** On a first launch it follows the
@@ -233,6 +191,41 @@ counts them at every run, so no build can ship half-translated without saying so
 **Developer documentation stays French only.** `docs/format-usine.md`, the code comments and the
 prose around the docstrings are for people working on the code, and a technical document
 translated twice drifts apart at the first change. The docstrings themselves are in English.
+
+## What this tool does not do
+
+Better said before you open the window.
+
+- **It reasons about throughput, not geometry.** No notion of distance, elevation or pump head.
+  A pipe whose theoretical flow fits is declared valid even if the game would need a pump. A
+  factory validated here holds on paper, not necessarily on the ground.
+- **Steady state only.** Buffers are infinite sinks and sources, never tanks simulated over time.
+  The application tells you whether the rates hold and how long a stock takes to drain, but it
+  does not play the film.
+- **No Somersloop, no production amplification.** Overclocking *is* modelled: 1 % to 250 %,
+  throughput in proportion and power by a power law.
+- **Power is a counter, not a constraint.** Draw and production are shown side by side and a
+  shortfall is raised as an error — but it throttles nothing. In game, running out of power does
+  not slow the factory down: it trips the whole grid until someone resets it. Showing everything
+  at zero would teach nothing, and a partial throttle would be an invention.
+- **Two modes, and the factory picks.** In **simple** — what a new factory gets — a port carries
+  as many lines as you like, max-min sharing happens there, and fittings are deduced for the
+  shopping list without being drawn: this is the mode for thinking about rates. In **faithful**,
+  the game's rule applies — one port, one line — and a splitter or a merger is a node you place
+  and see: this is the mode for building. The setting lives in the document and travels with it,
+  because it changes the figures.
+- **Every machine in the game is in the catalogue**: the 291 recipes Satisfactory makes in a
+  machine can all be placed, Blender, Converter, Particle Accelerator and Quantum Encoder
+  included. What stays out is the **26 hand-crafted recipes** at the Equipment Workshop —
+  parachute, chainsaw, rifle — and they are not out in silence: the database keeps them and an
+  item card shows them greyed out, saying a workshop will never be a factory node.
+- **The machine count is an input**, not a result — unless you ask for the opposite. "I want 2
+  Heavy Modular Frames a minute" is the **goal mode**, and it builds the factory; but it
+  **optimises** nothing. It follows the standard recipe, or the one you pin, and never looks for
+  the best combination of alternates: that would need a linear program, hence a dependency.
+- **It does not know your map.** A generated factory puts its resource nodes at normal purity
+  with the first extractor available, and says so. Nothing in the game files knows where your
+  nodes are or what they are worth.
 
 ## Files and sharing
 
@@ -261,23 +254,6 @@ confirmation recalling what was dropped.
 `migrate(payload, schema_version)` lifts a document one version at a time. The current schema is
 **9**.
 
-### Why the major numbers follow each other so closely
-
-**The major number tracks the document schema, and nothing else.** A schema 7 file is refused by a
-2.0 build exactly as a schema 6 file was by a 1.1: the file is the only interface this application
-exposes to its own past, and breaking it is what a major is for. The consequence surprises anyone
-who has not read this: widening the catalogue to everything the game can make ran **three majors
-in a few weeks** — 3.0 for the two fitting modes, 4.0 for the resource well, 5.0 for the missing
-generators — because each of those three adds a node kind, hence a file format an earlier build
-cannot read.
-
-Versions that did **not** touch the document stayed minor: 3.1 brought in the Blender and the 69
-out-of-scope recipes by changing only the **database** schema, which is embedded and does not
-travel.
-
-Exports: PNG of the canvas, PDF with the canvas on page one and, optionally, the totals and the
-diagnostics on page two.
-
 ## Logs and incidents
 
 The application writes to `%LOCALAPPDATA%\SatisPlanner\logs\`:
@@ -287,6 +263,59 @@ The application writes to `%LOCALAPPDATA%\SatisPlanner\logs\`:
 
 Every uncaught exception is logged with its full traceback, then summarised on screen in one
 readable sentence with the path to the log.
+
+---
+
+# For people working on the code
+
+Everything above is about using the application. What follows is how it is built, why it is built
+that way, and what to run before changing it.
+
+## Install from source
+
+To *use* the application there is nothing to install — see [Download](#download).
+
+Windows, Python 3.12. The `py` launcher is used because a bare `python` can resolve to the
+Microsoft Store shim.
+
+```bash
+py -3.12 -m venv .venv
+.venv/Scripts/python.exe -m pip install --upgrade pip
+.venv/Scripts/python.exe -m pip install -e ".[dev]"
+```
+
+Run it:
+
+```bash
+.venv/Scripts/python.exe main.py
+```
+
+Checks:
+
+```bash
+.venv/Scripts/python.exe -m pytest
+.venv/Scripts/python.exe -m ruff check .
+.venv/Scripts/python.exe -m mypy
+```
+
+### The icons do not come with the clone, and that is deliberate
+
+**After `git clone`, `satisplanner/resources/icons/` does not exist.** That is not a fault: the
+folder is in `.gitignore` because the icons belong to Coffee Stain Studios and are not
+redistributable. The application starts and works normally — every class without a file is drawn
+by the generative fallback, which is a nominal mode of operation, not a degradation — but the
+thumbnails will be coloured squares with initials.
+
+To get the game's icons on a machine you have to extract them from **your own copy of the game**,
+with the FModel procedure below, then drop the export into either folder the application indexes:
+
+| Folder | What it is for |
+|--------|----------------|
+| `satisplanner/resources/icons/` | this is the one that goes into the full build |
+| `%LOCALAPPDATA%\SatisPlanner\icons\` | or whichever folder the preferences name |
+
+The internal tree does not matter: the index is **recursive and by file name**. Keep whatever
+structure FModel produced.
 
 ## Game icons (FModel procedure)
 
@@ -320,6 +349,17 @@ Get-ChildItem -Recurse -Filter '*_512.png' | Rename-Item -NewName { $_.Name -rep
 
 Without that rename the 32 buildings stay on the fallback whatever you export, and the counter
 above shows it: its third number does not go down.
+
+Counter, from the repository root:
+
+```bash
+.venv\Scripts\python.exe -c 'from satisplanner.data import db; from satisplanner.data.icons import IconIndex, default_icon_roots; g = db.load_game_data_from_file(db.default_database_path()); x = IconIndex(default_icon_roots()); print(len(x), sum(x.resolve(o.icon_file) is None for o in g.items.values()), sum(x.resolve(o.icon_file) is None for o in g.buildings.values()))'
+```
+
+Three numbers: files indexed, items on the fallback, buildings on the fallback. On a bare clone,
+`0 195 32`. **Help ▸ About** says the same thing in one sentence and the log writes it at every
+start — which is what tells "I have no icons" apart from "the fallback is working as designed",
+two situations that look alike on screen and call for opposite reactions.
 
 ## Game data
 
@@ -451,6 +491,20 @@ before you trust a figure:
    Three machines declare `mPowerConsumption` at zero and put their draw on the recipe as
    `constant + factor`. Being a steady-state model, it keeps the **midpoint**, which is the mean
    of any oscillation symmetric about its centre.
+
+### Why the major numbers follow each other so closely
+
+**The major number tracks the document schema, and nothing else.** A schema 7 file is refused by a
+2.0 build exactly as a schema 6 file was by a 1.1: the file is the only interface this application
+exposes to its own past, and breaking it is what a major is for. The consequence surprises anyone
+who has not read this: widening the catalogue to everything the game can make ran **three majors
+in a few weeks** — 3.0 for the two fitting modes, 4.0 for the resource well, 5.0 for the missing
+generators — because each of those three adds a node kind, hence a file format an earlier build
+cannot read.
+
+Versions that did **not** touch the document stayed minor: 3.1 brought in the Blender and the 69
+out-of-scope recipes by changing only the **database** schema, which is embedded and does not
+travel.
 
 ## What is left
 

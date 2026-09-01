@@ -14,6 +14,24 @@ rien à configurer, et **Satisfactory n'a pas besoin d'être installé** sur la 
 Ce n'est **ni un mod ni un lecteur de sauvegarde**. Aucune interaction avec le jeu en cours
 d'exécution, aucun accès réseau au runtime.
 
+**Windows, sans installateur, licence MIT, gratuit.** On décompresse et on lance.
+
+Il existe de bons calculateurs en ligne pour ce jeu, et ils répondent à une autre question : on
+nomme une cible, ils donnent les ratios. SatisPlanner se lit dans l'autre sens — on part des
+gisements qu'on a vraiment, on dispose l'usine soi-même sur un canvas, et les diagnostics portent
+leur correction. Il fonctionne aussi hors ligne, la base de recettes étant dans l'exécutable.
+
+![Une usine sur le canvas, panneau des totaux ouvert](docs/images/01-factory-overview.png)
+
+## Téléchargement
+
+**[Dernière version](https://github.com/VictorBousseau/SatisPlanner/releases/latest)** — on
+décompresse où l'on veut et on lance `SatisPlanner.exe`. Pas d'installateur, pas de dépendance,
+rien à configurer. Windows peut afficher un avertissement SmartScreen au premier lancement :
+l'exécutable n'est pas signé.
+
+L'interface est en français ou en anglais, et suit le système au premier lancement.
+
 ## Ce que l'outil ne fait pas
 
 Autant le dire avant d'ouvrir la fenêtre.
@@ -56,15 +74,10 @@ Autant le dire avant d'ouvrir la fenêtre.
   le premier extracteur venu, et le dit. Rien dans les fichiers du jeu ne sait où sont vos nœuds
   ni ce qu'ils valent.
 
-## Installation
+## Installation depuis les sources
 
-### Pour utiliser l'application
-
-Récupérer le dossier construit, le décompresser où l'on veut, lancer `SatisPlanner.exe`. Il n'y a
-pas d'installateur, pas de dépendance à installer, rien à configurer. Windows peut afficher un
-avertissement SmartScreen au premier lancement — l'exécutable n'est pas signé.
-
-### Pour développer
+Pour **utiliser** l'application il n'y a rien à installer : voir
+[Téléchargement](#téléchargement).
 
 Windows, Python 3.12. Le lanceur `py` est utilisé car `python` nu peut renvoyer le raccourci
 Microsoft Store.
