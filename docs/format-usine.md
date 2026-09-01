@@ -116,7 +116,7 @@ par une valeur par défaut silencieuse.
 | --- | --- | --- | --- |
 | `kind` | chaîne | — | le type de nœud ; il décide des autres champs |
 | `id` | chaîne | — | unique dans le fichier ; c'est lui que les lignes citent |
-| `label` | chaîne ou `null` | `null` | le nom affiché ; sans lui, le nom français de l'objet ou de la recette |
+| `label` | chaîne ou `null` | `null` | le nom affiché ; sans lui, le nom de l'objet ou de la recette dans la langue de l'interface |
 | `position` | `[x, y]` | `[0, 0]` | en pixels de la scène, alignée sur une grille de 20 |
 | `show_deployed` | `true`, `false` ou `null` | `null` | dessiner une vignette par machine bâtie ; `null` signifie « suivre la préférence globale ». Purement visuel |
 
@@ -514,8 +514,13 @@ courant** : en fidèle elle pose ses raccords, en simple elle n'en pose aucun.
 
 Deux choses s'y reconnaissent quand même, et c'est voulu :
 
-- les identifiants viennent du nom français de l'objet — `plaque-de-fer`,
-  `gisement-minerai-de-fer`, `sortie-ordinateur`, `tampon-cable` ;
+- les identifiants viennent du nom de l'objet **dans la langue de l'interface au
+  moment de la génération** — `plaque-de-fer` en français, `iron-plate` en anglais —
+  derrière un préfixe qui, lui, reste français parce qu'il finit dans le fichier :
+  `gisement-`, `sortie-`, `entree-`, `tampon-`. Une usine générée en anglais porte
+  donc `gisement-iron-ore`. C'est lisible, mais hybride, et **la question de savoir
+  si l'identifiant doit suivre la langue ou rester stable n'est pas tranchée** — voir
+  le point ouvert en fin de document ;
 - les gisements sont en **pureté normale avec le premier extracteur venu**. Ce
   n'est pas une estimation, c'est une valeur par défaut : ce qui se trouve sur la
   carte n'est écrit nulle part dans les données du jeu, et le rapport de génération
@@ -602,3 +607,30 @@ usine qui l'affame, il en fera moins.
 
 Un fichier illisible coûte **un** module et une phrase qui le nomme, jamais la
 bibliothèque : la lecture continue au fichier suivant.
+
+## Un point ouvert : l'identifiant et la langue
+
+Depuis la 5.1.0, l'interface est bilingue, et `_slug()` construit l'identifiant d'un
+nœud généré à partir du **nom affiché**, qui suit désormais la langue. Le préfixe,
+lui, reste français parce qu'il est écrit en dur et qu'il finit dans le fichier. Une
+usine générée en anglais porte donc des identifiants comme `gisement-iron-ore` ou
+`sortie-iron-plate` : moitié français, moitié anglais.
+
+**Rien n'est cassé** — l'identifiant n'est qu'une clé, unique dans le document, et
+les deux usines se résolvent à l'identique. La promesse « un fichier ne dépend pas de
+la langue » tient aussi : elle porte sur un graphe donné, enregistré dans les deux
+langues, et pas sur deux générations séparées.
+
+Mais l'état est bâtard, et il y a deux réponses cohérentes, pas trois :
+
+1. **L'identifiant reste français quoi qu'il arrive.** `_slug()` lit
+   `display_name_fr` plutôt que `name`. Un identifiant devient alors stable comme un
+   nom de classe : deux personnes qui génèrent la même usine dans deux langues
+   obtiennent le même document, ce qui est la lecture la plus proche du reste du
+   projet.
+2. **Tout suit la langue, préfixe compris.** `gisement-` devient `deposit-`, et
+   l'identifiant est franchement un libellé. Plus lisible pour qui lit l'anglais,
+   mais l'identifiant cesse d'être comparable d'un document à l'autre.
+
+La question n'a pas été tranchée parce qu'elle n'a été vue qu'après coup, en relisant
+ce document. **Elle appartient à un lot, pas à une correction de passage.**

@@ -616,7 +616,7 @@ def _name(game_data: GameData, item_class: str) -> str:
 
 
 def _slug(game_data: GameData, item_class: str) -> str:
-    """A readable identifier from the item's French name.
+    """A readable identifier from the item's name, in the language in force.
 
     Identifiers end up in the saved file, in every diagnostic and in the table, so
     "plaque-de-fer" is worth the six lines that fold the accents out of it. Falls

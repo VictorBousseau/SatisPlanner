@@ -469,7 +469,7 @@ def _iter_all_classes(grouped: Locale) -> Iterator[ClassEntry]:
 
 
 def _label(class_name: str, fallback: str, labels: dict[str, str]) -> str:
-    """French label if the locale provides a non-empty one, else the reference label."""
+    """The French locale's label when it has a non-empty one, else the reference label."""
     return labels.get(class_name) or fallback
 
 

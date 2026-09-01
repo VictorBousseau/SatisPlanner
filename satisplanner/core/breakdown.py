@@ -33,7 +33,7 @@ COST_EPSILON: Final = 1e-9
 def producers(game_data: GameData, item_class: str) -> list[Recipe]:
     """Recipes that make this item: the standard ones first, then the alternates.
 
-    Within each group the order is by French label, so the card reads the way a wiki
+    Within each group the order is by label, so the card reads the way a wiki
     page does rather than the way a database happened to be filled.
     """
     made = [

@@ -268,7 +268,7 @@ def _one_recipe(
         )
     elif building is not None and building.power_mw > 0:
         power = _(" — {power} MW").format(power=formatting.number(building.power_mw))
-    # Most French labels already read "... (alternative)"; the marker is only added
+    # Most of the game's own labels already say so; the marker is only added
     # where the game left it out, exactly as the palette does.
     marker = ""
     if recipe.is_alternate and not says_alternate(recipe.name):

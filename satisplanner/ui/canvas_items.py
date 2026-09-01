@@ -1,6 +1,6 @@
 """The two things drawn on the canvas: a node box and a line between two ports.
 
-A node shows its icon, its French label, the recipe, how many machines are built and
+A node shows its icon, its label, the recipe, how many machines are built and
 how many are useful, the rate on every input and output, and a coloured border that
 says at a glance whether it is running, short of something, or stopped.
 
@@ -351,7 +351,7 @@ class NodeItem(QGraphicsItem):
         # cannot count its own neighbours.
         self.branch_count = 0
         # What is written on the branches that are not simply "any", as
-        # ``(neighbour, setting)`` pairs already in French. Set by the scene, which
+        # ``(neighbour, setting)`` pairs already worded. Set by the scene, which
         # is the only place that knows what the neighbours are called.
         self.branch_settings: tuple[tuple[str, str], ...] = ()
         # Deployed rendering, as resolved by the scene: the global preference unless

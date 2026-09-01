@@ -247,7 +247,7 @@ class PaletteList(QListView):
 
 
 def _alternate_marker(entry: PaletteEntry) -> str:
-    """The French labels already say so for most alternates ("Alternative : ..."),
+    """The game's own labels already say so for most alternates,
     so the marker is only added where the game left it out."""
     if entry.is_alternate and not says_alternate(entry.label):
         return _(" (alternative)")

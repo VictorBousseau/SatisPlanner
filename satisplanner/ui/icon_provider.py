@@ -4,7 +4,7 @@
 2. an optional user directory under the local application data, for someone who
    exported their own set with FModel;
 3. a **generative fallback**: a rounded square whose colour is derived from a stable
-   hash of the class name, with the initials of the French label in the middle.
+   hash of the class name, with the initials of the label in the middle.
 
 The third backend is the normal way this application runs, not a degraded mode. The
 game's own icons belong to Coffee Stain Studios and are never redistributed, so the
@@ -56,7 +56,7 @@ def stable_hue(seed: str) -> int:
 
 
 def initials(label: str) -> str:
-    """Up to two initials from a French label: "Minerai de fer" gives "MF"."""
+    """Up to two initials from a label: "Minerai de fer" gives "MF"."""
     words = [word for word in label.split() if len(word) > _MINOR_WORD_LENGTH]
     if not words:
         return (label[:1] or "?").upper()

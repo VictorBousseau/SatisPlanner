@@ -2,11 +2,6 @@
 
 *English — [Français](README.fr.md)*
 
-> **The interface is still in French.** The English translation is under way and this page is
-> the first part of it. If you are here from Reddit: read this before you download 129 MB —
-> the [Language](#language) section says exactly where it stands, so you can decide now
-> rather than after the install.
-
 A planner for **theoretical** Satisfactory 1.2 factories. You drop nodes on a canvas — ore node
 → smelter → constructor → assembler, oil → refinery — join them with belts and pipes, and the
 application solves the steady state: throughputs, how many machines are actually useful,
@@ -17,26 +12,6 @@ configure, and **Satisfactory does not have to be installed** on the machine run
 
 It is **neither a mod nor a save-file reader**. No interaction with the running game, no network
 access at runtime.
-
-## Language
-
-| | |
-| --- | --- |
-| The game's vocabulary — items, recipes, buildings, in-game descriptions | **both languages, already** |
-| Numbers — decimal separator, percent sign | **both languages** |
-| `.sfp` files and share codes | **language-independent**, proven by test |
-| Menus, panels, diagnostics, node faces, help page | **French only, for now** |
-
-Nothing here is translated by hand from the game: item and building names come from the game's
-own `fr.json` and `en-US.json`. A *Façonneuse* becomes a **Manufacturer** because Coffee Stain
-says so, not because it looked like the right word.
-
-The 749 hand-written sentences of the interface are the work in progress. `--self-check` counts
-how many have an English twin, so no build can ship half-translated without saying so.
-
-**Developer documentation stays French only.** `docs/format-usine.md`, the code comments and the
-docstrings are for people working on the code, and a technical document translated twice drifts
-apart at the first change. The docstrings are in English already; the prose around them is not.
 
 ## What this tool does not do
 
@@ -231,6 +206,33 @@ Palette on the left, open factories in the middle, three panels on the right.
 
 **Help ▸ Gestures and shortcuts** (`F1`) lists every canvas gesture and every shortcut. The
 shortcut table is built from the window's real actions: it cannot drift out of step with the code.
+
+## Language
+
+**The interface is fully bilingual, French and English.** On a first launch it follows the
+system language; after that it follows your choice, which it remembers. The **Langue /
+Language** menu switches on the spot — no restart, and nothing lost: not the factory, not the
+undo history, not the selection.
+
+Everything follows: menus, panels, node faces, diagnostics, the item card, the help page, the
+generator's report, the error boxes. The switch also changes the **numbers** — `24.549` against
+`24,549`, `81.8%` against `81,8 %` — because a comma read as a thousands separator turns
+twenty-four into twenty-four thousand.
+
+Nothing here is translated by hand from the game: item, recipe and building names come from the
+game's own `fr.json` and `en-US.json`. A *Façonneuse* is a **Manufacturer** because Coffee Stain
+says so, not because it looked like the right word.
+
+**A factory does not depend on the language it was designed in.** A `.sfp` file and a share code
+are byte for byte the same either way, which is checked rather than hoped for — see
+[Files and sharing](#files-and-sharing).
+
+The 659 hand-written sentences of the interface all have an English twin, and `--self-check`
+counts them at every run, so no build can ship half-translated without saying so.
+
+**Developer documentation stays French only.** `docs/format-usine.md`, the code comments and the
+prose around the docstrings are for people working on the code, and a technical document
+translated twice drifts apart at the first change. The docstrings themselves are in English.
 
 ## Files and sharing
 
@@ -452,10 +454,10 @@ before you trust a figure:
 
 ## What is left
 
-The remaining backlog is eight lines, and none of it is a gap in the catalogue: Somersloop and
+The remaining backlog is seven lines, and none of it is a gap in the catalogue: Somersloop and
 production amplification, generator overclocking, automatic choice of alternate recipes (which
 needs a linear program), a finer model of smart splitters and priority mergers, time simulation
-of buffers, interoperability with satisfactory-calculator.com — and this English interface.
+of buffers, and interoperability with satisfactory-calculator.com.
 
 ## Licence
 

@@ -176,7 +176,7 @@ def has_clock(node: Node) -> TypeGuard[ClockedNode]:
 
 
 _ROLE_NODE_ID: Final = int(Qt.ItemDataRole.UserRole)
-# The short list of values a cell accepts, as (stored value, French label). The
+# The short list of values a cell accepts, as (stored value, label). The
 # delegate reads it to build a combo box; an empty list means "type it yourself".
 _ROLE_CHOICES: Final = int(Qt.ItemDataRole.UserRole) + 1
 

@@ -4,7 +4,8 @@ The payload is a **share code**: the same string the "copier le code de partage"
 action produces, and read back by the same decoder. That is deliberate. A second
 serialisation format would be a second thing to migrate, a second thing to get wrong
 on a schema bump, and a second place for a corrupt payload to crash the application.
-There is one format, and it already refuses versions from the future in French.
+There is one format, and it already refuses versions from the future in a sentence
+the user can read.
 
 It is **read** from a private MIME type, so that a paste between two SatisPlanner
 windows is unambiguous and a clipboard full of prose is never mistaken for a factory.

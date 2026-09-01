@@ -228,7 +228,7 @@ class ModuleLibraryDialog(QDialog):
             self._show_current()
 
     def _matches(self, module: FactoryModule, needle: str) -> bool:
-        """By name, by description, or by what it makes -- in French, as displayed."""
+        """By name, by description, or by what it makes -- as displayed."""
         haystack = [module.name, module.description]
         haystack.extend(self._item_name(item_class) for item_class in module.outputs)
         return any(needle in text.casefold() for text in haystack)

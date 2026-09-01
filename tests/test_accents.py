@@ -499,10 +499,16 @@ DOCUMENTS = ("README.fr.md", "docs/format-usine.md")
 # it; anything left outside a path is still read word by word.
 _PATH_LIKE = re.compile(r"[\w./-]+\.(?:md|json|py|ps1|sqlite|sfp|sfm|png|pdf)\b")
 
+# Backticked spans are code, not prose: a field name, a class name, an identifier
+# prefix. `entree-` is not the word *entrée* spelled wrong, it is the first half of
+# an identifier that ends up in a saved file and is deliberately ASCII. Same
+# reasoning as the ``{fields}`` of a translatable sentence, one section up.
+_CODE_SPAN = re.compile(r"`[^`]*`")
+
 
 def prose_of(line: str) -> str:
-    """The line without the file names in it."""
-    return _PATH_LIKE.sub(" ", line)
+    """The line without the file names and the code spans in it."""
+    return _PATH_LIKE.sub(" ", _CODE_SPAN.sub(" ", line))
 
 
 def test_the_two_readmes_point_at_each_other() -> None:
@@ -519,16 +525,63 @@ def test_the_two_readmes_point_at_each_other() -> None:
     assert "(README.md)" in "".join(french[:4])
 
 
-def test_the_english_readme_is_honest_about_the_interface() -> None:
-    """It must say the interface is still French, above the fold and not in a footnote.
+def test_no_readme_still_announces_a_french_only_interface() -> None:
+    """The sentence that got a post refused, and that must not come back.
 
-    Someone who reads that and walks away is a user who may come back. Someone who
-    downloads 129 MB to find an interface they cannot read never does.
+    This replaces a test that asserted the opposite, and the reversal is the point.
+    While the interface really was French, ``README.md`` said so above the fold and
+    the check made sure it kept saying so -- somebody who reads that and walks away
+    is a user who may come back, where somebody who downloads 129 MB to find an
+    interface they cannot read never does.
+
+    The day the catalogue reached 659/659 that sentence became false, and it stayed
+    on the page. A moderator of r/SatisfactoryGame read the page rather than the
+    application and refused the post for an interface that had been bilingual for a
+    week. **A front page is read instead of the thing it describes**, so a claim
+    about the state of the work has to fall the moment it stops being true -- which
+    is what this now checks, in both languages.
+
+    A presence check and not a position check: where the section sits is a matter of
+    taste now that it states a fact instead of warning about a gap.
+
+    The phrases are listed exactly as they were written, so this catches the same
+    claim coming back and not a fresh wording of it -- the same limit, and the same
+    reason, as :data:`PHRASES` above. What holds the positive side up is
+    :func:`test_both_readmes_say_the_interface_is_bilingual`. Note that "Developer
+    documentation stays French only" is **not** in this list: it is about the docs,
+    it is still true, and a guard that fired on it would be a guard somebody turns
+    off.
     """
-    english = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
-    head = english[: english.index("## What this tool does not do")]
-    assert "still in French" in head
-    assert "## Language" in head
+    stale = (
+        "The interface is still in French",
+        "Menus, panels, diagnostics, node faces, help page",
+        "French only, for now",
+        "**Interface anglaise** : en cours",
+        "The English translation is under way",
+    )
+    for name in ("README.md", "README.fr.md"):
+        text = (PROJECT_ROOT / name).read_text(encoding="utf-8")
+        for phrase in stale:
+            assert phrase not in text, f"{name} annonce encore « {phrase} »"
+
+
+def test_both_readmes_say_the_interface_is_bilingual() -> None:
+    """And each in its own language, in a section a reader can find.
+
+    The English page is what a visitor from Reddit meets: if it does not say the
+    application speaks English, nothing else on it will be read.
+    """
+    # Read with the line breaks flattened: these documents wrap at 100 columns, and
+    # the menu's name falls across two lines in one of them.
+    english = " ".join((PROJECT_ROOT / "README.md").read_text(encoding="utf-8").split())
+    assert "## Language" in english
+    assert "fully bilingual" in english
+    assert "Langue / Language" in english
+
+    french = " ".join((PROJECT_ROOT / "README.fr.md").read_text(encoding="utf-8").split())
+    assert "## Langue" in french
+    assert "entièrement bilingue" in french
+    assert "Langue / Language" in french
 
 
 @pytest.mark.parametrize("name", DOCUMENTS)

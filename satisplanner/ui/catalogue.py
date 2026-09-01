@@ -594,7 +594,7 @@ def _handled_items(game_data: GameData) -> set[str]:
 
 
 def machine_choices(game_data: GameData) -> list[tuple[str, str]]:
-    """``(class name, French label)`` of every production machine, for the filter."""
+    """``(class name, label)`` of every production machine, for the filter."""
     return sorted(
         (
             (building.class_name, building.name)
@@ -606,7 +606,7 @@ def machine_choices(game_data: GameData) -> list[tuple[str, str]]:
 
 
 def extractor_choices(game_data: GameData, item_class: str) -> list[tuple[str, str]]:
-    """Extractors that could work this deposit, as ``(class name, French label)``.
+    """Extractors that could work this deposit, as ``(class name, label)``.
 
     Filtered on what the game allows: the form has to match, and an extractor that
     names one resource -- the oil pump, the water pump -- only appears for it. That
@@ -658,7 +658,7 @@ def fuel_choices(game_data: GameData, generator_class: str) -> list[tuple[str, s
 
 
 def transport_choices(game_data: GameData, form: ItemForm) -> list[tuple[str, str]]:
-    """Belts or pipes, cheapest first, as ``(class name, French label)``."""
+    """Belts or pipes, cheapest first, as ``(class name, label)``."""
     return [
         (
             transport.class_name,

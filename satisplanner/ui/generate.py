@@ -58,7 +58,7 @@ def caveat() -> str:
 
 
 def craftable_items(game_data: GameData) -> list[tuple[str, str]]:
-    """Everything a recipe makes, as ``(class, French name)`` sorted by name."""
+    """Everything a recipe makes, as ``(class, name)`` sorted by name."""
     made = {
         slot.item_class
         for recipe in game_data.recipes.values()

@@ -262,9 +262,37 @@ Palette à gauche, les usines ouvertes au centre, trois panneaux à droite.
 table des raccourcis est construite à partir des actions réelles de la fenêtre : elle ne peut pas
 se désynchroniser du code.
 
-**Fichier ▸ Préférences** (`Ctrl+,`) : tier de convoyeur et de tuyauterie par défaut, dossier
-d'icônes, nombre de fichiers récents conservés, affichage par défaut des recettes alternatives et
-des objets d'événement.
+**Fichier ▸ Préférences** (`Ctrl+,`) : langue de l'interface, tier de convoyeur et de tuyauterie
+par défaut, dossier d'icônes, nombre de fichiers récents conservés, affichage par défaut des
+recettes alternatives et des objets d'événement.
+
+## Langue
+
+**L'interface est entièrement bilingue, français et anglais.** Au premier lancement elle suit la
+langue du système ; ensuite elle suit votre choix, qu'elle retient. Le menu **Langue / Language**
+bascule sur place — pas de redémarrage, et rien de perdu : ni l'usine, ni la pile d'annulation,
+ni la sélection.
+
+Tout suit : menus, panneaux, faces de nœuds, diagnostics, fiche d'objet, page d'aide, rapport du
+générateur, boîtes d'erreur. La bascule change aussi les **nombres** — `24,549` contre `24.549`,
+`81,8 %` contre `81.8%` — parce qu'une virgule lue comme séparateur de milliers transforme
+vingt-quatre en vingt-quatre mille.
+
+Rien n'est traduit à la main depuis le jeu : les noms d'objets, de recettes et de bâtiments
+viennent des locales `fr.json` et `en-US.json` du jeu. Une **Façonneuse** est un *Manufacturer*
+parce que Coffee Stain le dit, pas parce que le mot ressemblait.
+
+**Une usine ne dépend pas de la langue dans laquelle elle a été dessinée.** Un `.sfp` et un code
+de partage sont octet pour octet les mêmes dans les deux cas, et c'est vérifié plutôt qu'espéré :
+voir [Fichiers et partage](#fichiers-et-partage).
+
+Les 659 phrases écrites à la main ont toutes leur jumelle anglaise, et `--self-check` les compte
+à chaque exécution : aucune build ne peut partir à moitié traduite sans le dire.
+
+**La documentation de développement reste en français seulement.** `docs/format-usine.md`, les
+commentaires et la prose autour des docstrings s'adressent à qui travaille sur le code, et un
+document technique traduit deux fois diverge dès la première modification. Les docstrings, elles,
+sont en anglais.
 
 ## Fichiers et partage
 
@@ -650,10 +678,12 @@ reconstruction de la scène, ni la réinitialisation du tableau. Le déplacement
 
 ## Backlog V2
 
-**Ce qui reste tient en huit lignes, et c'est le résultat de la série close en 5.0.0.**
-Toutes les machines et tous les générateurs du jeu sont au catalogue, et la moitié des
-entrées d'hier — Mélangeur, puits de ressource, puissance variable, centrale nucléaire,
-géothermique — sont parties parce qu'elles sont faites. Le reste se range en deux tas :
+**Ce qui reste tient en sept lignes, et c'est le résultat des deux séries closes en 5.0.0
+et en 5.1.0.**
+Toutes les machines et tous les générateurs du jeu sont au catalogue, l'interface est
+bilingue, et la moitié des entrées d'hier — Mélangeur, puits de ressource, puissance
+variable, centrale nucléaire, géothermique, interface anglaise — sont parties parce
+qu'elles sont faites. Le reste se range en deux tas :
 ce qui demanderait une **dépendance ou une autre formule**, et ce qui demanderait un
 **modèle plus fin des raccords**. Rien n'y est un manque du catalogue.
 
@@ -669,10 +699,6 @@ ce qui demanderait une **dépendance ou une autre formule**, et ce qui demandera
 - **Groupeur prioritaire** : la réponse du jeu au répartiteur intelligent, côté groupage.
 - Simulation temporelle des tampons, pour voir le film et pas seulement l'état final.
 - Interopérabilité avec satisfactory-calculator.com.
-- **Interface anglaise** : en cours. Le vocabulaire du jeu vient déjà des deux locales, les
-  nombres suivent la langue et le fichier n'en dépend pas. Restent les chaînes écrites à la
-  main — 749 relevées, dont la page d'aide — et la bascule elle-même. `--self-check` compte
-  ce qui est traduit pour qu'aucune build ne parte à moitié.
 
 ## Licence
 

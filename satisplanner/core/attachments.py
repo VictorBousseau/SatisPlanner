@@ -189,7 +189,7 @@ class Materialisation:
         return tuple(change for change in self.changes if not change.was_even)
 
     def notes(self) -> list[str]:
-        """What to show the user on opening, in French, shortest useful form.
+        """What to show the user on opening, in the shortest useful form.
 
         Written as sentences rather than a count because the point is that the
         figures may have moved and where. The asymmetry between the two halves is
